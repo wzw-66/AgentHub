@@ -1,0 +1,22 @@
+{
+  "name": "agenthub",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.0.0",
+    "turbo": "^2.9.14",
+    "typescript": "^6.0.3"
+  }
+}
