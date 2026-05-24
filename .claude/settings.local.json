@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npx openspec:*)",
       "Bash(openspec status:*)",
-      "Bash(openspec instructions:*)"
+      "Bash(openspec instructions:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm --filter @agenthub/shared add -D @types/node)"
     ]
   }
 }

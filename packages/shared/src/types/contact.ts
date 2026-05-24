@@ -1,0 +1,9 @@
+export interface Contact {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
