@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agenthub-db
+    environment:
+      POSTGRES_USER: agenthub
+      POSTGRES_PASSWORD: agenthub_dev
+      POSTGRES_DB: agenthub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

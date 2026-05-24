@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum AgentProvider {
+  Claude
+  OpenCode
+  Custom
+}
+
+enum ConversationType {
+  Single
+  Group
+}
+
+enum SenderType {
+  User
+  Contact
+  System
+}
+
+enum MessageType {
+  Text
+  Code
+  Diff
+  Preview
+  Artifact
+}
+
+enum ArtifactType {
+  CodeDiff
+  WebPreview
+  Document
+}
+
+enum ArtifactStatus {
+  Building
+  Completed
+  Failed
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String           @id @default(cuid())
+  name         String
+  email        String           @unique
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  contacts      Contact[]
+  conversations Conversation[]
+  credentials   UserCredential[]
+}
+
+model Agent {
+  id           String        @id @default(cuid())
+  name         String
+  avatarUrl    String?
+  provider     AgentProvider
+  systemPrompt String?
+  model        String?
+  config       Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  contacts Contact[]
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  userId      String
+  agentId     String
+  displayName String
+  tags        String[]
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, agentId])
+}
+
+model Conversation {
+  id           String           @id @default(cuid())
+  title        String
+  type         ConversationType
+  ownerId      String
+  contactIds   String[]
+  isArchived   Boolean          @default(false)
+  lastActiveAt DateTime         @default(now())
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  owner    User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  messages Message[]
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  senderType     SenderType
+  senderId       String
+  type           MessageType
+  content        String
+  parentId       String?
+  isPinned       Boolean     @default(false)
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent       Message?     @relation("MessageParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Message[]    @relation("MessageParent")
+  artifacts    Artifact[]
+}
+
+model Artifact {
+  id         String         @id @default(cuid())
+  messageId  String
+  type       ArtifactType
+  url        String?
+  content    String?
+  previewUrl String?
+  status     ArtifactStatus @default(Building)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model UserCredential {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String
+  encryptedKey String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
