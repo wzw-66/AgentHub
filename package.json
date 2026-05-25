@@ -5,7 +5,13 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "test": "turbo test"
+    "test": "turbo test",
+    "db:generate": "pnpm --filter @agenthub/db db:generate",
+    "db:push": "pnpm --filter @agenthub/db db:push",
+    "db:seed": "pnpm --filter @agenthub/db db:seed",
+    "db:studio": "pnpm --filter @agenthub/db db:studio",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {

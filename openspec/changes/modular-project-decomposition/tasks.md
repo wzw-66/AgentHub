@@ -1,37 +1,37 @@
 ## 1. Monorepo 基础搭建
 
-- [ ] 1.1 初始化根目录 `package.json`，包含 turborepo 和 TypeScript 开发依赖
-- [ ] 1.2 创建 `turbo.json`，配置 build/dev/lint/test 流水线
-- [ ] 1.3 创建 `pnpm-workspace.yaml`，包含 `apps/*`、`packages/*`、`tooling/*`
-- [ ] 1.4 创建 `.npmrc` 和 `.gitignore`
-- [ ] 1.5 创建 `tooling/tsconfig/base.json`，配置严格 TypeScript 设置
-- [ ] 1.6 创建 `tooling/tsconfig/nextjs.json`，继承 base 并添加 JSX 支持
-- [ ] 1.7 创建 `tooling/tsconfig/node.json`，继承 base 并添加 Node 类型
-- [ ] 1.8 创建 `tooling/eslint-config` 包，配置 TypeScript 规则
-- [ ] 1.9 执行 `pnpm install` 并验证工作空间解析
+- [x] 1.1 初始化根目录 `package.json`，包含 turborepo 和 TypeScript 开发依赖
+- [x] 1.2 创建 `turbo.json`，配置 build/dev/lint/test 流水线
+- [x] 1.3 创建 `pnpm-workspace.yaml`，包含 `apps/*`、`packages/*`、`tooling/*`
+- [x] 1.4 创建 `.npmrc` 和 `.gitignore`
+- [x] 1.5 创建 `tooling/tsconfig/base.json`，配置严格 TypeScript 设置
+- [x] 1.6 创建 `tooling/tsconfig/nextjs.json`，继承 base 并添加 JSX 支持
+- [x] 1.7 创建 `tooling/tsconfig/node.json`，继承 base 并添加 Node 类型
+- [x] 1.8 创建 `tooling/eslint-config` 包，配置 TypeScript 规则
+- [x] 1.9 执行 `pnpm install` 并验证工作空间解析
 
 ## 2. 共享类型包
 
-- [ ] 2.1 创建 `packages/shared/package.json` 和 `tsconfig.json`
-- [ ] 2.2 定义所有枚举：ConversationType、SenderType、MessageType、ArtifactType、ArtifactStatus、AgentProvider、ChunkType
-- [ ] 2.3 定义核心接口：Agent、Contact、Conversation、Message、Artifact、User、Chunk、AgentContext
-- [ ] 2.4 定义 AgentAdapter 接口和 UserCredential 类型
-- [ ] 2.5 创建 `src/index.ts` 统一导出入口
-- [ ] 2.6 编写枚举值和类型导出的单元测试
-- [ ] 2.7 验证零运行时依赖
+- [x] 2.1 创建 `packages/shared/package.json` 和 `tsconfig.json`
+- [x] 2.2 定义所有枚举：ConversationType、SenderType、MessageType、ArtifactType、ArtifactStatus、AgentProvider、ChunkType
+- [x] 2.3 定义核心接口：Agent、Contact、Conversation、Message、Artifact、User、Chunk、AgentContext
+- [x] 2.4 定义 AgentAdapter 接口和 UserCredential 类型
+- [x] 2.5 创建 `src/index.ts` 统一导出入口
+- [x] 2.6 编写枚举值和类型导出的单元测试
+- [x] 2.7 验证零运行时依赖
 
 ## 3. 数据库包
 
-- [ ] 3.1 创建 `packages/db/package.json` 和 `tsconfig.json`
-- [ ] 3.2 定义包含 User 模型的 Prisma schema
-- [ ] 3.3 定义包含 Agent 和 Contact 模型的 Prisma schema
-- [ ] 3.4 定义包含 Conversation、Message、Artifact 模型的 Prisma schema
-- [ ] 3.5 定义包含 UserCredential 模型及所有关联关系的 Prisma schema
-- [ ] 3.6 创建 Prisma 客户端单例（`src/client.ts`）
-- [ ] 3.7 实现会话 CRUD 函数（创建、获取、列表、更新）
-- [ ] 3.8 实现消息 CRUD 函数（创建、获取、分页列表、置顶）
-- [ ] 3.9 创建 `.env.example` 包含 DATABASE_URL
-- [ ] 3.10 执行 `prisma generate` 并验证编译
+- [x] 3.1 创建 `packages/db/package.json` 和 `tsconfig.json`
+- [x] 3.2 定义包含 User 模型的 Prisma schema
+- [x] 3.3 定义包含 Agent 和 Contact 模型的 Prisma schema
+- [x] 3.4 定义包含 Conversation、Message、Artifact 模型的 Prisma schema
+- [x] 3.5 定义包含 UserCredential 模型及所有关联关系的 Prisma schema
+- [x] 3.6 创建 Prisma 客户端单例（`src/client.ts`）
+- [x] 3.7 实现会话 CRUD 函数（创建、获取、列表、更新）
+- [x] 3.8 实现消息 CRUD 函数（创建、获取、分页列表、置顶）
+- [x] 3.9 创建 `.env.example` 包含 DATABASE_URL
+- [x] 3.10 执行 `prisma generate` 并验证编译
 
 ## 4. Agent 适配器层
 
