@@ -1,6 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
-import type { AgentAdapter, AgentContext, Chunk, HealthStatus } from "@agenthub/shared";
+import type {
+  AgentAdapter,
+  AgentContext,
+  Chunk,
+  HealthStatus,
+} from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createChunk, parseClaudeStreamJson } from "../utils/chunk-parser.js";
 
@@ -88,7 +93,10 @@ export class ClaudeAdapter implements AgentAdapter {
     this.clearTimeout();
 
     if (exitCode !== 0) {
-      yield createChunk(ChunkType.Error, `claude CLI exited with code ${exitCode}`);
+      yield createChunk(
+        ChunkType.Error,
+        `claude CLI exited with code ${exitCode}`,
+      );
     }
   }
 

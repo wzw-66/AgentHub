@@ -35,13 +35,13 @@
 
 ## 4. Agent 适配器层
 
-- [ ] 4.1 创建 `packages/agent-core/package.json` 和 `tsconfig.json`
-- [ ] 4.2 实现 `ClaudeAdapter`，通过 Anthropic API HTTP SSE 流式通信
-- [ ] 4.3 实现 `OpenCodeAdapter`，通过 CLI 子进程生成和 stdout 解析
-- [ ] 4.4 实现 `CustomAgentAdapter`，用于用户配置的 LLM 端点
-- [ ] 4.5 实现 `createAdapter` 工厂函数，按提供商类型创建适配器
-- [ ] 4.6 为每个适配器实现健康检查逻辑
-- [ ] 4.7 编写适配器工厂和数据块解析的单元测试
+- [x] 4.1 创建 `packages/agent-core/package.json` 和 `tsconfig.json`
+- [x] 4.2 实现 `ClaudeAdapter`，通过 Anthropic API HTTP SSE 流式通信
+- [x] 4.3 实现 `OpenCodeAdapter`，通过 CLI 子进程生成和 stdout 解析
+- [x] 4.4 实现 `CustomAgentAdapter`，用于用户配置的 LLM 端点
+- [x] 4.5 实现 `createAdapter` 工厂函数，按提供商类型创建适配器
+- [x] 4.6 为每个适配器实现健康检查逻辑
+- [x] 4.7 编写适配器工厂和数据块解析的单元测试
 
 ## 5. 用户认证
 
