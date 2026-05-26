@@ -57,25 +57,25 @@
 
 ## 6. REST API 服务器
 
-- [ ] 6.1 实现路由注册模式和错误处理中间件
-- [ ] 6.2 实现 Agent 路由：`GET /api/agents`、`POST /api/agents`、`GET /api/agents/:id`
-- [ ] 6.3 实现联系人路由：`GET /api/contacts`、`POST /api/contacts`、`PATCH /api/contacts/:id`、`DELETE /api/contacts/:id`
-- [ ] 6.4 实现会话路由：`GET /api/conversations`、`POST /api/conversations`、`GET /api/conversations/:id`、`PATCH /api/conversations/:id`、`DELETE /api/conversations/:id`
-- [ ] 6.5 实现消息路由：`GET /api/conversations/:id/messages`（分页）、`POST /api/conversations/:id/messages`、置顶/回复端点的消息
-- [ ] 6.6 实现产物路由：`GET /api/artifacts/:id`、`GET /api/artifacts/:id/preview`
-- [ ] 6.7 实现凭证路由：`GET /api/credentials`、`POST /api/credentials`、`DELETE /api/credentials/:id`
-- [ ] 6.8 为所有路由组编写 API 集成测试
+- [x] 6.1 实现路由注册模式和错误处理中间件
+- [x] 6.2 实现 Agent 路由：`GET /api/agents`、`POST /api/agents`、`GET /api/agents/:id`
+- [x] 6.3 实现联系人路由：`GET /api/contacts`、`POST /api/contacts`、`PATCH /api/contacts/:id`、`DELETE /api/contacts/:id`
+- [x] 6.4 实现会话路由：`GET /api/conversations`、`POST /api/conversations`、`GET /api/conversations/:id`、`PATCH /api/conversations/:id`、`DELETE /api/conversations/:id`
+- [x] 6.5 实现消息路由：`GET /api/conversations/:id/messages`（分页）、`POST /api/conversations/:id/messages`、置顶/回复端点的消息
+- [x] 6.6 实现产物路由：`GET /api/artifacts/:id`、`GET /api/artifacts/:id/preview`
+- [x] 6.7 实现凭证路由：`GET /api/credentials`、`POST /api/credentials`、`DELETE /api/credentials/:id`
+- [x] 6.8 为所有路由组编写 API 集成测试
 
 ## 7. 实时通信
 
-- [ ] 7.1 实现 SSE 端点 `GET /sse/conversations/:id/stream`，含 JWT 认证
-- [ ] 7.2 实现 SSE chunk 事件推送，用于 Agent 流式输出
-- [ ] 7.3 实现 SSE done 事件，包含 token 用量元数据
-- [ ] 7.4 实现 WebSocket 端点，包含连接生命周期管理
-- [ ] 7.5 实现 WebSocket 输入中状态指示器事件
-- [ ] 7.6 实现 WebSocket 消息状态投递通知
-- [ ] 7.7 实现 WebSocket 心跳（ping/pong）
-- [ ] 7.8 编写 SSE 和 WebSocket 连接的集成测试
+- [x] 7.1 实现 SSE 端点 `GET /sse/conversations/:id/stream`，含 JWT 认证
+- [x] 7.2 实现 SSE chunk 事件推送，用于 Agent 流式输出
+- [x] 7.3 实现 SSE done 事件，包含 token 用量元数据
+- [x] 7.4 实现 WebSocket 端点，包含连接生命周期管理
+- [x] 7.5 实现 WebSocket 输入中状态指示器事件
+- [x] 7.6 实现 WebSocket 消息状态投递通知
+- [x] 7.7 实现 WebSocket 心跳（ping/pong）
+- [x] 7.8 编写 SSE 和 WebSocket 连接的集成测试
 
 ## 8. 编排器
 

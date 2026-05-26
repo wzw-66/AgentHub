@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import type { FastifyInstance } from "fastify";
+import type { ConnectionManager } from "./realtime/connection-manager";
 import { authRoutes } from "./routes/auth";
 import { agentRoutes } from "./routes/agents";
 import { contactRoutes } from "./routes/contacts";
@@ -8,9 +10,17 @@ import { conversationRoutes } from "./routes/conversations";
 import { messageRoutes } from "./routes/messages";
 import { artifactRoutes } from "./routes/artifacts";
 import { credentialRoutes } from "./routes/credentials";
+import { sseRoutes } from "./routes/sse";
+import { wsRoutes } from "./routes/ws";
 import { authenticate } from "./middleware/jwt";
 
-export async function buildApp(): Promise<FastifyInstance> {
+declare module "fastify" {
+  interface FastifyInstance {
+    connectionManager: ConnectionManager;
+  }
+}
+
+export async function buildApp(connectionManager?: ConnectionManager): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: "info",
@@ -23,6 +33,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: true,
     credentials: true,
   });
+
+  await app.register(websocket);
+
+  // Make connectionManager available to route modules
+  if (connectionManager) {
+    app.decorate("connectionManager", connectionManager);
+  }
 
   // ─── Global error handler ──────────────────────────────────────────────────
 
@@ -62,6 +79,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/health", async () => {
     return { status: "ok", timestamp: new Date().toISOString() };
   });
+
+  // ─── Real-time routes (SSE + WebSocket) ─────────────────────────────────
+
+  await app.register(sseRoutes);
+  await app.register(wsRoutes);
 
   return app;
 }
