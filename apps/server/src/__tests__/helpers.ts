@@ -1,6 +1,11 @@
 import { buildApp } from "../app";
 import { signAccessToken, signRefreshToken, generateJti } from "../utils/jwt";
-import { createUser } from "@agenthub/db";
+import {
+  createUser,
+  createAgent as dbCreateAgent,
+  createContact as dbCreateContact,
+  createConversation as dbCreateConversation,
+} from "@agenthub/db";
 import { hashPassword } from "../utils/password";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../middleware/jwt";
@@ -53,4 +58,54 @@ export function createTestAccessToken(userId: string): string {
 
 export function createTestRefreshToken(userId: string): string {
   return signRefreshToken({ userId, jti: generateJti() });
+}
+
+export function getAuthHeader(userId: string): { authorization: string } {
+  return { authorization: `Bearer ${createTestAccessToken(userId)}` };
+}
+
+// ─── Resource factories ─────────────────────────────────────────────────────
+
+export async function createTestAgent(
+  prisma: PrismaClient,
+  overrides: { name?: string; provider?: string } = {}
+): Promise<{ id: string; name: string; provider: string }> {
+  return dbCreateAgent(
+    {
+      name: overrides.name ?? "Test Agent",
+      provider: (overrides.provider ?? "Claude") as any,
+    },
+    prisma
+  );
+}
+
+export async function createTestContact(
+  prisma: PrismaClient,
+  userId: string,
+  agentId: string,
+  overrides: { displayName?: string } = {}
+) {
+  return dbCreateContact(
+    {
+      userId,
+      agentId,
+      displayName: overrides.displayName ?? "Test Contact",
+    },
+    prisma
+  );
+}
+
+export async function createTestConversation(
+  prisma: PrismaClient,
+  userId: string,
+  overrides: { title?: string; type?: "Single" | "Group" } = {}
+) {
+  return dbCreateConversation(
+    {
+      title: overrides.title ?? "Test Conversation",
+      type: overrides.type ?? "Single",
+      ownerId: userId,
+    },
+    prisma
+  );
 }

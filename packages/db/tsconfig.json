@@ -4,8 +4,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "types": ["node"],
-    "ignoreDeprecations": "6.0",
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src"]
 }

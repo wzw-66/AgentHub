@@ -43,7 +43,15 @@
       "Bash(export PGPASSWORD=agenthub_dev)",
       "Bash(psql -h localhost -U agenthub -d agenthub -c \"DELETE FROM \"\"User\"\" WHERE email LIKE ''test.%'';\")",
       "Bash(mkdir -p openspec/changes/archive)",
-      "Bash(mv openspec/changes/user-auth openspec/changes/archive/2026-05-25-user-auth)"
+      "Bash(mv openspec/changes/user-auth openspec/changes/archive/2026-05-25-user-auth)",
+      "Bash(grep -r baseUrl D:codegithubAgentHub --include=*.json)",
+      "Bash(pnpm:*)",
+      "Bash(TEST_DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test\" npx --yes prisma db push --schema=packages/db/prisma/schema.prisma 2>&1)",
+      "Bash(export TEST_DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test\")",
+      "Bash(TEST_DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test\" npx prisma db push --schema=packages/db/prisma/schema.prisma)",
+      "Bash(DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test\" npx --no-install prisma db push)",
+      "Bash(PGPASSWORD=agenthub_dev psql -h localhost -U agenthub -d agenthub_test -c \"DELETE FROM \\\\\"User\\\\\" WHERE email LIKE 'test.%';\" 2>&1)",
+      "Bash(node:*)"
     ]
   }
 }

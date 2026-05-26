@@ -12,6 +12,7 @@ export default defineConfig({
     setupFiles: ["src/__tests__/setup.ts"],
     testTimeout: 15000,
     hookTimeout: 30000,
+    fileParallelism: false,
     env: {
       // Override DATABASE_URL so the server's prisma singleton uses test DB
       DATABASE_URL: TEST_DATABASE_URL,

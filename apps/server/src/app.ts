@@ -2,6 +2,13 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import type { FastifyInstance } from "fastify";
 import { authRoutes } from "./routes/auth";
+import { agentRoutes } from "./routes/agents";
+import { contactRoutes } from "./routes/contacts";
+import { conversationRoutes } from "./routes/conversations";
+import { messageRoutes } from "./routes/messages";
+import { artifactRoutes } from "./routes/artifacts";
+import { credentialRoutes } from "./routes/credentials";
+import { authenticate } from "./middleware/jwt";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,9 +40,22 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  // ─── Routes ────────────────────────────────────────────────────────────────
+  // ─── Public routes ─────────────────────────────────────────────────────────
 
   await app.register(authRoutes, { prefix: "/auth" });
+
+  // ─── Protected routes ──────────────────────────────────────────────────────
+
+  await app.register(async function (protectedApp) {
+    protectedApp.addHook("preHandler", authenticate);
+
+    await protectedApp.register(agentRoutes, { prefix: "/api/agents" });
+    await protectedApp.register(contactRoutes, { prefix: "/api/contacts" });
+    await protectedApp.register(conversationRoutes, { prefix: "/api/conversations" });
+    await protectedApp.register(messageRoutes, { prefix: "/api/conversations/:conversationId/messages" });
+    await protectedApp.register(artifactRoutes, { prefix: "/api/artifacts" });
+    await protectedApp.register(credentialRoutes, { prefix: "/api/credentials" });
+  });
 
   // ─── Health check ──────────────────────────────────────────────────────────
 

@@ -87,6 +87,13 @@ export async function createConversation(
   });
 }
 
+export async function deleteConversation(
+  id: string,
+  prisma: PrismaClient = defaultPrisma
+): Promise<Conversation> {
+  return prisma.conversation.delete({ where: { id } });
+}
+
 export async function updateConversation(
   id: string,
   data: UpdateConversationInput,

@@ -24,9 +24,9 @@ describe("Auth API", () => {
   });
 
   afterEach(async () => {
-    // Clean up test users created during tests
+    // Clean up auth test users only (unique prefix to avoid cross-file pollution)
     await prisma.user.deleteMany({
-      where: { email: { startsWith: "test." } },
+      where: { email: { startsWith: "test.auth." } },
     });
   });
 
@@ -38,7 +38,7 @@ describe("Auth API", () => {
         method: "POST",
         url: "/auth/register",
         payload: {
-          email: "test.register@example.com",
+          email: "test.auth.register@example.com",
           name: "Register User",
           password: "password123",
         },
@@ -47,7 +47,7 @@ describe("Auth API", () => {
       expect(res.statusCode).toBe(201);
       const body = res.json();
       expect(body.user).toBeDefined();
-      expect(body.user.email).toBe("test.register@example.com");
+      expect(body.user.email).toBe("test.auth.register@example.com");
       expect(body.user.name).toBe("Register User");
       expect(body.accessToken).toBeDefined();
       expect(body.refreshToken).toBeDefined();
@@ -58,7 +58,7 @@ describe("Auth API", () => {
       await prisma.user.create({
         data: {
           name: "Existing User",
-          email: "test.duplicate@example.com",
+          email: "test.auth.duplicate@example.com",
           passwordHash: "$2a$10$dummyhash",
         },
       });
@@ -67,7 +67,7 @@ describe("Auth API", () => {
         method: "POST",
         url: "/auth/register",
         payload: {
-          email: "test.duplicate@example.com",
+          email: "test.auth.duplicate@example.com",
           name: "Duplicate User",
           password: "password123",
         },
@@ -95,7 +95,7 @@ describe("Auth API", () => {
         method: "POST",
         url: "/auth/register",
         payload: {
-          email: "test.shortpw@example.com",
+          email: "test.auth.shortpw@example.com",
           name: "Short PW",
           password: "1234567",
         },
@@ -109,13 +109,13 @@ describe("Auth API", () => {
 
   describe("POST /auth/login", () => {
     it("should login with valid credentials", async () => {
-      await createTestUser(prisma, "test.logintest@example.com", "myPassword123");
+      await createTestUser(prisma, "test.auth.login@example.com", "myPassword123");
 
       const res = await app.inject({
         method: "POST",
         url: "/auth/login",
         payload: {
-          email: "test.logintest@example.com",
+          email: "test.auth.login@example.com",
           password: "myPassword123",
         },
       });
@@ -123,19 +123,19 @@ describe("Auth API", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.user).toBeDefined();
-      expect(body.user.email).toBe("test.logintest@example.com");
+      expect(body.user.email).toBe("test.auth.login@example.com");
       expect(body.accessToken).toBeDefined();
       expect(body.refreshToken).toBeDefined();
     });
 
     it("should reject wrong password", async () => {
-      await createTestUser(prisma, "test.wrongpw@example.com", "correctPassword");
+      await createTestUser(prisma, "test.auth.wrongpw@example.com", "correctPassword");
 
       const res = await app.inject({
         method: "POST",
         url: "/auth/login",
         payload: {
-          email: "test.wrongpw@example.com",
+          email: "test.auth.wrongpw@example.com",
           password: "wrongPassword",
         },
       });
@@ -148,7 +148,7 @@ describe("Auth API", () => {
         method: "POST",
         url: "/auth/login",
         payload: {
-          email: "test.nonexistent@example.com",
+          email: "test.auth.nonexistent@example.com",
           password: "somePassword",
         },
       });
@@ -166,7 +166,7 @@ describe("Auth API", () => {
         method: "POST",
         url: "/auth/register",
         payload: {
-          email: "test.refresh@example.com",
+          email: "test.auth.refresh@example.com",
           name: "Refresh User",
           password: "password123",
         },
@@ -215,7 +215,7 @@ describe("Auth API", () => {
         method: "POST",
         url: "/auth/register",
         payload: {
-          email: "test.middleware@example.com",
+          email: "test.auth.middleware@example.com",
           name: "Middleware User",
           password: "password123",
         },

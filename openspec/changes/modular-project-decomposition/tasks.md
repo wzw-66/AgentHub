@@ -45,15 +45,15 @@
 
 ## 5. 用户认证
 
-- [ ] 5.1 创建 `apps/server/package.json` 和 `tsconfig.json`
-- [ ] 5.2 初始化 Fastify 服务器，包含 CORS 和 JSON 解析器
-- [ ] 5.3 实现 JWT 工具函数（签名、验证、刷新）
-- [ ] 5.4 实现 `POST /auth/register` 路由，包含密码哈希
-- [ ] 5.5 实现 `POST /auth/login` 路由，返回 access + refresh token
-- [ ] 5.6 实现 `POST /auth/refresh` 路由，用于令牌刷新
-- [ ] 5.7 创建 JWT 认证中间件，保护需要认证的路由
-- [ ] 5.8 实现 SSE/WS 通过查询参数验证 token
-- [ ] 5.9 编写认证 API 集成测试
+- [x] 5.1 创建 `apps/server/package.json` 和 `tsconfig.json`
+- [x] 5.2 初始化 Fastify 服务器，包含 CORS 和 JSON 解析器
+- [x] 5.3 实现 JWT 工具函数（签名、验证、刷新）
+- [x] 5.4 实现 `POST /auth/register` 路由，包含密码哈希
+- [x] 5.5 实现 `POST /auth/login` 路由，返回 access + refresh token
+- [x] 5.6 实现 `POST /auth/refresh` 路由，用于令牌刷新
+- [x] 5.7 创建 JWT 认证中间件，保护需要认证的路由
+- [x] 5.8 实现 SSE/WS 通过查询参数验证 token
+- [x] 5.9 编写认证 API 集成测试
 
 ## 6. REST API 服务器
 
