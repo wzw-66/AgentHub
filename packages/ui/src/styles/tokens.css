@@ -1,0 +1,70 @@
+:root {
+  /* Primary Colors */
+  --ui-color-primary: #2563eb;
+  --ui-color-primary-light: #dbeafe;
+  --ui-color-primary-dark: #1d4ed8;
+
+  /* Background Colors */
+  --ui-color-bg-user: #3b82f6;
+  --ui-color-bg-contact: #f3f4f6;
+  --ui-color-bg-system: #f9fafb;
+  --ui-color-bg-code: #1e293b;
+  --ui-color-bg-card: #ffffff;
+
+  /* Text Colors */
+  --ui-color-text-primary: #111827;
+  --ui-color-text-secondary: #6b7280;
+  --ui-color-text-inverse: #ffffff;
+  --ui-color-text-code: #e2e8f0;
+
+  /* Border Colors */
+  --ui-color-border: #e5e7eb;
+  --ui-color-border-light: #f3f4f6;
+
+  /* Status Colors */
+  --ui-color-success: #22c55e;
+  --ui-color-error: #ef4444;
+  --ui-color-warning: #f59e0b;
+
+  /* Diff Colors */
+  --ui-color-diff-add: #dcfce7;
+  --ui-color-diff-add-text: #166534;
+  --ui-color-diff-remove: #fee2e2;
+  --ui-color-diff-remove-text: #991b1b;
+
+  /* Spacing Scale */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+
+  /* Border Radius */
+  --ui-radius-sm: 4px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+  --ui-radius-full: 9999px;
+
+  /* Font Families */
+  --ui-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ui-font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+
+  /* Font Sizes */
+  --ui-font-xs: 11px;
+  --ui-font-sm: 13px;
+  --ui-font-base: 15px;
+  --ui-font-lg: 17px;
+  --ui-font-xl: 20px;
+
+  /* Shadows */
+  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ui-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --ui-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+  /* Transitions */
+  --ui-transition-fast: 150ms ease;
+  --ui-transition-normal: 250ms ease;
+}

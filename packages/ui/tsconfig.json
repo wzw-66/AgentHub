@@ -1,0 +1,11 @@
+{
+  "extends": "../../tooling/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src"]
+}

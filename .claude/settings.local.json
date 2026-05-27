@@ -52,7 +52,8 @@
       "Bash(DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test\" npx --no-install prisma db push)",
       "Bash(PGPASSWORD=agenthub_dev psql -h localhost -U agenthub -d agenthub_test -c \"DELETE FROM \\\\\"User\\\\\" WHERE email LIKE 'test.%';\" 2>&1)",
       "Bash(node:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(xargs -I{} echo \"{} lint errors remaining\")"
     ]
   }
 }
