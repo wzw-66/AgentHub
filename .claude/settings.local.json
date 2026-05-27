@@ -64,7 +64,10 @@
       "Bash(tasklist //FI \"PID eq 56608\" //FO TABLE)",
       "Bash(curl:*)",
       "Bash(findstr \":8123 \")",
-      "Bash(find D:codegithubAgentHubpackages -type f -name *.ts -o -name *.tsx)"
+      "Bash(find D:codegithubAgentHubpackages -type f -name *.ts -o -name *.tsx)",
+      "Bash(openspec list:*)",
+      "Bash(grep -l '\"\"dev\"\"' packages/*/package.json apps/*/package.json tooling/*/package.json)",
+      "Bash(grep -A2 '\"\"dev\"\"' packages/*/package.json apps/*/package.json tooling/*/package.json)"
     ]
   }
 }

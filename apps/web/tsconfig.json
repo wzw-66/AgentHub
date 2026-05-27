@@ -10,6 +10,7 @@
         "name": "next"
       }
     ],
+    "exactOptionalPropertyTypes": false,
     "incremental": true,
     "resolveJsonModule": true,
     "ignoreDeprecations": "6.0"

@@ -5,6 +5,7 @@
     "rootDir": "src",
     "jsx": "react-jsx",
     "types": ["node"],
+    "exactOptionalPropertyTypes": false,
     "ignoreDeprecations": "6.0"
   },
   "include": ["src"]

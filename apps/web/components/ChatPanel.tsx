@@ -230,7 +230,7 @@ export default function ChatPanel({
           <div className="flex h-full items-center justify-center">
             <p className="text-sm text-gray-400">消息加载中...</p>
           </div>
-        ) : messages.length === 0 ? (
+        ) : messages.length === 0 && !streamingMessage ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-sm text-gray-400">暂无消息，开始聊天吧</p>
           </div>

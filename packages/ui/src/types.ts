@@ -4,7 +4,7 @@ import type { Message, Artifact } from "@agenthub/shared";
 // ─── AgentAvatar ───────────────────────────────────────────
 export interface AgentAvatarProps {
   name: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }

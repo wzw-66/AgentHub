@@ -9,9 +9,9 @@
 | `@agenthub/shared` | ✅ Done | Type definitions, enums, DTOs — zero runtime deps |
 | `@agenthub/db` | ✅ Done | Prisma schema, CRUD repositories, seed data |
 | `@agenthub/agent-core` | ✅ Done | Agent adapter layer (Claude CLI, OpenCode CLI, custom LLM) |
-| `@agenthub/server` | ✅ Done | Fastify REST API + JWT 双 token 认证 |
-| `apps/web` | 📋 Planned | Next.js chat UI |
-| `packages/ui` | 📋 Planned | Shared React components |
+| `@agenthub/server` | ✅ Done | Fastify 5 REST API + JWT 双 token 认证 + SSE/WS |
+| `@agenthub/web` | ✅ Done | Next.js 14 chat UI with Tailwind CSS |
+| `@agenthub/ui` | ✅ Done | Shared React components (MessageBubble, ArtifactCard, etc.) |
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ pnpm --filter @agenthub/db db:seed
 pnpm test
 ```
 
-### Run Server
+### Run Project
 
 ```bash
 # Build all packages
@@ -48,22 +48,27 @@ pnpm build
 
 # Start the API server (default: http://localhost:3001)
 pnpm --filter @agenthub/server start
+
+# Start the Web app (default: http://localhost:5234)
+pnpm --filter @agenthub/web dev
 ```
 
 ## Project Architecture
 
 ```
 AgentHub/
+├── apps/
+│   ├── server/              # [✅] Fastify REST API + JWT 认证 + 编排器
+│   └── web/                 # [✅] Next.js IM 聊天界面
 ├── packages/
 │   ├── shared/              # [✅] 共享类型、枚举、DTO
 │   ├── db/                  # [✅] Prisma schema、CRUD 仓储、seed
-│   └── agent-core/          # [✅] Agent 适配器层（Claude / OpenCode / 自定义）
-├── apps/
-│   └── server/              # [✅] Fastify REST API + JWT 认证
+│   ├── agent-core/          # [✅] Agent 适配器层（Claude / OpenCode / 自定义）
+│   └── ui/                  # [✅] 共享 React 组件库
 ├── tooling/
 │   ├── eslint-config/       # ESLint 共享配置
 │   └── tsconfig/            # TypeScript 共享配置
-├── docs/                    # 设计文档
+├── docs/                    # 设计文档与技术详解
 ├── openspec/                # OpenSpec 变更管理
 ├── docker-compose.yaml      # PostgreSQL 16 容器
 ├── turbo.json               # Turborepo 任务编排
@@ -77,8 +82,10 @@ AgentHub/
        │
        ├──→ @agenthub/db           (shared + Prisma)
        ├──→ @agenthub/agent-core   (shared only)
+       ├──→ @agenthub/ui           (shared + React)
        │
-       └──→ @agenthub/server       (shared + db + Fastify)
+       ├──→ @agenthub/server       (shared + db + agent-core + Fastify)
+       └──→ @agenthub/web          (shared + ui + Next.js)
 ```
 
 ### Tech Stack
@@ -87,59 +94,49 @@ AgentHub/
 |----------|--------|
 | Monorepo | Turborepo + pnpm workspaces |
 | Language | TypeScript 6.0.3 (strict mode) |
-| Building | tsup (ESM + CJS dual output) |
-| Testing | Vitest |
+| Frontend | Next.js 14 + React 18 + Tailwind CSS |
+| UI Components | Radix UI + Prism React Renderer |
+| Backend | Fastify 5 + JWT + bcryptjs |
+| Real-time | SSE (Stream) + WebSocket (Presence/Status) |
 | Database | PostgreSQL 16 + Prisma ORM 6 |
-| Server | Fastify 5 + JWT + bcryptjs |
-| Linting | ESLint 10 + Prettier |
+| Building | tsup / Next.js Build |
+| Testing | Vitest + Testing Library |
 | Container | Docker Compose |
 
-### Database Schema
+## Core Features
 
-7 个数据模型，完整关系图：
+### 1. Orchestrator (编排器)
 
-```
-User ──→ Contact ←── Agent
-  │
-  ├──→ Conversation ──→ Message ──→ Artifact
-  │                        │
-  │                     (自引用 parentId)
-  │
-  └──→ UserCredential
-```
+Orchestrator 是系统的核心调度模块，负责处理复杂的 Agent 任务：
+- **Intent Analysis**: 识别用户意图并分解为子任务。
+- **Task Graph**: 构建任务依赖图，支持并行与串行执行，自动检测循环依赖。
+- **Dispatcher**: 根据子任务类型调度对应的 Agent Adapter。
+- **Aggregator**: 聚合多个 Agent 的输出结果，生成最终回复。
 
-### Repository Pattern
+### 2. Multi-Agent Adapters
 
-每个模型对应一个仓储模块，所有函数接受可选的 `PrismaClient` 参数（默认使用全局单例），方便测试注入：
+支持多种 Agent 接入：
+- **Claude**: 通过本地 CLI 调用。
+- **OpenCode**: 专注于代码生成的 Agent。
+- **Custom**: 通过 HTTP 调用兼容 OpenAI 格式的 API。
 
-```typescript
-import { createConversation, listMessages } from "@agenthub/db";
+### 3. Real-time Interaction
 
-// 生产环境：使用默认 Prisma 单例
-const conv = await createConversation({ title: "New Chat", type: "Single", ownerId: "user1" });
+- **SSE (Server-Sent Events)**: 用于 Agent 输出的流式推送，实现打字机效果。
+- **WebSocket**: 用于处理在线状态、输入中状态以及复杂的异步事件通知。
 
-// 测试环境：注入 test client
-const result = await listMessages(convId, { cursor, limit: 50 }, testPrisma);
-```
-
-### Agent Adapters
-
-三种 Agent 执行引擎通过统一 `AgentAdapter` 接口接入：
-
-| Adapter | 执行方式 | 流式格式 |
-|---------|---------|---------|
-| `ClaudeAdapter` | `claude --bare` 子进程 | NDJSON stream-json |
-| `OpenCodeAdapter` | `opencode run --format json` 子进程 | NDJSON events |
-| `CustomAgentAdapter` | HTTP fetch OpenAI 兼容 API | SSE data: 行 |
-
-### API Endpoints
+## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/auth/register` | 注册新用户 |
 | POST | `/auth/login` | 登录获取 token |
-| POST | `/auth/refresh` | 刷新 access token |
-| GET | `/health` | 健康检查 |
+| GET | `/agents` | 获取 Agent 列表 |
+| POST | `/agents` | 创建新 Agent |
+| GET | `/conversations` | 获取会话列表 |
+| GET | `/conversations/:id/messages` | 获取会话消息 |
+| POST | `/messages` | 发送消息（触发 Orchestrator） |
+| GET | `/sse` | 建立 SSE 流连接 |
 
 ## Development
 
@@ -155,25 +152,20 @@ pnpm --filter @agenthub/db db:studio     # Prisma Studio GUI
 pnpm --filter @agenthub/db db:push       # 同步 schema
 pnpm --filter @agenthub/db db:seed       # 填充种子数据
 
-# 单包测试
-pnpm --filter @agenthub/db test
-pnpm --filter @agenthub/db vitest run src/__tests__/agent.test.ts
+# Web 端
+pnpm --filter @agenthub/web dev          # 启动 Web 开发服务器
 
 # 服务器
-pnpm --filter @agenthub/server dev       # watch 构建
-pnpm --filter @agenthub/server start     # 启动服务
-```
-
-### Database Connection
-
-```
-Development: postgresql://agenthub:agenthub_dev@localhost:5432/agenthub
-Test:        postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test
+pnpm --filter @agenthub/server dev       # 启动服务器开发模式 (watch)
+pnpm --filter @agenthub/server start     # 启动生产服务
 ```
 
 ## Planned Features
 
-- SSE 流式 Agent 输出 + WebSocket 实时通信
-- 群聊多 Agent 编排调度
-- Next.js 三栏 IM 界面
-- Agent 市场、产物预览
+- [x] SSE 流式 Agent 输出 + WebSocket 实时通信
+- [x] 群聊多 Agent 编排调度 (Orchestrator)
+- [x] Next.js 三栏 IM 界面
+- [x] Agent 市场与自定义 Agent 创建
+- [ ] 产物 (Artifacts) 的实时编辑与版本控制
+- [ ] 更多 Agent 适配器 (如 Gemini, Llama3)
+
