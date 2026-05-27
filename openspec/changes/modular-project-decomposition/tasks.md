@@ -88,14 +88,14 @@
 
 ## 9. 共享 UI 组件
 
-- [ ] 9.1 创建 `packages/ui/package.json` 和 `tsconfig.json`，启用 React 支持
-- [ ] 9.2 实现 `MessageBubble` 组件，按发送者类型显示不同样式
-- [ ] 9.3 实现 `CodeBlock` 组件，支持语法高亮和复制按钮
-- [ ] 9.4 实现 `DiffCard` 组件，支持内联差异渲染（绿色/红色）
-- [ ] 9.5 实现 `PreviewCard` 组件，使用 iframe 缩略图
-- [ ] 9.6 实现 `ArtifactCard` 组件，支持构建中/已完成/失败三种状态
-- [ ] 9.7 实现 `AgentAvatar` 组件，支持图片和首字母兜底显示
-- [ ] 9.8 使用 React Testing Library 编写组件测试
+- [x] 9.1 创建 `packages/ui/package.json` 和 `tsconfig.json`，启用 React 支持
+- [x] 9.2 实现 `MessageBubble` 组件，按发送者类型显示不同样式
+- [x] 9.3 实现 `CodeBlock` 组件，支持语法高亮和复制按钮
+- [x] 9.4 实现 `DiffCard` 组件，支持内联差异渲染（绿色/红色）
+- [x] 9.5 实现 `PreviewCard` 组件，使用 iframe 缩略图
+- [x] 9.6 实现 `ArtifactCard` 组件，支持构建中/已完成/失败三种状态
+- [x] 9.7 实现 `AgentAvatar` 组件，支持图片和首字母兜底显示
+- [x] 9.8 使用 React Testing Library 编写组件测试
 
 ## 10. 聊天界面（Next.js Web 应用）
 
