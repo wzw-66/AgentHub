@@ -8,8 +8,13 @@ import {
   listContacts,
 } from "@agenthub/db";
 import { createAdapter } from "@agenthub/agent-core";
-import type { Chunk } from "@agenthub/shared";
+import type { Chunk, Agent } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
+import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
+import { TaskDispatcher } from "../orchestrator/dispatcher.js";
+import { ResultAggregator } from "../orchestrator/aggregator.js";
+import { createMessage, createArtifact } from "@agenthub/db";
+import type { PushSSEFn } from "../orchestrator/types.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -52,6 +57,24 @@ function validateCreateMessage(body: unknown): body is CreateMessageBody {
   );
 }
 
+// ─── @mention helpers ────────────────────────────────────────────────────────
+
+const MENTION_RE = /@(\S+?)(?=\s|$|，|。|、|\.|,)/g;
+
+/**
+ * Extract unique @mention names from message content.
+ */
+function extractMentions(content: string): string[] {
+  const mentions = new Set<string>();
+  let match: RegExpExecArray | null;
+  const re = new RegExp(MENTION_RE.source, "g");
+  while ((match = re.exec(content)) !== null) {
+    const name = match[1]?.trim();
+    if (name) mentions.add(name);
+  }
+  return Array.from(mentions);
+}
+
 // ─── Route handlers ─────────────────────────────────────────────────────────
 
 async function handleList(
@@ -84,8 +107,11 @@ async function handleCreate(
   }
 
   const body = request.body as CreateMessageBody;
+  const { conversationId } = request.params;
+
+  // Create the user message first
   const message = await dbCreateMessage({
-    conversationId: request.params.conversationId,
+    conversationId,
     senderType: "User",
     senderId: request.userId!,
     type: body.type ?? "Text",
@@ -100,12 +126,33 @@ async function handleCreate(
       cm.getConnectedUserIds(),
       "notification",
       {
-        conversationId: request.params.conversationId,
+        conversationId,
         senderId: request.userId!,
         preview: body.content.slice(0, 100),
       },
       request.userId!,
     );
+  }
+
+  // Check if this should trigger orchestration
+  const conversation = await getConversation(conversationId);
+  const mentions = extractMentions(body.content);
+
+  if (
+    conversation &&
+    conversation.type === "Group" &&
+    mentions.length >= 2
+  ) {
+    // Launch orchestrator as background task
+    runOrchestration(message.id, conversation, request).catch((err) => {
+      request.server.log.error({ err, messageId: message.id }, "Orchestration failed");
+      if (cm) {
+        cm.pushToConversation(conversationId, "error", {
+          message: err instanceof Error ? err.message : "Orchestration failed",
+          code: "ORCHESTRATION_ERROR",
+        });
+      }
+    });
   }
 
   return reply.status(201).send(message);
@@ -162,6 +209,97 @@ async function handleExecute(
     }
   });
 }
+
+// ─── Orchestration ───────────────────────────────────────────────────────────
+
+/**
+ * Run the full orchestration pipeline in the background.
+ *
+ * Steps:
+ * 1. Resolve mentioned agents from conversation contacts
+ * 2. Decompose the message into sub-tasks
+ * 3. Dispatch tasks via dispatcher (parallel/serial)
+ * 4. Persist aggregated results via aggregator
+ */
+async function runOrchestration(
+  messageId: string,
+  conversation: Awaited<ReturnType<typeof getConversation>>,
+  request: FastifyRequest,
+): Promise<void> {
+  if (!conversation) return;
+
+  const cm = request.server.connectionManager;
+  const conversationId = conversation.id;
+
+  // Build SSE push function
+  const pushSSE: PushSSEFn = (event: string, data: unknown) => {
+    cm.pushToConversation(conversationId, event, data);
+  };
+
+  // Resolve agents from conversation contacts
+  const contacts = await listContacts(conversation.ownerId);
+  const agentMap = new Map<string, Agent>();
+
+  // Only include agents whose names are mentioned in the user's contacts
+  const message = await getMessage(messageId);
+  if (!message) return;
+
+  for (const contact of contacts) {
+    const agent = contact.agent as unknown as Agent;
+    agentMap.set(agent.id, agent);
+  }
+
+  // Get the full agent records from shared types
+  const mentionedAgents: Agent[] = [];
+  const mentions = extractMentions(message.content);
+
+  for (const contact of contacts) {
+    const agent = contact.agent as unknown as Agent;
+    if (
+      mentions.some(
+        (m) => agent.name.toLowerCase().includes(m.toLowerCase()),
+      )
+    ) {
+      mentionedAgents.push(agent);
+    }
+  }
+
+  if (mentionedAgents.length < 2) return; // Not a multi-agent message
+
+  // Step 1: Decompose
+  const decomposition = decomposeMessage({
+    content: message.content,
+    agents: mentionedAgents,
+    conversationId,
+    parentMessageId: messageId,
+    history: [],
+  });
+
+  if (decomposition.subtasks.length === 0) return;
+
+  // Build agent map for dispatcher
+  const agents = new Map<string, Agent>();
+  for (const agent of mentionedAgents) {
+    agents.set(agent.id, agent);
+  }
+
+  // Step 2: Dispatch
+  const dispatcher = new TaskDispatcher();
+  const aggregated = await dispatcher.dispatchAll(
+    decomposition,
+    agents,
+    pushSSE,
+  );
+
+  // Step 3: Aggregate & persist
+  const aggregator = new ResultAggregator(
+    (data) => createMessage(data),
+    (data) => createArtifact(data),
+  );
+  await aggregator.persist(aggregated, conversationId, messageId, pushSSE);
+}
+
+// ─── Agent execution ─────────────────────────────────────────────────────────
 
 async function runAgentExecution(
   conversationId: string,

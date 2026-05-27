@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["src/__tests__/**/*.test.ts"],
+    include: ["src/__tests__/**/*.test.ts", "src/orchestrator/__tests__/**/*.test.ts"],
     setupFiles: ["src/__tests__/setup.ts"],
     testTimeout: 15000,
     hookTimeout: 30000,

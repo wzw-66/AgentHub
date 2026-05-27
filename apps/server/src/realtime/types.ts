@@ -36,6 +36,36 @@ export type SSEArtifactStatusData = {
   title?: string;
 };
 
+// ─── Orchestrator SSE event types ────────────────────────────────────────
+
+export type SSEOrchestratorDecompositionData = {
+  subtasks: Array<{
+    id: string;
+    agentId: string;
+    agentName: string;
+    instruction: string;
+    dependsOn: string[];
+  }>;
+  layers: string[][];
+};
+
+export type SSEOrchestratorTaskStatusData = {
+  subtaskId: string;
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
+  agentId: string;
+  agentName: string;
+  layer: number;
+  error?: string;
+};
+
+export type SSEOrchestratorAggregatedData = {
+  summary: string;
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  skippedTasks: number;
+};
+
 // ─── Response helpers ─────────────────────────────────────────────────
 
 export function formatSSEEvent(event: string, data: unknown): string {
