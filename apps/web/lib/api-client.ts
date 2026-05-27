@@ -58,16 +58,15 @@ export function clearUser(): void {
 // ─── API Client ───────────────────────────────────────────────────────
 
 const defaultConfig: ApiClientConfig = {
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123",
   getAccessToken: getStoredAccessToken,
   getRefreshToken: getStoredRefreshToken,
   onTokenRefreshed: (accessToken, refreshToken) => {
     storeTokens(accessToken, refreshToken);
   },
   onAuthFailure: () => {
-    clearTokens();
-    clearUser();
-    if (typeof window !== "undefined") {
+    // Avoid redirect loop: if already on /login or /register, just clear state
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/register")) {
       window.location.href = "/login";
     }
   },

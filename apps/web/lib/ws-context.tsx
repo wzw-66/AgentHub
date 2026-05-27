@@ -109,7 +109,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
     const token = getStoredAccessToken();
     if (!token) return;
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123";
     const wsUrl = baseUrl.replace(/^http/, "ws");
     const url = `${wsUrl}/ws?token=${encodeURIComponent(token)}`;
 

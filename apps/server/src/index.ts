@@ -5,7 +5,7 @@ import { config as appConfig } from "./config/env";
 import { buildApp } from "./app";
 import { ConnectionManager } from "./realtime/connection-manager";
 
-// Load .env from project root (two levels up from this file)
+// Load .env from project root before main() reads config (config uses lazy getters)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 

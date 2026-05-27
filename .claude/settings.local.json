@@ -61,7 +61,10 @@
       "Bash(netstat -ano)",
       "Bash(findstr \":3001\")",
       "Bash(findstr LISTENING)",
-      "Bash(tasklist //FI \"PID eq 56608\" //FO TABLE)"
+      "Bash(tasklist //FI \"PID eq 56608\" //FO TABLE)",
+      "Bash(curl:*)",
+      "Bash(findstr \":8123 \")",
+      "Bash(find D:codegithubAgentHubpackages -type f -name *.ts -o -name *.tsx)"
     ]
   }
 }

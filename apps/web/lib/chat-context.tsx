@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { api } from "./api-client";
+import { api, getStoredAccessToken } from "./api-client";
 import type { Conversation, Message } from "@agenthub/shared";
 import { SenderType, MessageType } from "@agenthub/shared";
 
@@ -206,7 +206,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setTypingAgents(new Map());
   }, []);
 
-  // ─── Load agents on mount ────────────────────────────────────────
+  // ─── Load agents on mount (only if authenticated) ───────────────
   useEffect(() => {
     async function loadAgents() {
       setIsLoadingAgents(true);
@@ -219,12 +219,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsLoadingAgents(false);
       }
     }
-    loadAgents();
+    if (getStoredAccessToken()) {
+      loadAgents();
+    } else {
+      setIsLoadingAgents(false);
+    }
   }, []);
 
-  // ─── Load conversations on mount ─────────────────────────────────
+  // ─── Load conversations on mount (only if authenticated) ────────
   useEffect(() => {
-    fetchConversations();
+    if (getStoredAccessToken()) {
+      fetchConversations();
+    }
   }, [fetchConversations]);
 
   // ─── Load messages when active conversation changes ──────────────

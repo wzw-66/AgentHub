@@ -79,7 +79,7 @@ export function useSSEStream(conversationId: string | null) {
       const token = getStoredAccessToken();
       if (!token) return;
 
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123";
       const url = `${baseUrl}/sse/conversations/${convId}/stream?token=${encodeURIComponent(token)}`;
 
       setStatus("connecting");
