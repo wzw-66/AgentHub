@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AgentDetailContent from "@/components/AgentDetailContent";
 import { api } from "@/lib/api-client";
+import { useI18n } from "@/lib/i18n";
 
 interface AgentData {
   id: string;
@@ -18,14 +19,13 @@ async function checkIsContact(agentId: string): Promise<boolean> {
   try {
     const contacts = await api.get<{ id: string; agentId: string }[]>("/api/contacts/list");
     return contacts.some((c) => c.agentId === agentId);
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 export default function AgentDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { t } = useI18n();
   const id = params.id as string;
 
   const [agent, setAgent] = useState<AgentData | null>(null);
@@ -40,31 +40,27 @@ export default function AgentDetailPage() {
     try {
       const data = await api.get<AgentData>(`/api/agents/${id}/detail`);
       setAgent(data);
-      // Check contact status
       const contactStatus = await checkIsContact(id);
       setIsContact(contactStatus);
     } catch {
-      setError("Agent 未找到");
+      setError(t("agentDetail").notFound);
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
-  useEffect(() => {
-    fetchAgent();
-  }, [fetchAgent]);
+  useEffect(() => { fetchAgent(); }, [fetchAgent]);
 
   async function handleStartChat() {
     setActionLoading("chat");
     try {
-      await api.post(
-        "/api/conversations/create",
-        { title: `与 ${agent!.name} 的对话`, type: "single", contactIds: [id] }
-      );
-      router.push(`/chat`);
-    } catch {
-      setActionLoading(null);
-    }
+      await api.post("/api/conversations/create", {
+        title: `SESSION:${agent!.name}`,
+        type: "single",
+        contactIds: [id],
+      });
+      router.push("/chat");
+    } catch { setActionLoading(null); }
   }
 
   async function handleAddContact() {
@@ -72,21 +68,20 @@ export default function AgentDetailPage() {
     try {
       await api.post("/api/contacts/create", { agentId: id });
       setIsContact(true);
-    } catch {
-      // Silently fail
-    } finally {
-      setActionLoading(null);
-    }
+    } catch { /* silent */ }
+    finally { setActionLoading(null); }
   }
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-gray-50">
-        <div className="flex items-center border-b border-gray-200 bg-white px-6 py-4">
-          <div className="h-5 w-20 animate-pulse rounded bg-gray-200" />
+      <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
+        <div className="flex items-center px-6 py-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
+          <div className="h-4 w-20 rounded" style={{ backgroundColor: "var(--theme-bg-elevated)" }} />
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <div className="text-sm text-gray-400">加载中...</div>
+          <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            {t("common").loading}
+          </span>
         </div>
       </div>
     );
@@ -94,24 +89,35 @@ export default function AgentDetailPage() {
 
   if (error || !agent) {
     return (
-      <div className="flex min-h-screen flex-col bg-gray-50">
-        <div className="flex items-center border-b border-gray-200 bg-white px-6 py-4">
+      <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
+        <div className="flex items-center px-6 py-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
           <button
             onClick={() => router.back()}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded p-1.5 transition-colors"
+            style={{ color: "var(--theme-text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center">
-          <p className="mb-4 text-sm text-red-500">{error}</p>
+          <div
+            className="mb-4 rounded-lg border px-4 py-3 font-mono text-xs"
+            style={{ borderColor: "var(--theme-danger)", backgroundColor: "rgba(255,51,85,0.1)", color: "var(--theme-danger)" }}
+          >
+            [{t("common").error}] {error}
+          </div>
           <button
             onClick={() => router.push("/agents")}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border px-4 py-2 font-mono text-xs tracking-wider"
+            style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-secondary)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--theme-accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--theme-border-light)"; }}
           >
-            返回 Agent 列表
+            {t("agentDetail").backToMarket}
           </button>
         </div>
       </div>
@@ -119,15 +125,18 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
       {/* Header */}
-      <div className="flex items-center border-b border-gray-200 bg-white px-6 py-4">
+      <div className="flex items-center px-6 py-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
         <button
           onClick={() => router.back()}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="rounded p-1.5 transition-colors"
+          style={{ color: "var(--theme-text-muted)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       </div>
@@ -138,25 +147,46 @@ export default function AgentDetailPage() {
       </div>
 
       {/* Actions */}
-      <div className="border-t border-gray-200 bg-white px-6 py-4">
+      <div className="px-6 py-4" style={{ borderTop: "1px solid var(--theme-border)" }}>
         <div className="flex gap-3">
           <button
             onClick={handleStartChat}
             disabled={actionLoading !== null}
-            className="flex-1 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="flex-1 rounded-lg border py-2.5 font-mono text-xs font-bold tracking-wider transition-all active:scale-[0.98] disabled:opacity-50"
+            style={{
+              borderColor: "var(--theme-accent)",
+              color: "var(--theme-accent)",
+              backgroundColor: "var(--theme-accent-dim)",
+            }}
+            onMouseEnter={(e) => {
+              if (!actionLoading) {
+                e.currentTarget.style.backgroundColor = "var(--theme-accent)";
+                e.currentTarget.style.color = "var(--theme-text-inverse)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)";
+              e.currentTarget.style.color = "var(--theme-accent)";
+            }}
           >
-            {actionLoading === "chat" ? "创建中..." : "开始聊天"}
+            {actionLoading === "chat" ? t("agentDetail").initializing : t("agentDetail").startChat}
           </button>
           <button
             onClick={handleAddContact}
             disabled={isContact || actionLoading !== null}
-            className={`flex-1 rounded-md border px-4 py-2.5 text-sm font-medium disabled:opacity-50 ${
-              isContact
-                ? "border-gray-200 bg-gray-50 text-gray-400"
-                : "border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
+            className="flex-1 rounded-lg border py-2.5 font-mono text-xs tracking-wider transition-all disabled:opacity-40"
+            style={{
+              borderColor: "var(--theme-border-light)",
+              color: isContact ? "var(--theme-text-muted)" : "var(--theme-text-secondary)",
+            }}
+            onMouseEnter={(e) => {
+              if (!isContact && !actionLoading) e.currentTarget.style.borderColor = "var(--theme-accent)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isContact) e.currentTarget.style.borderColor = "var(--theme-border-light)";
+            }}
           >
-            {actionLoading === "contact" ? "添加中..." : isContact ? "已是联系人" : "添加到联系人"}
+            {actionLoading === "contact" ? t("agentDetail").adding : isContact ? t("agentDetail").inContacts : t("agentDetail").addContact}
           </button>
         </div>
       </div>

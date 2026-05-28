@@ -3,12 +3,10 @@
 import { useState, useEffect } from "react";
 import AgentDetailContent from "./AgentDetailContent";
 import { api } from "@/lib/api-client";
+import { useI18n } from "@/lib/i18n";
 
 interface RightPanelProps {
-  content: {
-    type: "artifact" | "agent";
-    id: string;
-  } | null;
+  content: { type: "artifact" | "agent"; id: string } | null;
   onClose: () => void;
 }
 
@@ -25,14 +23,12 @@ async function checkIsContact(agentId: string): Promise<boolean> {
   try {
     const contacts = await api.get<{ id: string; agentId: string }[]>("/api/contacts/list");
     return contacts.some((c) => c.agentId === agentId);
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 async function startChat(agentId: string): Promise<void> {
   await api.post("/api/conversations/create", {
-    title: "新对话",
+    title: "New Session",
     type: "single",
     contactIds: [agentId],
   });
@@ -43,6 +39,7 @@ async function addContact(agentId: string): Promise<void> {
 }
 
 export default function RightPanel({ content, onClose }: RightPanelProps) {
+  const { t } = useI18n();
   const [agent, setAgent] = useState<AgentData | null>(null);
   const [isContact, setIsContact] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,61 +63,64 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
   if (!content) return null;
 
   return (
-    <div className="flex h-full flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <span className="text-sm font-medium text-gray-900">
-          {content.type === "artifact" ? "产物预览" : "Agent 详情"}
+    <div className="flex h-full flex-col" style={{ backgroundColor: "var(--theme-bg-secondary)" }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--theme-border)" }}>
+        <span className="font-mono text-xs font-bold tracking-wider" style={{ color: "var(--theme-text-primary)" }}>
+          {content.type === "artifact" ? t("rightPanel").artifactView : t("rightPanel").agentInfo}
         </span>
         <button
           onClick={onClose}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="btn-ghost rounded p-1"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
+      {/* Content */}
       {content.type === "artifact" ? (
         <div className="flex flex-1 items-center justify-center p-4">
-          <p className="text-sm text-gray-400">
-            选择产物查看预览
+          <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            {t("rightPanel").selectArtifact}
           </p>
         </div>
       ) : isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <div className="text-sm text-gray-400">加载中...</div>
+          <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            {t("common").loading}
+          </span>
         </div>
       ) : !agent ? (
         <div className="flex flex-1 items-center justify-center p-4">
-          <p className="text-sm text-gray-400">选择 Agent 查看详情</p>
+          <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            {t("rightPanel").selectAgent}
+          </p>
         </div>
       ) : (
         <div className="flex flex-1 flex-col overflow-y-auto">
           <AgentDetailContent agent={agent} />
 
           {/* Actions */}
-          <div className="border-t border-gray-200 px-4 py-3">
+          <div className="px-4 py-3" style={{ borderTop: "1px solid var(--theme-border)" }}>
             <div className="flex gap-2">
               <button
                 onClick={() => startChat(agent.id)}
-                className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="btn-gradient flex-1 rounded-xl py-2.5 font-mono text-xs font-bold tracking-wider"
               >
-                开始聊天
+                {t("rightPanel").startChat}
               </button>
               <button
-                onClick={async () => {
-                  await addContact(agent.id);
-                  setIsContact(true);
-                }}
+                onClick={async () => { await addContact(agent.id); setIsContact(true); }}
                 disabled={isContact}
-                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50 ${
-                  isContact
-                    ? "border-gray-200 bg-gray-50 text-gray-400"
-                    : "border-gray-300 text-gray-700 hover:bg-gray-50"
-                }`}
+                className="btn-ghost flex-1 rounded-lg border py-2 font-mono text-xs tracking-wider disabled:opacity-40"
+                style={{
+                  borderColor: "var(--theme-border-light)",
+                  color: isContact ? "var(--theme-text-muted)" : "var(--theme-text-secondary)",
+                }}
               >
-                {isContact ? "已是联系人" : "添加到联系人"}
+                {isContact ? t("rightPanel").inContacts : t("rightPanel").addContact}
               </button>
             </div>
           </div>

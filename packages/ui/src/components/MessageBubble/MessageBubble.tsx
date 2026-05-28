@@ -25,6 +25,7 @@ const variants = {
       backgroundColor: "var(--ui-color-bg-contact)",
       color: "var(--ui-color-text-primary)",
       borderBottomLeftRadius: "var(--ui-radius-sm)",
+      border: "1px solid var(--ui-color-border)",
     },
   },
   system: {
@@ -37,6 +38,7 @@ const variants = {
       fontSize: "var(--ui-font-sm)",
       borderRadius: "var(--ui-radius-md)",
       textAlign: "center" as const,
+      border: "1px solid var(--ui-color-border-light)",
     },
   },
 } as const;
@@ -74,6 +76,8 @@ export function MessageBubble({
     fontSize: "var(--ui-font-xs)",
     color: "var(--ui-color-text-secondary)",
     padding: "0 var(--ui-space-1)",
+    fontFamily: "var(--ui-font-mono)",
+    opacity: 0.7,
   };
 
   return (

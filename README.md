@@ -27,30 +27,40 @@
 # 1. Install dependencies
 pnpm install
 
-# 2. Start PostgreSQL
+# 2. Generate Prisma Client (首次启动或 schema 变更后需要)
+pnpm db:generate
+
+# 3. Start PostgreSQL
 docker compose up -d
 
-# 3. Push database schema
+# 4. Push database schema
 pnpm --filter @agenthub/db db:push
 
-# 4. (Optional) Seed demo data
+# 5. (Optional) Seed demo data
 pnpm --filter @agenthub/db db:seed
 
-# 5. Run tests
+# 6. Build all packages
+pnpm build
+
+# 7. Run tests
 pnpm test
 ```
 
 ### Run Project
 
 ```bash
-# Build all packages
+# Development mode — starts all packages in watch mode (Turbo)
+pnpm dev
+
+# Or start individual packages separately:
+pnpm --filter @agenthub/web dev        # Web app (default: http://localhost:5234)
+pnpm --filter @agenthub/server dev     # API server (default: http://localhost:8123)
+
+# Production build (all packages)
 pnpm build
 
-# Start the API server (default: http://localhost:3001)
+# Start production server
 pnpm --filter @agenthub/server start
-
-# Start the Web app (default: http://localhost:5234)
-pnpm --filter @agenthub/web dev
 ```
 
 ## Project Architecture
@@ -143,9 +153,10 @@ Orchestrator 是系统的核心调度模块，负责处理复杂的 Agent 任务
 ### Common Commands
 
 ```bash
-pnpm build                    # 构建所有包
-pnpm test                     # 运行所有测试
-pnpm lint                     # 类型检查所有包
+pnpm dev                       # 开发模式：并行启动所有包（Turbo watch）
+pnpm build                     # 构建所有包
+pnpm test                      # 运行所有测试
+pnpm lint                      # 类型检查所有包
 
 # 数据库
 pnpm --filter @agenthub/db db:studio     # Prisma Studio GUI

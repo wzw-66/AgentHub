@@ -8,9 +8,7 @@ import { useChat } from "@/lib/chat-context";
 import { useSSEStream } from "@/hooks/useSSEStream";
 
 export default function ChatPage() {
-  const [activeConversationId, setActiveConversationId] = useState<
-    string | null
-  >(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [rightPanelContent, setRightPanelContent] = useState<{
     type: "artifact" | "agent";
     id: string;
@@ -18,20 +16,21 @@ export default function ChatPage() {
 
   const { setActiveConversation } = useChat();
 
-  // ─── Sync active conversation to ChatContext ────────────────────
   useEffect(() => {
     setActiveConversation(activeConversationId);
   }, [activeConversationId, setActiveConversation]);
 
-  // ─── SSE stream for active conversation ─────────────────────────
   useSSEStream(activeConversationId);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white">
+    <div className="relative z-10 flex h-screen overflow-hidden">
       {/* Sidebar */}
       <div
-        className="w-72 flex-shrink-0 border-r border-gray-200"
-        style={{ width: "var(--sidebar-width)" }}
+        className="flex-shrink-0"
+        style={{
+          width: "var(--sidebar-width)",
+          borderRight: "1px solid var(--theme-border)",
+        }}
       >
         <Sidebar
           activeConversationId={activeConversationId}
@@ -43,9 +42,7 @@ export default function ChatPage() {
       <div className="flex flex-1 flex-col min-w-0">
         <ChatPanel
           conversationId={activeConversationId}
-          onShowArtifact={(id) =>
-            setRightPanelContent({ type: "artifact", id })
-          }
+          onShowArtifact={(id) => setRightPanelContent({ type: "artifact", id })}
           onShowAgent={(id) => setRightPanelContent({ type: "agent", id })}
         />
       </div>
@@ -53,8 +50,11 @@ export default function ChatPage() {
       {/* Right Panel */}
       {rightPanelContent && (
         <div
-          className="w-96 flex-shrink-0 border-l border-gray-200"
-          style={{ width: "var(--right-panel-width)" }}
+          className="flex-shrink-0 animate-fade-in-up"
+          style={{
+            width: "var(--right-panel-width)",
+            borderLeft: "1px solid var(--theme-border)",
+          }}
         >
           <RightPanel
             content={rightPanelContent}

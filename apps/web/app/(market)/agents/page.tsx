@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AgentCard from "@/components/AgentCard";
 import CreateAgentModal from "@/components/CreateAgentModal";
 import { api } from "@/lib/api-client";
+import { useI18n } from "@/lib/i18n";
 
 interface AgentItem {
   id: string;
@@ -18,6 +19,7 @@ interface AgentItem {
 
 export default function AgentListPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,17 +32,16 @@ export default function AgentListPage() {
       const data = await api.get<AgentItem[]>("/api/agents/list");
       setAgents(data);
     } catch {
-      setError("加载 Agent 列表失败，请重试");
+      setError(t("agentMarket").failedToLoad);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
 
-  // Sort: built-in agents (created early, typically Claude/OpenCode) first
   const sortedAgents = [...agents].sort((a, b) => {
     const aIsBuiltin = a.provider === "claude" || a.provider === "opencode";
     const bIsBuiltin = b.provider === "claude" || b.provider === "opencode";
@@ -50,90 +51,143 @@ export default function AgentListPage() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+      <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/chat")}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded p-1.5 transition-colors"
+            style={{ color: "var(--theme-text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-lg font-semibold text-gray-900">Agent 市场</h1>
+          <div>
+            <h1 className="font-mono text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
+              {t("agentMarket").title}
+            </h1>
+            <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              {t("agentMarket").subtitle}
+            </p>
+          </div>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider transition-all active:scale-[0.98]"
+          style={{
+            borderColor: "var(--theme-accent)",
+            color: "var(--theme-accent)",
+            backgroundColor: "var(--theme-accent-dim)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "var(--theme-accent)";
+            e.currentTarget.style.color = "var(--theme-text-inverse)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)";
+            e.currentTarget.style.color = "var(--theme-accent)";
+          }}
         >
-          创建 Agent
+          {t("agentMarket").create}
         </button>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {/* Navigation Tabs */}
-        <div className="mb-4 flex gap-4 text-sm">
-          <span className="font-medium text-blue-600 border-b-2 border-blue-600 pb-1">
-            全部 Agent
+        {/* Nav tabs */}
+        <div className="mb-6 flex gap-6">
+          <span
+            className="font-mono text-xs font-bold tracking-wider pb-1"
+            style={{ color: "var(--theme-accent)", borderBottom: "2px solid var(--theme-accent)" }}
+          >
+            {t("agentMarket").allAgents}
           </span>
           <button
             onClick={() => router.push("/agents/contacts")}
-            className="text-gray-500 hover:text-gray-700 pb-1"
+            className="font-mono text-xs tracking-wider pb-1 transition-colors"
+            style={{ color: "var(--theme-text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-text-secondary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; }}
           >
-            我的联系人
+            {t("agentMarket").contacts}
           </button>
         </div>
 
-        {/* Loading State */}
+        {/* Loading */}
         {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="flex animate-pulse items-center gap-4 rounded-lg border border-gray-200 bg-white px-5 py-4"
+                className="flex animate-pulse items-center gap-4 rounded-xl border px-5 py-4"
+                style={{ borderColor: "var(--theme-border)", backgroundColor: "var(--theme-bg-surface)" }}
               >
-                <div className="h-10 w-10 rounded-full bg-gray-200" />
+                <div className="h-10 w-10 rounded-full" style={{ backgroundColor: "var(--theme-bg-elevated)" }} />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 rounded bg-gray-200" />
-                  <div className="h-3 w-20 rounded bg-gray-100" />
+                  <div className="h-4 w-32 rounded" style={{ backgroundColor: "var(--theme-bg-elevated)" }} />
+                  <div className="h-3 w-20 rounded" style={{ backgroundColor: "var(--theme-bg-surface)" }} />
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Error State */}
+        {/* Error */}
         {!isLoading && error && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <p className="mb-4 text-sm text-red-500">{error}</p>
+          <div className="flex flex-col items-center justify-center py-20">
+            <div
+              className="mb-4 rounded-lg border px-4 py-3 font-mono text-xs"
+              style={{ borderColor: "var(--theme-danger)", backgroundColor: "rgba(255,51,85,0.1)", color: "var(--theme-danger)" }}
+            >
+              [{t("common").error}] {error}
+            </div>
             <button
               onClick={fetchAgents}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border px-4 py-2 font-mono text-xs tracking-wider transition-colors"
+              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-secondary)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--theme-accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--theme-border-light)"; }}
             >
-              重试
+              {t("common").retry}
             </button>
           </div>
         )}
 
-        {/* Empty State */}
+        {/* Empty */}
         {!isLoading && !error && sortedAgents.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <p className="mb-4 text-sm text-gray-500">暂无可用 Agent</p>
+          <div className="flex flex-col items-center justify-center py-20">
+            <p className="mb-4 font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              {t("agentMarket").noAgents}
+            </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider"
+              style={{
+                borderColor: "var(--theme-accent)",
+                color: "var(--theme-accent)",
+                backgroundColor: "var(--theme-accent-dim)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--theme-accent)";
+                e.currentTarget.style.color = "var(--theme-text-inverse)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)";
+                e.currentTarget.style.color = "var(--theme-accent)";
+              }}
             >
-              创建第一个 Agent
+              {t("agentMarket").createFirst}
             </button>
           </div>
         )}
 
-        {/* Agent List */}
+        {/* List */}
         {!isLoading && !error && sortedAgents.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {sortedAgents.map((agent) => (
               <AgentCard
                 key={agent.id}
@@ -145,14 +199,11 @@ export default function AgentListPage() {
         )}
       </div>
 
-      {/* Create Agent Modal */}
+      {/* Create Modal */}
       {showCreateModal && (
         <CreateAgentModal
           onClose={() => setShowCreateModal(false)}
-          onCreated={() => {
-            setShowCreateModal(false);
-            fetchAgents();
-          }}
+          onCreated={() => { setShowCreateModal(false); fetchAgents(); }}
         />
       )}
     </div>

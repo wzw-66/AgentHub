@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,17 +21,15 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
       await register(name, email, password);
       router.push("/login");
     } catch (err: unknown) {
       const apiErr = err as { status?: number; message?: string };
-      // 后端返回 "Invalid input" → 翻译为中文提示
       if (apiErr.message === "Invalid input") {
-        setError("输入有误，请检查：名称不能为空、邮箱格式正确、密码至少 8 位");
+        setError(t("auth").register.invalidInput);
       } else {
-        setError(apiErr.message || "注册失败，请重试");
+        setError(apiErr.message || t("auth").register.failed);
       }
     } finally {
       setLoading(false);
@@ -36,94 +37,138 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm rounded-lg border bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-2xl font-semibold text-gray-900">
-          注册 AgentHub
-        </h1>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-700"
+    <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-sm animate-fade-in-up">
+        {/* Header */}
+        <div className="mb-10 text-center">
+          <div className="inline-flex items-center justify-center gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-xl hover-glow"
+              style={{
+                backgroundColor: "var(--theme-accent-dim)",
+                border: "1px solid var(--theme-border-light)",
+              }}
             >
-              名称
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="请输入名称"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              required
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
-            >
-              邮箱
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@email.com"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              required
-            />
-            <p className="mt-1 text-xs text-gray-400">请填写有效的邮箱地址</p>
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
-            >
-              密码
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 8 位密码"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              required
-            />
-            <p className="mt-1 text-xs text-gray-400">密码长度不少于 8 位</p>
-          </div>
-
-          {error && (
-            <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
-              {error}
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="var(--theme-accent)" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+              </svg>
             </div>
-          )}
+            <div className="text-left">
+              <h1 className="font-mono text-xl font-semibold leading-tight" style={{ color: "var(--theme-text-primary)" }}>
+                {t("brand").name}
+              </h1>
+              <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                {t("brand").tagline}
+              </p>
+            </div>
+          </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-          >
-            {loading ? "注册中..." : "注册"}
-          </button>
-        </form>
+        {/* Card */}
+        <div className="glass-panel rounded-xl p-8">
+          <h2 className="mb-2 text-center font-mono text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
+            {t("auth").register.title}
+          </h2>
+          <p className="mb-6 text-center font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            {t("auth").register.subtitle}
+          </p>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
-          已有账号？{" "}
-          <Link
-            href="/login"
-            className="font-medium text-blue-600 hover:text-blue-500"
-          >
-            登录
-          </Link>
-        </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                {t("auth").register.username}
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("auth").register.usernamePlaceholder}
+                className="input-theme mt-1.5 block w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm"
+                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                {t("auth").register.email}
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t("auth").register.emailPlaceholder}
+                className="input-theme mt-1.5 block w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm"
+                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                {t("auth").register.password}
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input-theme mt-1.5 block w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm"
+                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+                required
+              />
+              <p className="mt-1 font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+                {t("auth").register.minChars}
+              </p>
+            </div>
+
+            {error && (
+              <div
+                className="rounded-lg border px-4 py-3 font-mono text-xs"
+                style={{
+                  borderColor: "var(--theme-danger)",
+                  backgroundColor: "rgba(255,51,85,0.1)",
+                  color: "var(--theme-danger)",
+                }}
+              >
+                [{t("common").error}] {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-gradient relative w-full rounded-xl px-4 py-3 font-mono text-sm font-bold tracking-wider disabled:opacity-50"
+            >
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  {t("auth").register.registering}
+                </span>
+              ) : (
+                t("auth").register.register
+              )}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+            {t("auth").register.hasAccount}{" "}
+            <Link href="/login" className="font-bold tracking-wider transition-colors hover-glow" style={{ color: "var(--theme-accent)" }}>
+              {t("auth").register.login}
+            </Link>
+          </p>
+        </div>
+
+        <div className="mt-4 flex items-center justify-center gap-4">
+          <div className="font-mono text-xs tracking-widest" style={{ color: "var(--theme-text-muted)" }}>
+            <span className="inline-block w-2 h-2 rounded-full mr-1.5 pulse-glow" style={{ backgroundColor: "var(--theme-accent)" }} />
+            {t("common").systemReady}
+          </div>
+          <LanguageSwitcher />
+        </div>
       </div>
     </div>
   );

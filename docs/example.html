@@ -1,0 +1,693 @@
+以下是实现蓝黑、紫黑、红黑三种极客风格一键切换的博客HTML代码。您可以通过顶部的颜色按钮即时变换主题，所有视觉元素（背景、边框、高光等）都会同步更新。
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>极客三原色 | 蓝黑 · 紫黑 · 红黑 动态主题</title>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* 基础过渡 + 基础字体 */
+        body {
+            font-family: 'Fira Code', 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+            line-height: 1.5;
+            scroll-behavior: smooth;
+            transition: background-color 0.25s ease, color 0.2s ease;
+            min-height: 100vh;
+        }
+
+        /* 全局变量默认 (蓝黑主题，与主题类同步，但下面主题类会覆盖) */
+        :root, body.theme-blueblack {
+            --bg-primary: #05070c;
+            --bg-card: rgba(12, 18, 28, 0.75);
+            --bg-card-hover: rgba(15, 22, 36, 0.85);
+            --border-color: rgba(0, 180, 216, 0.25);
+            --border-hover: #2a6df0;
+            --text-main: #e2e8f0;
+            --text-muted: #6c86a3;
+            --text-dim: #b9c7d9;
+            --accent: #2a6df0;
+            --accent-glow: rgba(42, 109, 240, 0.5);
+            --accent-gradient: linear-gradient(135deg, #00c6ff, #2a6df0);
+            --terminal-border: #2a6df0;
+            --tag-bg: rgba(42, 109, 240, 0.15);
+            --tag-color: #8bb9fe;
+            --scrollbar-track: #0a0e17;
+            --scrollbar-thumb: #1e2a4a;
+            --scrollbar-thumb-hover: #2a6df0;
+            --glow-bg-1: radial-gradient(circle at 20% 30%, rgba(0, 50, 80, 0.2), transparent 60%);
+            --glow-bg-2: transparent;
+            --btn-bg: rgba(12, 18, 28, 0.9);
+        }
+
+        /* 紫黑主题 */
+        body.theme-purpleblack {
+            --bg-primary: #07040c;
+            --bg-card: rgba(16, 8, 28, 0.75);
+            --bg-card-hover: rgba(22, 12, 40, 0.85);
+            --border-color: rgba(156, 77, 255, 0.35);
+            --border-hover: #c45eff;
+            --text-main: #e2d6ff;
+            --text-muted: #aa93e0;
+            --text-dim: #cdbef5;
+            --accent: #b05eff;
+            --accent-glow: rgba(168, 85, 247, 0.5);
+            --accent-gradient: linear-gradient(135deg, #c084fc, #a855f7);
+            --terminal-border: #b05eff;
+            --tag-bg: rgba(168, 85, 247, 0.18);
+            --tag-color: #cbabff;
+            --scrollbar-track: #110b1a;
+            --scrollbar-thumb: #6a2be0;
+            --scrollbar-thumb-hover: #b05eff;
+            --glow-bg-1: radial-gradient(circle at 80% 10%, rgba(106, 43, 224, 0.2), transparent 55%);
+            --glow-bg-2: radial-gradient(circle at 20% 90%, rgba(156, 77, 255, 0.15), transparent 60%);
+            --btn-bg: rgba(12, 6, 26, 0.85);
+        }
+
+        /* 红黑主题 */
+        body.theme-redblack {
+            --bg-primary: #0b0205;
+            --bg-card: rgba(18, 4, 10, 0.75);
+            --bg-card-hover: rgba(28, 8, 18, 0.88);
+            --border-color: rgba(220, 50, 70, 0.45);
+            --border-hover: #ff5c7a;
+            --text-main: #ffe6e9;
+            --text-muted: #dc98ae;
+            --text-dim: #ffcdd9;
+            --accent: #ff4d6d;
+            --accent-glow: rgba(255, 50, 80, 0.6);
+            --accent-gradient: linear-gradient(135deg, #ff4d6d, #c9182f);
+            --terminal-border: #ff3b5c;
+            --tag-bg: rgba(255, 60, 92, 0.18);
+            --tag-color: #ffa6bc;
+            --scrollbar-track: #1a050c;
+            --scrollbar-thumb: #e33b5c;
+            --scrollbar-thumb-hover: #ff4d6d;
+            --glow-bg-1: radial-gradient(circle at 10% 80%, rgba(200, 20, 50, 0.18), transparent 55%);
+            --glow-bg-2: radial-gradient(circle at 85% 20%, rgba(255, 40, 70, 0.12), transparent 60%);
+            --btn-bg: rgba(30, 5, 12, 0.9);
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            background-image: var(--glow-bg-1), var(--glow-bg-2);
+            background-size: auto, auto;
+            color: var(--text-main);
+        }
+
+        /* 滚动条动态 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover);
+            box-shadow: 0 0 6px var(--accent);
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+        }
+
+        /* 导航栏 + 主题切换按钮 */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0 1.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .logo {
+            font-size: 1.6rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 8px var(--accent-glow);
+        }
+        .logo i {
+            background: none;
+            -webkit-background-clip: unset;
+            background-clip: unset;
+            color: var(--accent);
+            margin-right: 6px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: 0.2s;
+            border-bottom: 2px solid transparent;
+            padding-bottom: 4px;
+            font-weight: 500;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            text-shadow: 0 0 4px var(--accent-glow);
+        }
+
+        /* 主题切换胶囊 */
+        .theme-switcher {
+            display: flex;
+            gap: 0.8rem;
+            background: var(--btn-bg);
+            backdrop-filter: blur(4px);
+            padding: 0.3rem 0.8rem;
+            border-radius: 48px;
+            border: 1px solid var(--border-color);
+        }
+        .theme-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0.3rem 0.6rem;
+            border-radius: 32px;
+            transition: 0.2s;
+            color: var(--text-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .theme-btn i {
+            font-size: 1rem;
+        }
+        .theme-btn.active {
+            background: var(--accent);
+            color: #05070c;
+            box-shadow: 0 0 8px var(--accent);
+        }
+        .theme-btn:hover:not(.active) {
+            color: var(--accent);
+            background: rgba(255,255,255,0.05);
+        }
+
+        /* 主网格布局 */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2.5rem;
+            margin-top: 1rem;
+        }
+
+        /* 文章卡片 */
+        .blog-section h2, .sidebar-section h3 {
+            font-size: 1.3rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: -0.3px;
+            border-left: 4px solid var(--accent);
+            padding-left: 12px;
+            color: var(--text-main);
+        }
+        .post-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(2px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            transition: all 0.25s ease;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+        .post-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: 0 12px 28px var(--accent-glow);
+            transform: translateY(-3px);
+            background: var(--bg-card-hover);
+        }
+        .post-meta {
+            display: flex;
+            gap: 1.2rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.8rem;
+            font-family: monospace;
+        }
+        .post-meta i {
+            margin-right: 5px;
+        }
+        .post-title {
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            color: var(--text-main);
+        }
+        .post-title a {
+            text-decoration: none;
+            color: inherit;
+            transition: color 0.2s;
+        }
+        .post-title a:hover {
+            color: var(--accent);
+            text-shadow: 0 0 4px var(--accent-glow);
+        }
+        .post-excerpt {
+            color: var(--text-dim);
+            margin-bottom: 1.2rem;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+        .post-tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.2rem;
+        }
+        .tag {
+            background: var(--tag-bg);
+            padding: 0.2rem 0.7rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-family: monospace;
+            color: var(--tag-color);
+            border: 0.5px solid var(--border-color);
+        }
+        .read-more {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-bottom: 1px dashed var(--accent);
+            padding-bottom: 2px;
+            transition: 0.2s;
+        }
+        .read-more i {
+            font-size: 0.75rem;
+            transition: transform 0.2s;
+        }
+        .read-more:hover i {
+            transform: translateX(4px);
+        }
+
+        /* 侧边栏卡片 */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .card-module {
+            background: var(--bg-card);
+            backdrop-filter: blur(2px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 1.4rem;
+            transition: 0.2s;
+        }
+        .card-module:hover {
+            border-color: var(--border-hover);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .profile {
+            text-align: center;
+        }
+        .avatar {
+            font-size: 3.5rem;
+            background: radial-gradient(circle at 30% 30%, rgba(0,0,0,0.5), transparent);
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+        .avatar i {
+            font-size: 3rem;
+            color: var(--accent);
+        }
+        .profile h4 {
+            font-size: 1.3rem;
+            margin-bottom: 0.3rem;
+        }
+        .profile-bio {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+        .social-icons {
+            display: flex;
+            justify-content: center;
+            gap: 1.2rem;
+            margin-top: 0.5rem;
+        }
+        .social-icons a {
+            color: var(--text-dim);
+            font-size: 1.3rem;
+            transition: 0.2s;
+        }
+        .social-icons a:hover {
+            color: var(--accent);
+            transform: translateY(-2px);
+        }
+        .terminal-status {
+            background: rgba(0,0,0,0.5);
+            border-radius: 16px;
+            padding: 1rem;
+            font-family: monospace;
+            border-left: 4px solid var(--accent);
+        }
+        .line-status {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            font-size: 0.8rem;
+            padding: 6px 0;
+            border-bottom: 0.5px solid var(--border-color);
+        }
+        .prompt {
+            color: var(--accent);
+            font-weight: 600;
+        }
+        .cmd-text {
+            color: var(--text-dim);
+        }
+        .glow-text {
+            color: var(--accent);
+            text-shadow: 0 0 3px var(--accent-glow);
+        }
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .cloud-tag {
+            background: transparent;
+            border: 1px solid var(--accent);
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            transition: all 0.2s;
+            color: var(--text-dim);
+        }
+        .cloud-tag:hover {
+            background: var(--accent);
+            color: var(--bg-primary);
+            box-shadow: 0 0 8px var(--accent);
+            cursor: default;
+        }
+        .footer {
+            margin-top: 3.5rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .blink-cursor {
+            animation: blink 1s step-end infinite;
+            display: inline-block;
+            width: 2px;
+            height: 1rem;
+            background: var(--accent);
+            margin-left: 2px;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        @media (max-width: 880px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            .container {
+                padding: 1rem;
+            }
+            .navbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .post-title {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+<body class="theme-blueblack">
+<div class="container">
+    <!-- 导航栏 + 主题切换 -->
+    <nav class="navbar">
+        <div class="logo">
+            <i class="fas fa-cube"></i> POLYCHROME::VOID
+        </div>
+        <div class="nav-links">
+            <a href="#" class="active">~/home</a>
+            <a href="#">/explore</a>
+            <a href="#">/labs</a>
+            <div class="theme-switcher">
+                <button id="theme-blueblack" class="theme-btn active" title="蓝黑风格"><i class="fas fa-water"></i> 蓝黑</button>
+                <button id="theme-purpleblack" class="theme-btn" title="紫黑风格"><i class="fas fa-crown"></i> 紫黑</button>
+                <button id="theme-redblack" class="theme-btn" title="红黑风格"><i class="fas fa-fire"></i> 红黑</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-grid">
+        <!-- 左侧文章流 -->
+        <div class="blog-section">
+            <h2><i class="fas fa-terminal"></i> recent::transmissions</h2>
+            <article class="post-card">
+                <div class="post-meta">
+                    <span><i class="far fa-calendar-alt"></i> 2025.03.06</span>
+                    <span><i class="fas fa-clock"></i> 7 min read</span>
+                    <span><i class="fas fa-palette"></i> #chromatic</span>
+                </div>
+                <h3 class="post-title"><a href="#">动态主题引擎：蓝黑 · 紫黑 · 红黑极客美学</a></h3>
+                <div class="post-excerpt">
+                    利用CSS自定义属性与JS运行时切换，构建三重视觉宇宙。深入解析色调对比度、光效平衡及终端风格的统一性。
+                </div>
+                <div class="post-tags">
+                    <span class="tag">CSS变量</span>
+                    <span class="tag">动态主题</span>
+                    <span class="tag">极客设计</span>
+                </div>
+                <a href="#" class="read-more">探索设计 <i class="fas fa-arrow-right"></i></a>
+            </article>
+            <article class="post-card">
+                <div class="post-meta">
+                    <span><i class="far fa-calendar-alt"></i> 2025.03.01</span>
+                    <span><i class="fas fa-clock"></i> 9 min read</span>
+                    <span><i class="fas fa-microchip"></i> #kernel</span>
+                </div>
+                <h3 class="post-title"><a href="#">eBPF 与内核观测性: 实战性能剖析</a></h3>
+                <div class="post-excerpt">
+                    编写eBPF程序追踪TCP拥塞与调度延迟，在三种主题下可视化监控数据，极客终端展示。
+                </div>
+                <div class="post-tags">
+                    <span class="tag">eBPF</span>
+                    <span class="tag">Linux内核</span>
+                    <span class="tag">性能</span>
+                </div>
+                <a href="#" class="read-more">深入核心 <i class="fas fa-arrow-right"></i></a>
+            </article>
+            <article class="post-card">
+                <div class="post-meta">
+                    <span><i class="far fa-calendar-alt"></i> 2025.02.20</span>
+                    <span><i class="fas fa-clock"></i> 5 min read</span>
+                    <span><i class="fas fa-shield-alt"></i> #offsec</span>
+                </div>
+                <h3 class="post-title"><a href="#">红队基础设施自动化: 从C2到持久化</a></h3>
+                <div class="post-excerpt">
+                    结合Terraform与Cloudflare构建弹性C2，并提供三种主题下的仪表板样式参考。
+                </div>
+                <div class="post-tags">
+                    <span class="tag">红队</span>
+                    <span class="tag">C2</span>
+                    <span class="tag">云原生</span>
+                </div>
+                <a href="#" class="read-more">阅读全文 <i class="fas fa-arrow-right"></i></a>
+            </article>
+        </div>
+
+        <!-- 右侧多功能侧边栏 -->
+        <div class="sidebar">
+            <div class="card-module profile">
+                <div class="avatar">
+                    <i class="fas fa-user-astronaut"></i>
+                </div>
+                <h4>0x3l3ctr0 · V0ID</h4>
+                <div class="profile-bio">>_ 全栈极客 / 主题魔术师 / 漏洞熔炉</div>
+                <div class="social-icons">
+                    <a href="#"><i class="fab fa-github"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fas fa-envelope"></i></a>
+                </div>
+                <div style="margin-top: 8px; font-size:0.7rem; font-family:monospace;"><i class="fas fa-crown"></i> tricolor::wizard</div>
+            </div>
+
+            <!-- 终端风格状态 -->
+            <div class="card-module">
+                <h3><i class="fas fa-microchip"></i> sys::fetch</h3>
+                <div class="terminal-status">
+                    <div class="line-status"><span class="prompt">$></span> <span class="cmd-text">uname -rs</span></div>
+                    <div class="line-status"><span class="prompt">  ↳</span> Void Linux 6.12.5</div>
+                    <div class="line-status"><span class="prompt">$></span> <span class="cmd-text">theme_mode</span></div>
+                    <div class="line-status"><span class="prompt">  ↳</span> <span class="glow-text" id="activeThemeName">蓝黑深渊</span></div>
+                    <div class="line-status"><span class="prompt">$></span> <span class="cmd-text">uptime -p</span></div>
+                    <div class="line-status"><span class="prompt">  ↳</span> up 14 days, 3h 22m</div>
+                    <div class="line-status"><span class="prompt">$></span> <span class="cmd-text">wm/theme</span></div>
+                    <div class="line-status"><span class="prompt">  ↳</span> <span class="glow-text" id="wmThemeVar">NEO-BLUE v2.0</span></div>
+                    <div class="line-status" style="border-bottom: none;"><span class="prompt">█</span><span class="blink-cursor"></span> <span style="color: var(--accent);">void@tricolor:~$</span></div>
+                </div>
+            </div>
+
+            <!-- 标签云 -->
+            <div class="card-module">
+                <h3><i class="fas fa-tags"></i> tags::spectrum</h3>
+                <div class="tag-cloud">
+                    <span class="cloud-tag">#Rust</span>
+                    <span class="cloud-tag">#Zig</span>
+                    <span class="cloud-tag">#WebAssembly</span>
+                    <span class="cloud-tag">#Neovim</span>
+                    <span class="cloud-tag">#K8s</span>
+                    <span class="cloud-tag">#逆向工程</span>
+                    <span class="cloud-tag">#cyber</span>
+                </div>
+            </div>
+
+            <!-- 动态项目列表 -->
+            <div class="card-module">
+                <h3><i class="fas fa-code-branch"></i> active::projects</h3>
+                <div style="margin-top: 6px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 14px; align-items: center;">
+                        <i class="fas fa-dharmachakra" style="color: var(--accent);"></i>
+                        <div><span style="font-weight: 500;">chroma-schemer</span><br><span style="font-size: 0.7rem; color: var(--text-muted);">动态主题切换引擎</span></div>
+                        <span style="margin-left: auto; font-size: 0.7rem; background: rgba(0,0,0,0.5); padding:2px 6px; border-radius: 30px;">css/js</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 14px; align-items: center;">
+                        <i class="fas fa-shield-haltered" style="color: var(--accent);"></i>
+                        <div><span style="font-weight: 500;">darkeye</span><br><span style="font-size: 0.7rem; color: var(--text-muted);">eBPF 入侵检测</span></div>
+                        <span style="margin-left: auto; font-size: 0.7rem; background: rgba(0,0,0,0.5); padding:2px 6px; border-radius: 30px;">c/rust</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <i class="fas fa-terminal" style="color: var(--accent);"></i>
+                        <div><span style="font-weight: 500;">dotrix</span><br><span style="font-size: 0.7rem; color: var(--text-muted);">三色主题 dotfiles</span></div>
+                        <span style="margin-left: auto; font-size: 0.7rem; background: rgba(0,0,0,0.5); padding:2px 6px; border-radius: 30px;">lua/sh</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-module">
+                <div style="font-family: monospace; font-size: 0.75rem;">
+                    <i class="fas fa-quote-left" style="color: var(--accent); margin-right: 6px;"></i> 主题可变，内核不变——极客的浪漫是自由切换。<br>
+                    <span style="display: block; margin-top: 6px; color: var(--text-muted);">~/.tricolor_sig</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="code-sign">
+            <i class="far fa-copyright"></i> 2025 POLYCHROME::VOID  |  三色协议
+        </div>
+        <div>
+            <i class="fas fa-hourglass-half"></i>  <span id="liveTime"></span> UTC+8
+        </div>
+        <div>
+            <i class="fas fa-palette"></i>  dynamic theme | 蓝黑 · 紫黑 · 红黑
+        </div>
+    </footer>
+</div>
+
+<script>
+    // 主题切换逻辑，同时修改 body class 和局部文本展示
+    function setTheme(themeName) {
+        // 移除已有主题类
+        document.body.classList.remove('theme-blueblack', 'theme-purpleblack', 'theme-redblack');
+        if (themeName === 'blueblack') {
+            document.body.classList.add('theme-blueblack');
+            document.getElementById('activeThemeName').innerText = '蓝黑深渊';
+            document.getElementById('wmThemeVar').innerText = 'NEO-BLUE v2.0';
+        } else if (themeName === 'purpleblack') {
+            document.body.classList.add('theme-purpleblack');
+            document.getElementById('activeThemeName').innerText = '紫黑异界';
+            document.getElementById('wmThemeVar').innerText = 'Amethyst-Neo';
+        } else if (themeName === 'redblack') {
+            document.body.classList.add('theme-redblack');
+            document.getElementById('activeThemeName').innerText = '红黑熔岩';
+            document.getElementById('wmThemeVar').innerText = 'Crimson Flame';
+        }
+        // 存储到 localStorage
+        localStorage.setItem('preferredTheme', themeName);
+        // 更新按钮 active 样式
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        if (themeName === 'blueblack') document.getElementById('theme-blueblack').classList.add('active');
+        if (themeName === 'purpleblack') document.getElementById('theme-purpleblack').classList.add('active');
+        if (themeName === 'redblack') document.getElementById('theme-redblack').classList.add('active');
+    }
+
+    // 绑定按钮事件
+    document.getElementById('theme-blueblack').addEventListener('click', () => setTheme('blueblack'));
+    document.getElementById('theme-purpleblack').addEventListener('click', () => setTheme('purpleblack'));
+    document.getElementById('theme-redblack').addEventListener('click', () => setTheme('redblack'));
+
+    // 加载用户偏好
+    const savedTheme = localStorage.getItem('preferredTheme');
+    if (savedTheme && (savedTheme === 'blueblack' || savedTheme === 'purpleblack' || savedTheme === 'redblack')) {
+        setTheme(savedTheme);
+    } else {
+        // 默认蓝黑
+        setTheme('blueblack');
+    }
+
+    // 实时时间更新
+    function updateTime() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
+        const timeSpan = document.getElementById('liveTime');
+        if (timeSpan) timeSpan.innerText = timeStr;
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    // 控制台彩蛋
+    console.log("%c[ TRI-COLOR MATRIX ] 蓝黑 | 紫黑 | 红黑 —— 极客主题自由切换", "color: #2a6df0; font-size: 14px; font-family: monospace;");
+    console.log("%c>_ 点击顶部按钮，感受三种风格的视觉张力。", "color: #b05eff;");
+</script>
+</body>
+</html>
+```

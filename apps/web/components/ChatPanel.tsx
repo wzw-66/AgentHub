@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/chat-context";
+import { useI18n } from "@/lib/i18n";
 import { MessageBubble, CodeBlock } from "@agenthub/ui";
 import type { Message } from "@agenthub/shared";
 import MentionPopup from "./MentionPopup";
@@ -25,11 +26,9 @@ function isCodeBlock(content: string): CodeBlockMatch {
 
 function MessageContent({ message }: { message: Message }) {
   const { isCode, code, language } = isCodeBlock(message.content);
-
   if (isCode) {
     return <CodeBlock code={code} language={language} />;
   }
-
   return <>{message.content}</>;
 }
 
@@ -42,31 +41,20 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const {
-    messages,
-    conversations,
-    isLoadingMessages,
-    sendMessage,
-    agents,
-    streamingMessage,
-  } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, agents, streamingMessage } = useChat();
+  const { t } = useI18n();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [mentionState, setMentionState] = useState<{
-    atIndex: number;
-    query: string;
-  } | null>(null);
+  const [mentionState, setMentionState] = useState<{ atIndex: number; query: string } | null>(null);
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const activeConversation = conversations.find(
-    (c) => c.id === conversationId,
-  );
+  const activeConversation = (conversations || []).find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
 
-  // ─── Auto-scroll to bottom ──────────────────────────────────────
+  // ─── Auto-scroll ────────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
@@ -81,120 +69,82 @@ export default function ChatPanel({
       setMentionState(null);
       return;
     }
-
     const cursorPos = textareaRef.current.selectionStart;
     const beforeCursor = input.slice(0, cursorPos);
     const atIndex = beforeCursor.lastIndexOf("@");
-
-    if (atIndex === -1) {
-      setMentionState(null);
-      return;
-    }
-
-    // Check word boundary
+    if (atIndex === -1) { setMentionState(null); return; }
     if (atIndex > 0 && beforeCursor[atIndex - 1] !== " " && beforeCursor[atIndex - 1] !== "\n") {
-      setMentionState(null);
-      return;
+      setMentionState(null); return;
     }
-
     const query = beforeCursor.slice(atIndex + 1);
-    if (query.includes(" ")) {
-      setMentionState(null);
-      return;
-    }
-
+    if (query.includes(" ")) { setMentionState(null); return; }
     setMentionState({ atIndex, query });
     setMentionSelectedIndex(0);
   }, [input, isGroupChat]);
 
-  // ─── Handle mention select ──────────────────────────────────────
   function handleMentionSelect(agentName: string) {
     if (mentionState === null) return;
     const before = input.slice(0, mentionState.atIndex);
     const after = input.slice(textareaRef.current?.selectionStart ?? input.length);
-    const newText = `${before}@${agentName} ${after}`;
-    setInput(newText);
+    setInput(`${before}@${agentName} ${after}`);
     setMentionState(null);
     textareaRef.current?.focus();
   }
 
-  // ─── Handle send ────────────────────────────────────────────────
+  // ─── Send ───────────────────────────────────────────────────────
   async function handleSend() {
     const trimmed = input.trim();
     if (!trimmed || !conversationId || sending) return;
-
     setSending(true);
     try {
       await sendMessage(conversationId, trimmed);
       setInput("");
       textareaRef.current?.focus();
     } catch {
-      // Handle error silently
+      // silent
     } finally {
       setSending(false);
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    // If mention popup is open, intercept navigation keys
     if (mentionState) {
-      const filtered = agents.filter((a) =>
+      const filtered = (agents || []).filter((a) =>
         a.name.toLowerCase().includes(mentionState.query),
       );
-
       if (filtered.length > 0) {
         switch (e.key) {
-          case "ArrowDown":
-            e.preventDefault();
-            setMentionSelectedIndex(
-              (prev) => (prev + 1) % filtered.length,
-            );
-            return;
-          case "ArrowUp":
-            e.preventDefault();
-            setMentionSelectedIndex(
-              (prev) => (prev - 1 + filtered.length) % filtered.length,
-            );
-            return;
-          case "Enter":
-          case "Tab":
-            e.preventDefault();
-            handleMentionSelect(filtered[mentionSelectedIndex]!.name);
-            return;
-          case "Escape":
-            e.preventDefault();
-            setMentionState(null);
-            return;
+          case "ArrowDown": e.preventDefault(); setMentionSelectedIndex((p) => (p + 1) % filtered.length); return;
+          case "ArrowUp": e.preventDefault(); setMentionSelectedIndex((p) => (p - 1 + filtered.length) % filtered.length); return;
+          case "Enter": case "Tab": e.preventDefault(); handleMentionSelect(filtered[mentionSelectedIndex]!.name); return;
+          case "Escape": e.preventDefault(); setMentionState(null); return;
         }
       }
     }
-
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   }
 
-  // ─── Empty state: no conversation selected ──────────────────────
+  // ─── Empty state ────────────────────────────────────────────────
   if (!conversationId) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <svg
-            className="mx-auto h-16 w-16 text-gray-300"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+      <div className="flex h-full items-center justify-center" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
+        <div className="text-center animate-fade-in-up">
+          <div
+            className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl mb-4 hover-glow"
+            style={{
+              backgroundColor: "var(--theme-accent-dim)",
+              border: "1px solid var(--theme-border-light)",
+            }}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <p className="mt-4 text-sm text-gray-400">
-            选择一个会话开始聊天
+            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--theme-accent)" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            {t("chat").empty}
           </p>
         </div>
       </div>
@@ -203,67 +153,87 @@ export default function ChatPanel({
 
   // ─── Render ─────────────────────────────────────────────────────
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className="flex h-full flex-col"
+      style={{ backgroundColor: "var(--theme-bg-primary)" }}
+    >
       {/* Header */}
-      <div className="flex items-center border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-sm text-gray-600">
+      <div
+        className="flex items-center justify-between px-5 py-3.5"
+        style={{ borderBottom: "1px solid var(--theme-border)" }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold hover-lift-sm"
+            style={{
+              backgroundColor: "var(--theme-accent-dim)",
+              color: "var(--theme-accent)",
+              border: "1px solid var(--theme-border-light)",
+            }}
+          >
             {activeConversation?.title?.charAt(0).toUpperCase() || "?"}
           </div>
           <div>
-            <span className="text-sm font-medium text-gray-900">
-              {activeConversation?.title || "加载中..."}
+            <span className="text-sm font-semibold" style={{ color: "var(--theme-text-primary)" }}>
+              {activeConversation?.title || t("common").loading}
             </span>
-            {isGroupChat && (
-              <span className="ml-2 text-xs text-gray-400">群聊</span>
-            )}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span
+                className="inline-block h-2 w-2 rounded-full pulse-glow"
+                style={{ backgroundColor: "var(--theme-accent)" }}
+              />
+              <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                {isGroupChat ? t("chat").groupSession : t("chat").directChannel}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-y-auto px-4 py-4"
-      >
+      <div ref={containerRef} className="flex-1 overflow-y-auto px-5 py-4">
         {isLoadingMessages ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-gray-400">消息加载中...</p>
+            <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              {t("chat").loadingMessages}
+            </span>
           </div>
         ) : messages.length === 0 && !streamingMessage ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-gray-400">暂无消息，开始聊天吧</p>
+            <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              {t("chat").noMessages}
+            </span>
           </div>
         ) : (
-          <div className="flex flex-col">
-            {messages.map((msg) => {
+          <div className="flex flex-col gap-3">
+            {messages.map((msg, idx) => {
               const variant =
-                msg.senderType === "user"
-                  ? "user"
-                  : msg.senderType === "system"
-                    ? "system"
-                    : "contact";
+                msg.senderType === "user" ? "user" :
+                msg.senderType === "system" ? "system" : "contact";
               return (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  variant={variant}
-                >
-                  <MessageContent message={msg} />
-                </MessageBubble>
+                <div key={msg.id} className="animate-fade-in-up message-bubble" style={{ animationDelay: `${Math.min(idx * 15, 200)}ms` }}>
+                  <MessageBubble message={msg} variant={variant}>
+                    <MessageContent message={msg} />
+                  </MessageBubble>
+                </div>
               );
             })}
             {/* Streaming message */}
             {streamingMessage && (
-              <MessageBubble
-                message={streamingMessage}
-                variant="contact"
-              >
-                <span>
-                  {streamingMessage.content}
-                  <span className="ml-1 inline-block h-3 w-2 animate-pulse bg-gray-400" />
-                </span>
-              </MessageBubble>
+              <div className="animate-fade-in-up message-bubble">
+                <MessageBubble message={streamingMessage} variant="contact">
+                  <span>
+                    {streamingMessage.content}
+                    <span
+                      className="ml-0.5 inline-block h-4 w-2 align-text-bottom"
+                      style={{
+                        backgroundColor: "var(--theme-accent)",
+                        animation: "cursor-blink 1s step-end infinite",
+                      }}
+                    />
+                  </span>
+                </MessageBubble>
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -273,10 +243,19 @@ export default function ChatPanel({
       {/* Typing Indicator */}
       <TypingIndicator />
 
-      {/* Input */}
-      <div className="border-t border-gray-200 px-4 py-3">
+      {/* Input area */}
+      <div
+        className="px-4 py-3"
+        style={{ borderTop: "1px solid var(--theme-border)" }}
+      >
         <div className="relative flex items-end gap-2">
-          {/* Mention Popup */}
+          <div
+            className="flex items-center font-mono text-sm font-bold tracking-wider flex-shrink-0 mb-2"
+            style={{ color: "var(--theme-accent)" }}
+          >
+            $<span className="cursor-blink ml-0.5" style={{ color: "var(--theme-accent)" }}>▌</span>
+          </div>
+
           {mentionState && (
             <MentionPopup
               searchQuery={mentionState.query}
@@ -291,32 +270,19 @@ export default function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            rows={2}
-            placeholder={
-              isGroupChat
-                ? "输入消息... (@提及 Agent)"
-                : "输入消息... (Enter 发送, Shift+Enter 换行)"
-            }
+            className="chat-textarea flex-1 resize-none border-b bg-transparent py-2 font-mono text-sm rounded-none"
+            rows={1}
+            placeholder={isGroupChat ? t("chat").mentionPlaceholder : t("chat").messagePlaceholder}
             disabled={sending}
           />
+
           <button
             onClick={handleSend}
             disabled={!input.trim() || sending}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="btn-send flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19V5m0 0l-7 7m7-7l7 7"
-              />
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </button>
         </div>

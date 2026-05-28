@@ -1,14 +1,14 @@
 import type { AgentAvatarProps } from "../../types.js";
 
 const AVATAR_COLORS = [
-  "#2563eb",
-  "#7c3aed",
-  "#db2777",
-  "#dc2626",
-  "#ea580c",
-  "#ca8a04",
-  "#16a34a",
-  "#0891b2",
+  "#60a5fa", // brighter blue
+  "#a78bfa", // brighter purple
+  "#f472b6", // brighter pink
+  "#fb7185", // brighter red
+  "#fb923c", // brighter orange
+  "#fbbf24", // amber
+  "#34d399", // emerald
+  "#22d3ee", // cyan
 ];
 
 function hashName(name: string): number {
@@ -64,12 +64,13 @@ export function AgentAvatar({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "#fff",
-        fontWeight: 600,
+        color: "#000000",
+        fontWeight: 700,
         fontSize: px * 0.4,
         lineHeight: 1,
         userSelect: "none",
         flexShrink: 0,
+        border: "1px solid rgba(0,0,0,0.1)",
       }}
       data-testid="agent-avatar-initials"
     >
