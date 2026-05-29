@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
+import { useRipple } from "@/hooks/useRipple";
 
 interface CreateAgentModalProps {
   onClose: () => void;
@@ -17,6 +18,7 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const { addRipple, renderRipples } = useRipple();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,14 +120,16 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
               {t("createAgent").cancel}
             </button>
             <button type="submit" disabled={isSubmitting}
+              onMouseDown={addRipple}
               className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ borderColor: "var(--theme-accent)", color: "var(--theme-accent)", backgroundColor: "var(--theme-accent-dim)" }}
+              style={{ borderColor: "var(--theme-accent)", color: "var(--theme-accent)", backgroundColor: "var(--theme-accent-dim)", position: "relative", overflow: "hidden" }}
               onMouseEnter={(e) => {
                 if (!isSubmitting) { e.currentTarget.style.backgroundColor = "var(--theme-accent)"; e.currentTarget.style.color = "var(--theme-text-inverse)"; }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; e.currentTarget.style.color = "var(--theme-accent)";
               }}>
+              {renderRipples()}
               {isSubmitting ? t("createAgent").deploying : t("createAgent").deploy}
             </button>
           </div>

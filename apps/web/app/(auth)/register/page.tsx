@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useRipple } from "@/hooks/useRipple";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { addRipple, renderRipples } = useRipple();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -137,9 +139,11 @@ export default function RegisterPage() {
 
             <button
               type="submit"
+              onMouseDown={addRipple}
               disabled={loading}
               className="btn-gradient relative w-full rounded-xl px-4 py-3 font-mono text-sm font-bold tracking-wider disabled:opacity-50"
             >
+              {renderRipples()}
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">

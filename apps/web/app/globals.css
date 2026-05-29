@@ -18,6 +18,7 @@
   --theme-bg-surface: #0e180e;
   --theme-bg-elevated: #142014;
   --theme-bg-glass: rgba(8, 18, 8, 0.78);
+  --theme-bg-glass-panel: rgba(8, 18, 8, 0.45);
   --theme-bg-glass-border: rgba(0, 255, 65, 0.22);
   --theme-accent: #00ff41;
   --theme-accent-hover: #39ff14;
@@ -60,6 +61,7 @@
   --theme-bg-surface: #0e1720;
   --theme-bg-elevated: #14202e;
   --theme-bg-glass: rgba(8, 14, 22, 0.78);
+  --theme-bg-glass-panel: rgba(8, 14, 22, 0.45);
   --theme-bg-glass-border: rgba(0, 180, 216, 0.22);
   --theme-accent: #00b4d8;
   --theme-accent-hover: #48cae4;
@@ -102,6 +104,7 @@
   --theme-bg-surface: #160e20;
   --theme-bg-elevated: #1e142e;
   --theme-bg-glass: rgba(14, 8, 24, 0.78);
+  --theme-bg-glass-panel: rgba(14, 8, 24, 0.45);
   --theme-bg-glass-border: rgba(187, 134, 252, 0.22);
   --theme-accent: #bb86fc;
   --theme-accent-hover: #ce93d8;
@@ -144,6 +147,7 @@
   --theme-bg-surface: #180e0e;
   --theme-bg-elevated: #201414;
   --theme-bg-glass: rgba(22, 8, 8, 0.78);
+  --theme-bg-glass-panel: rgba(22, 8, 8, 0.45);
   --theme-bg-glass-border: rgba(255, 51, 51, 0.22);
   --theme-accent: #ff3333;
   --theme-accent-hover: #ff5555;
@@ -284,11 +288,8 @@ h1, h2, h3, h4, h5, h6 {
 .stagger-delay-7 { animation-delay: 0.28s; }
 .stagger-delay-8 { animation-delay: 0.32s; }
 
-@keyframes orb-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(30px, -30px) scale(1.05); }
-  50% { transform: translate(-20px, -40px) scale(0.95); }
-  75% { transform: translate(40px, 20px) scale(1.02); }
+@keyframes ripple-anim {
+  to { transform: scale(4); opacity: 0; }
 }
 
 @keyframes pulse-glow {
@@ -428,6 +429,20 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--theme-text-inverse);
   box-shadow: 0 0 24px var(--theme-accent-glow);
   border-color: var(--theme-accent);
+}
+
+/* ─── Ripple effect ──────────────────────────────────────────────────── */
+.ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top: -10px;
+  background: var(--theme-accent);
+  opacity: 0.35;
+  pointer-events: none;
+  animation: ripple-anim 0.8s ease-out forwards;
 }
 
 /* ─── Buttons ──────────────────────────────────────────────────────── */

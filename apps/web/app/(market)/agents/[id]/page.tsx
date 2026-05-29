@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import AgentDetailContent from "@/components/AgentDetailContent";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
+import { useRipple } from "@/hooks/useRipple";
 
 interface AgentData {
   id: string;
@@ -33,6 +34,7 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isContact, setIsContact] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { addRipple: addRippleChat, renderRipples: renderRipplesChat } = useRipple();
 
   const fetchAgent = useCallback(async () => {
     setIsLoading(true);
@@ -151,12 +153,15 @@ export default function AgentDetailPage() {
         <div className="flex gap-3">
           <button
             onClick={handleStartChat}
+            onMouseDown={addRippleChat}
             disabled={actionLoading !== null}
             className="flex-1 rounded-lg border py-2.5 font-mono text-xs font-bold tracking-wider transition-all active:scale-[0.98] disabled:opacity-50"
             style={{
               borderColor: "var(--theme-accent)",
               color: "var(--theme-accent)",
               backgroundColor: "var(--theme-accent-dim)",
+              position: "relative",
+              overflow: "hidden",
             }}
             onMouseEnter={(e) => {
               if (!actionLoading) {
@@ -169,6 +174,7 @@ export default function AgentDetailPage() {
               e.currentTarget.style.color = "var(--theme-accent)";
             }}
           >
+            {renderRipplesChat()}
             {actionLoading === "chat" ? t("agentDetail").initializing : t("agentDetail").startChat}
           </button>
           <button

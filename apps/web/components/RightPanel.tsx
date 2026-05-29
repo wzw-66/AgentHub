@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import AgentDetailContent from "./AgentDetailContent";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
+import { useRipple } from "@/hooks/useRipple";
 
 interface RightPanelProps {
   content: { type: "artifact" | "agent"; id: string } | null;
@@ -40,6 +41,7 @@ async function addContact(agentId: string): Promise<void> {
 
 export default function RightPanel({ content, onClose }: RightPanelProps) {
   const { t } = useI18n();
+  const { addRipple, renderRipples } = useRipple();
   const [agent, setAgent] = useState<AgentData | null>(null);
   const [isContact, setIsContact] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,7 +65,7 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
   if (!content) return null;
 
   return (
-    <div className="flex h-full flex-col" style={{ backgroundColor: "var(--theme-bg-secondary)" }}>
+    <div className="flex h-full flex-col" style={{ backgroundColor: "var(--theme-bg-glass-panel)" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--theme-border)" }}>
         <span className="font-mono text-xs font-bold tracking-wider" style={{ color: "var(--theme-text-primary)" }}>
@@ -107,8 +109,10 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
             <div className="flex gap-2">
               <button
                 onClick={() => startChat(agent.id)}
+                onMouseDown={addRipple}
                 className="btn-gradient flex-1 rounded-xl py-2.5 font-mono text-xs font-bold tracking-wider"
               >
+                {renderRipples()}
                 {t("rightPanel").startChat}
               </button>
               <button

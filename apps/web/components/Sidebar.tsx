@@ -59,7 +59,10 @@ export default function Sidebar({
   return (
     <div
       className="flex h-full flex-col"
-      style={{ backgroundColor: "var(--theme-bg-secondary)", borderRight: "1px solid var(--theme-border)" }}
+      style={{
+        backgroundColor: "var(--theme-bg-glass-panel)",
+        borderRight: "1px solid var(--theme-border)",
+      }}
     >
       {/* User info bar */}
       <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: "1px solid var(--theme-border)" }}>

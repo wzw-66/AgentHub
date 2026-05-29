@@ -7,6 +7,7 @@ import { MessageBubble, CodeBlock } from "@agenthub/ui";
 import type { Message } from "@agenthub/shared";
 import MentionPopup from "./MentionPopup";
 import TypingIndicator from "./TypingIndicator";
+import { useRipple } from "@/hooks/useRipple";
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export default function ChatPanel({
   const [mentionState, setMentionState] = useState<{ atIndex: number; query: string } | null>(null);
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { addRipple, renderRipples } = useRipple();
 
   const activeConversation = (conversations || []).find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
@@ -130,7 +132,7 @@ export default function ChatPanel({
   // ─── Empty state ────────────────────────────────────────────────
   if (!conversationId) {
     return (
-      <div className="flex h-full items-center justify-center" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
+      <div className="flex h-full items-center justify-center" style={{ backgroundColor: "var(--theme-bg-glass-panel)" }}>
         <div className="text-center animate-fade-in-up">
           <div
             className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl mb-4 hover-glow"
@@ -155,7 +157,7 @@ export default function ChatPanel({
   return (
     <div
       className="flex h-full flex-col"
-      style={{ backgroundColor: "var(--theme-bg-primary)" }}
+      style={{ backgroundColor: "var(--theme-bg-glass-panel)" }}
     >
       {/* Header */}
       <div
@@ -278,9 +280,12 @@ export default function ChatPanel({
 
           <button
             onClick={handleSend}
+            onMouseDown={addRipple}
             disabled={!input.trim() || sending}
             className="btn-send flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+            style={{ position: "relative", overflow: "hidden" }}
           >
+            {renderRipples()}
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
             </svg>
