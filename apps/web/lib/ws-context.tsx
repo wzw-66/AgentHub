@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { getStoredAccessToken } from "./api-client";
+import { getStoredAccessToken, API_BASE_URL } from "./api-client";
 import { useAuth } from "./auth-context";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
     const token = getStoredAccessToken();
     if (!token) return;
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123";
+    const baseUrl = API_BASE_URL;
     const wsUrl = baseUrl.replace(/^http/, "ws");
     const url = `${wsUrl}/ws?token=${encodeURIComponent(token)}`;
 

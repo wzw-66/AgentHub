@@ -55,10 +55,24 @@ export function clearUser(): void {
   localStorage.removeItem("agenthub_user");
 }
 
+// ─── API Base URL ─────────────────────────────────────────────────────
+
+/** Resolved API base URL. Throws if NEXT_PUBLIC_API_URL is not configured. */
+export const API_BASE_URL: string = (() => {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  if (!url) {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL is not configured. " +
+        "Set it in apps/web/.env.local (or root .env for dev, which is auto-injected by dev.mjs).",
+    );
+  }
+  return url.replace(/\/+$/, "");
+})();
+
 // ─── API Client ───────────────────────────────────────────────────────
 
 const defaultConfig: ApiClientConfig = {
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123",
+  baseUrl: API_BASE_URL,
   getAccessToken: getStoredAccessToken,
   getRefreshToken: getStoredRefreshToken,
   onTokenRefreshed: (accessToken, refreshToken) => {

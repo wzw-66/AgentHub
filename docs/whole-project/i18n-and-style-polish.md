@@ -1,5 +1,6 @@
 # 中英文国际化 (i18n) 与 UI 样式打磨
 
+> i18n = Internationalization  
 > 日期：2026-05-28
 > 范围：`apps/web` + `packages/ui`（样式部分）
 
@@ -194,10 +195,10 @@ export function LanguageSwitcher() {
 
 ### 4.2 修改的文件
 
-| 文件 | 字段 |
-|------|------|
-| `globals.css` | `body` 和 `h1-h6` 的 `font-family` |
-| `tailwind.config.ts` | `fontFamily.heading/body/mono` |
+| 文件                                | 字段                               |
+| ----------------------------------- | ---------------------------------- |
+| `globals.css`                       | `body` 和 `h1-h6` 的 `font-family` |
+| `tailwind.config.ts`                | `fontFamily.heading/body/mono`     |
 | `packages/ui/src/styles/tokens.css` | `--ui-font-sans`, `--ui-font-mono` |
 
 ---
@@ -206,12 +207,12 @@ export function LanguageSwitcher() {
 
 ### 5.1 新增动画
 
-| 动画名称 | 用途 | 参数 |
-|----------|------|------|
-| `fade-in` | 简单淡入 | 0.3s ease |
-| `slide-in-right` | 右侧面板滑入 | 0.3s cubic-bezier |
-| `scale-in` | 模态框弹出 | 0.2s cubic-bezier |
-| `shimmer` | 加载骨架屏光泽 | 1.5s ease-in-out infinite |
+| 动画名称         | 用途           | 参数                      |
+| ---------------- | -------------- | ------------------------- |
+| `fade-in`        | 简单淡入       | 0.3s ease                 |
+| `slide-in-right` | 右侧面板滑入   | 0.3s cubic-bezier         |
+| `scale-in`       | 模态框弹出     | 0.2s cubic-bezier         |
+| `shimmer`        | 加载骨架屏光泽 | 1.5s ease-in-out infinite |
 
 ### 5.2 杂色纹理叠加
 
@@ -252,38 +253,38 @@ export function LanguageSwitcher() {
 
 ### 新增文件
 
-| 文件 | 用途 |
-|------|------|
-| `apps/web/lib/i18n/index.ts` | i18n 导出入口 |
-| `apps/web/lib/i18n/context.tsx` | I18nProvider + useI18n |
-| `apps/web/lib/i18n/translations/en.ts` | 英文翻译（~120 键） |
-| `apps/web/lib/i18n/translations/zh.ts` | 中文翻译（与 en.ts 结构一致） |
-| `apps/web/components/LanguageSwitcher.tsx` | 语言切换按钮组件 |
+| 文件                                       | 用途                          |
+| ------------------------------------------ | ----------------------------- |
+| `apps/web/lib/i18n/index.ts`               | i18n 导出入口                 |
+| `apps/web/lib/i18n/context.tsx`            | I18nProvider + useI18n        |
+| `apps/web/lib/i18n/translations/en.ts`     | 英文翻译（~120 键）           |
+| `apps/web/lib/i18n/translations/zh.ts`     | 中文翻译（与 en.ts 结构一致） |
+| `apps/web/components/LanguageSwitcher.tsx` | 语言切换按钮组件              |
 
 ### 修改文件
 
-| 文件 | 改动内容 |
-|------|----------|
-| `apps/web/app/providers.tsx` | 增加 I18nProvider |
-| `apps/web/app/layout.tsx` | lang="en"（原 zh-CN），body 增加 noise-overlay |
-| `apps/web/app/globals.css` | 中文字体回退、新动画、杂色纹理、输入框/滚动条优化 |
-| `apps/web/tailwind.config.ts` | fontFamily 增加中文字体，新增 4 个动画定义 |
-| `packages/ui/src/styles/tokens.css` | 中文字体回退 |
-| `apps/web/app/(auth)/login/page.tsx` | 全部文本替换为 t()，底部增加 LanguageSwitcher |
-| `apps/web/app/(auth)/register/page.tsx` | 同上 |
-| `apps/web/app/(market)/agents/page.tsx` | 全部文本替换为 t() |
-| `apps/web/app/(market)/agents/contacts/page.tsx` | 同上 |
-| `apps/web/app/(market)/agents/[id]/page.tsx` | 同上 |
-| `apps/web/components/Sidebar.tsx` | 文本替换为 t()，增加 LanguageSwitcher + i18n 导入 |
-| `apps/web/components/ChatPanel.tsx` | 文本替换为 t() |
-| `apps/web/components/RightPanel.tsx` | 同上 |
-| `apps/web/components/AgentCard.tsx` | 同上（provider 标签动态获取） |
-| `apps/web/components/AgentDetailContent.tsx` | 同上 |
-| `apps/web/components/CreateAgentModal.tsx` | 同上 |
-| `apps/web/components/AuthGuard.tsx` | 同上 |
-| `apps/web/components/TypingIndicator.tsx` | 同上 |
-| `apps/web/components/ThemeSwitcher.tsx` | 主题名使用 t('themes') |
-| `apps/web/components/BackgroundEffects.tsx` | 重构为数据驱动渲染，动画参数优化 |
+| 文件                                             | 改动内容                                          |
+| ------------------------------------------------ | ------------------------------------------------- |
+| `apps/web/app/providers.tsx`                     | 增加 I18nProvider                                 |
+| `apps/web/app/layout.tsx`                        | lang="en"（原 zh-CN），body 增加 noise-overlay    |
+| `apps/web/app/globals.css`                       | 中文字体回退、新动画、杂色纹理、输入框/滚动条优化 |
+| `apps/web/tailwind.config.ts`                    | fontFamily 增加中文字体，新增 4 个动画定义        |
+| `packages/ui/src/styles/tokens.css`              | 中文字体回退                                      |
+| `apps/web/app/(auth)/login/page.tsx`             | 全部文本替换为 t()，底部增加 LanguageSwitcher     |
+| `apps/web/app/(auth)/register/page.tsx`          | 同上                                              |
+| `apps/web/app/(market)/agents/page.tsx`          | 全部文本替换为 t()                                |
+| `apps/web/app/(market)/agents/contacts/page.tsx` | 同上                                              |
+| `apps/web/app/(market)/agents/[id]/page.tsx`     | 同上                                              |
+| `apps/web/components/Sidebar.tsx`                | 文本替换为 t()，增加 LanguageSwitcher + i18n 导入 |
+| `apps/web/components/ChatPanel.tsx`              | 文本替换为 t()                                    |
+| `apps/web/components/RightPanel.tsx`             | 同上                                              |
+| `apps/web/components/AgentCard.tsx`              | 同上（provider 标签动态获取）                     |
+| `apps/web/components/AgentDetailContent.tsx`     | 同上                                              |
+| `apps/web/components/CreateAgentModal.tsx`       | 同上                                              |
+| `apps/web/components/AuthGuard.tsx`              | 同上                                              |
+| `apps/web/components/TypingIndicator.tsx`        | 同上                                              |
+| `apps/web/components/ThemeSwitcher.tsx`          | 主题名使用 t('themes')                            |
+| `apps/web/components/BackgroundEffects.tsx`      | 重构为数据驱动渲染，动画参数优化                  |
 
 ---
 

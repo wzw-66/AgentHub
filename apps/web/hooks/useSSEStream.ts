@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { getStoredAccessToken } from "@/lib/api-client";
+import { getStoredAccessToken, API_BASE_URL } from "@/lib/api-client";
 import { useChat } from "@/lib/chat-context";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
@@ -79,7 +79,7 @@ export function useSSEStream(conversationId: string | null) {
       const token = getStoredAccessToken();
       if (!token) return;
 
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123";
+      const baseUrl = API_BASE_URL;
       const url = `${baseUrl}/sse/conversations/${convId}/stream?token=${encodeURIComponent(token)}`;
 
       setStatus("connecting");

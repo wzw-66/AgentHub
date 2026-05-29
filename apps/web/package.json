@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 3457",
+    "dev": "node scripts/dev.mjs",
     "dev:clean": "node scripts/dev-clean.mjs",
     "build": "next build",
     "start": "next start",

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AgentAvatar } from "@agenthub/ui";
 import { useI18n } from "@/lib/i18n";
+import { API_BASE_URL } from "@/lib/api-client";
 
 interface ContactAgent {
   id: string;
@@ -31,7 +32,7 @@ export default function ContactListPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8123";
+  const API = API_BASE_URL;
   const token = typeof window !== "undefined" ? localStorage.getItem("agenthub_access_token") : null;
 
   const fetchContacts = useCallback(async () => {
