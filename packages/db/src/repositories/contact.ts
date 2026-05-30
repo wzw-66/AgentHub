@@ -1,4 +1,4 @@
-import type { Contact } from "@prisma/client";
+import type { Contact, AgentProvider, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "../client";
 import type { PrismaClient } from "@prisma/client";
 
@@ -6,51 +6,56 @@ import type { PrismaClient } from "@prisma/client";
 
 export type CreateContactInput = {
   userId: string;
-  agentId: string;
-  displayName: string;
-  tags?: string[];
-  isPinned?: boolean;
-};
-
-export type UpdateContactInput = {
+  name: string;
+  avatarUrl?: string | null;
+  provider: AgentProvider;
+  systemPrompt?: string | null;
+  model?: string | null;
+  workspacePath?: string | null;
+  config?: Prisma.InputJsonValue;
   displayName?: string;
   tags?: string[];
   isPinned?: boolean;
 };
 
-export type ContactWithAgent = Contact & {
-  agent: { id: string; name: string; avatarUrl: string | null; provider: string };
+export type UpdateContactInput = {
+  name?: string;
+  avatarUrl?: string | null;
+  provider?: AgentProvider;
+  systemPrompt?: string | null;
+  model?: string | null;
+  workspacePath?: string | null;
+  config?: Prisma.InputJsonValue;
+  displayName?: string;
+  tags?: string[];
+  isPinned?: boolean;
+};
+
+export type ListContactsOptions = {
+  provider?: AgentProvider;
 };
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 export async function listContacts(
   userId: string,
+  options: ListContactsOptions = {},
   prisma: PrismaClient = defaultPrisma
-): Promise<ContactWithAgent[]> {
+): Promise<Contact[]> {
   return prisma.contact.findMany({
-    where: { userId },
-    include: {
-      agent: {
-        select: { id: true, name: true, avatarUrl: true, provider: true },
-      },
+    where: {
+      userId,
+      ...(options.provider ? { provider: options.provider } : {}),
     },
-    orderBy: [{ isPinned: "desc" }, { displayName: "asc" }],
-  }) as Promise<ContactWithAgent[]>;
+    orderBy: [{ isPinned: "desc" }, { name: "asc" }],
+  });
 }
 
 export async function getContact(
   id: string,
   prisma: PrismaClient = defaultPrisma
-): Promise<ContactWithAgent | null> {
-  return prisma.contact.findUnique({
-    where: { id },
-    include: {
-      agent: {
-        select: { id: true, name: true, avatarUrl: true, provider: true },
-      },
-    },
-  }) as Promise<ContactWithAgent | null>;
+): Promise<Contact | null> {
+  return prisma.contact.findUnique({ where: { id } });
 }
 
 // ─── Mutations ───────────────────────────────────────────────────────────────
@@ -62,8 +67,14 @@ export async function createContact(
   return prisma.contact.create({
     data: {
       userId: data.userId,
-      agentId: data.agentId,
-      displayName: data.displayName,
+      name: data.name,
+      avatarUrl: data.avatarUrl ?? null,
+      provider: data.provider,
+      systemPrompt: data.systemPrompt ?? null,
+      model: data.model ?? null,
+      workspacePath: data.workspacePath ?? null,
+      config: data.config ?? undefined,
+      displayName: data.displayName ?? null,
       tags: data.tags ?? [],
       isPinned: data.isPinned ?? false,
     },

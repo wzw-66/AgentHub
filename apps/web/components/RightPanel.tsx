@@ -20,23 +20,25 @@ interface AgentData {
   systemPrompt?: string | null;
 }
 
-async function checkIsContact(agentId: string): Promise<boolean> {
+async function checkIsContact(contactId: string): Promise<boolean> {
   try {
-    const contacts = await api.get<{ id: string; agentId: string }[]>("/api/contacts/list");
-    return contacts.some((c) => c.agentId === agentId);
+    await api.get(`/api/contacts/${contactId}/detail`);
+    return true;
   } catch { return false; }
 }
 
-async function startChat(agentId: string): Promise<void> {
+async function startChat(contactId: string): Promise<void> {
   await api.post("/api/conversations/create", {
     title: "New Session",
     type: "single",
-    contactIds: [agentId],
+    contactIds: [contactId],
   });
 }
 
-async function addContact(agentId: string): Promise<void> {
-  await api.post("/api/contacts/create", { agentId });
+// Placeholder for future agent market "add to contacts" feature
+async function addContact(_contactId: string): Promise<void> {
+  // TODO: implement when agent market is built
+  throw new Error("Not implemented");
 }
 
 export default function RightPanel({ content, onClose }: RightPanelProps) {
@@ -49,7 +51,7 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
   useEffect(() => {
     if (content?.type === "agent") {
       setIsLoading(true);
-      api.get<AgentData>(`/api/agents/${content.id}/detail`)
+      api.get<AgentData>(`/api/contacts/${content.id}/detail`)
         .then(async (data) => {
           setAgent(data);
           const contactStatus = await checkIsContact(content.id);

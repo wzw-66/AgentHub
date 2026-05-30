@@ -18,70 +18,58 @@ async function main() {
   });
   console.log(`  ✓ User: ${user.name} (${user.email})`);
 
-  // ─── Create preset agents ─────────────────────────────────────────────
-  const claudeAgent = await prisma.agent.upsert({
-    where: { id: "seed-agent-claude" },
-    update: {},
-    create: {
-      id: "seed-agent-claude",
+  // Clean existing contacts for this user (idempotent seed)
+  await prisma.contact.deleteMany({ where: { userId: user.id } });
+
+  // ─── Create preset contacts (was agents) ──────────────────────────────
+  const claude = await prisma.contact.create({
+    data: {
+      userId: user.id,
       name: "Claude Assistant",
       provider: "Claude",
       model: "claude-sonnet-4-6",
       systemPrompt: "You are Claude, a helpful AI assistant built by Anthropic.",
+      displayName: "Claude (my assistant)",
+      tags: ["favorite", "coding"],
+      isPinned: true,
       config: { temperature: 0.7, maxTokens: 4096 },
     },
   });
-  console.log(`  ✓ Agent: ${claudeAgent.name} (${claudeAgent.provider})`);
+  console.log(`  ✓ Contact: ${claude.name} (${claude.provider})`);
 
-  const openCodeAgent = await prisma.agent.upsert({
-    where: { id: "seed-agent-opencode" },
-    update: {},
-    create: {
-      id: "seed-agent-opencode",
+  const openCode = await prisma.contact.create({
+    data: {
+      userId: user.id,
       name: "OpenCode Coder",
       provider: "OpenCode",
-      model: null,
       systemPrompt: "You are an AI coding assistant that generates code via OpenCode CLI.",
-      config: null,
+      displayName: "OpenCode Coder",
+      tags: [],
     },
   });
-  console.log(`  ✓ Agent: ${openCodeAgent.name} (${openCodeAgent.provider})`);
+  console.log(`  ✓ Contact: ${openCode.name} (${openCode.provider})`);
 
-  const customAgent = await prisma.agent.upsert({
-    where: { id: "seed-agent-custom" },
-    update: {},
-    create: {
-      id: "seed-agent-custom",
+  const custom = await prisma.contact.create({
+    data: {
+      userId: user.id,
       name: "Custom GPT",
       provider: "Custom",
       model: "gpt-4o",
       systemPrompt: "You are a custom-configured AI assistant.",
+      displayName: "Custom GPT",
+      tags: [],
       config: { temperature: 0.5, apiEndpoint: "https://api.openai.com/v1" },
     },
   });
-  console.log(`  ✓ Agent: ${customAgent.name} (${customAgent.provider})`);
-
-  // ─── Create contacts ──────────────────────────────────────────────────
-  const contact1 = await prisma.contact.upsert({
-    where: { userId_agentId: { userId: user.id, agentId: claudeAgent.id } },
-    update: {},
-    create: {
-      userId: user.id,
-      agentId: claudeAgent.id,
-      displayName: "Claude (my assistant)",
-      tags: ["favorite", "coding"],
-      isPinned: true,
-    },
-  });
-  console.log(`  ✓ Contact: ${contact1.displayName}`);
+  console.log(`  ✓ Contact: ${custom.name} (${custom.provider})`);
 
   // ─── Create example conversations ─────────────────────────────────────
   const conversation = await prisma.conversation.create({
     data: {
       title: "Hello, Claude!",
-      type: "Single",
+      type: "single",
       ownerId: user.id,
-      contactIds: [claudeAgent.id],
+      contactIds: [claude.id],
       lastActiveAt: new Date(),
     },
   });
@@ -90,9 +78,9 @@ async function main() {
   const conv2 = await prisma.conversation.create({
     data: {
       title: "Help me debug a React component",
-      type: "Single",
+      type: "single",
       ownerId: user.id,
-      contactIds: [claudeAgent.id],
+      contactIds: [claude.id],
       lastActiveAt: new Date(Date.now() - 3600000), // 1 hour ago
     },
   });
@@ -110,7 +98,7 @@ async function main() {
     {
       conversationId: conversation.id,
       senderType: "Contact" as const,
-      senderId: claudeAgent.id,
+      senderId: claude.id,
       type: "Text" as const,
       content:
         "Hi! I'd be happy to help you with your coding question. What are you working on?",
@@ -126,7 +114,7 @@ async function main() {
     {
       conversationId: conversation.id,
       senderType: "Contact" as const,
-      senderId: claudeAgent.id,
+      senderId: claude.id,
       type: "Text" as const,
       content:
         "Your code looks correct! The issue might be that you forgot to import `useState` from React. Make sure you have:\n\n```tsx\nimport { useState } from 'react';\n```",
@@ -155,8 +143,7 @@ async function main() {
 
   console.log("\n✅ Seed complete!");
   console.log(`  Users: 1`);
-  console.log(`  Agents: 3`);
-  console.log(`  Contacts: 1`);
+  console.log(`  Contacts: 3`);
   console.log(`  Conversations: 2`);
   console.log(`  Messages: 5`);
 }

@@ -10,6 +10,12 @@
   font-display: swap;
 }
 
+/* ─── Layout widths ─────────────────────────────────────────────────── */
+:root {
+  --sidebar-width: 360px;
+  --right-panel-width: 380px;
+}
+
 /* ─── Theme: Green (default/recommended) ─────────────────────────── */
 :root,
 [data-theme="green"] {

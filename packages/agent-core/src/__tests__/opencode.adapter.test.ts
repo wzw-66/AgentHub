@@ -4,6 +4,7 @@ import { OpenCodeAdapter } from "../adapters/opencode.adapter.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
+  execSync: vi.fn(),
 }));
 
 import { spawn } from "node:child_process";
@@ -75,9 +76,9 @@ describe("OpenCodeAdapter", () => {
     }
 
     expect(spawn).toHaveBeenCalledWith(
-      "opencode",
+      expect.any(String),
       expect.arrayContaining(["run", "--format", "json", "-m", "anthropic/claude-sonnet-4-6"]),
-      { stdio: ["pipe", "pipe", "pipe"] },
+      expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
     );
   });
 
@@ -157,7 +158,10 @@ describe("OpenCodeAdapter", () => {
     await iterator.next();
 
     adapter.abort();
-    expect(mockProcess.kill).toHaveBeenCalledWith("SIGTERM");
+    // On Windows, taskkill is used; on other platforms kill("SIGTERM") is called
+    if (process.platform !== "win32") {
+      expect(mockProcess.kill).toHaveBeenCalledWith("SIGTERM");
+    }
 
     // Clean up
     setTimeout(() => mockProcess._triggerClose(0), 5);

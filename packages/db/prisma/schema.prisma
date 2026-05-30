@@ -16,8 +16,8 @@ enum AgentProvider {
 }
 
 enum ConversationType {
-  Single
-  Group
+  single
+  group
 }
 
 enum SenderType {
@@ -62,34 +62,23 @@ model User {
   credentials   UserCredential[]
 }
 
-model Agent {
-  id           String        @id @default(cuid())
-  name         String
-  avatarUrl    String?
-  provider     AgentProvider
-  systemPrompt String?
-  model        String?
-  config       Json?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
-  contacts Contact[]
-}
-
 model Contact {
-  id          String   @id @default(cuid())
-  userId      String
-  agentId     String
-  displayName String
-  tags        String[]
-  isPinned    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String        @id @default(cuid())
+  userId        String
+  name          String
+  avatarUrl     String?
+  provider      AgentProvider
+  systemPrompt  String?
+  model         String?
+  workspacePath String?
+  config        Json?
+  displayName   String?
+  tags          String[]      @default([])
+  isPinned      Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, agentId])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Conversation {
@@ -98,6 +87,7 @@ model Conversation {
   type         ConversationType
   ownerId      String
   contactIds   String[]
+  workspacePath String?
   isArchived   Boolean          @default(false)
   lastActiveAt DateTime         @default(now())
   createdAt    DateTime         @default(now())

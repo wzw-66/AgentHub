@@ -38,7 +38,7 @@ describe("Artifact API", () => {
 
   beforeEach(async () => {
     const conv = await prisma.conversation.create({
-      data: { title: "Test Artifact Conv", type: "Single", ownerId: userId },
+      data: { title: "Test Artifact Conv", type: "single", ownerId: userId },
     });
     conversationId = conv.id;
 

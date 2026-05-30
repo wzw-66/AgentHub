@@ -27,7 +27,7 @@ describe("Artifact Repository", () => {
     const conv = await prisma.conversation.create({
       data: {
         title: "[TEST] Artifact Conversation",
-        type: "Single",
+        type: "single",
         ownerId: user.id,
       },
     });

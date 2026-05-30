@@ -101,6 +101,9 @@ function buildUrl(path: string): string {
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
   if (!response.ok) {
     const body = await response.text();
     let message: string;
@@ -125,9 +128,7 @@ async function request<T>(
   body?: unknown,
   opts?: { skipAuth?: boolean },
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const headers: Record<string, string> = {};
 
   if (!opts?.skipAuth) {
     const token = config.getAccessToken();
@@ -136,10 +137,15 @@ async function request<T>(
     }
   }
 
+  const hasBody = body !== undefined;
+  if (hasBody) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const response = await fetch(buildUrl(path), {
     method,
     headers,
-    body: body ? JSON.stringify(body) : null,
+    body: hasBody ? JSON.stringify(body) : undefined,
   });
 
   // ─── Token refresh on 401 ──────────────────────────────────────
@@ -154,7 +160,7 @@ async function request<T>(
       const retryResponse = await fetch(buildUrl(path), {
         method,
         headers,
-        body: body ? JSON.stringify(body) : null,
+        body: hasBody ? JSON.stringify(body) : undefined,
       });
       return handleResponse<T>(retryResponse);
     }

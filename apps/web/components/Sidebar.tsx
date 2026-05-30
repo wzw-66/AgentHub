@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useChat } from "@/lib/chat-context";
 import { useI18n } from "@/lib/i18n";
+import { api } from "@/lib/api-client";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import type { Conversation } from "@agenthub/shared";
 
 interface SidebarProps {
   activeConversationId: string | null;
-  onSelectConversation: (id: string) => void;
+  onSelectConversation: (id: string | null) => void;
 }
+
+type ChatMode = "single" | "group";
 
 function getDisplayName(conv: Conversation): string {
   return conv.title || "UNTITLED";
@@ -31,28 +34,106 @@ export default function Sidebar({
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
-  const { conversations, agents, isLoadingConversations, createConversation, fetchConversations } = useChat();
+  const { conversations, contacts, isLoadingConversations, createConversation, fetchConversations } = useChat();
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatTitle, setNewChatTitle] = useState("");
+  const [chatMode, setChatMode] = useState<ChatMode>("single");
+  const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
+  const [deleteConfirmConvId, setDeleteConfirmConvId] = useState<string | null>(null);
+  const [deletingConv, setDeletingConv] = useState(false);
 
   const filteredConversations = (conversations || []).filter((c) =>
     getDisplayName(c).toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  async function handleCreateConversation(agentId: string) {
+  function resetModal() {
+    setShowNewChat(false);
+    setNewChatTitle("");
+    setChatMode("single");
+    setSelectedAgentIds(new Set());
+  }
+
+  function toggleAgentSelection(id: string) {
+    setSelectedAgentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleCreateConversation(contactId: string) {
+    setCreating(true);
     try {
+      // Check if a single conversation with this agent already exists
+      const existing = await api.get<{ conversation: { id: string } | null }>(
+        `/api/conversations/find-by-agent/${contactId}`,
+      );
+      if (existing.conversation) {
+        onSelectConversation(existing.conversation.id);
+        resetModal();
+        return;
+      }
+
       const conv = await createConversation(
-        newChatTitle || `SESSION:${agentId.slice(0, 8)}`,
+        newChatTitle || `SESSION:${contactId.slice(0, 8)}`,
         "single",
-        [agentId],
+        [contactId],
       );
       onSelectConversation(conv.id);
-      setShowNewChat(false);
-      setNewChatTitle("");
+      resetModal();
       fetchConversations();
     } catch {
       // silent
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleCreateGroup() {
+    if (selectedAgentIds.size < 2) return;
+    setCreating(true);
+    try {
+      const agentIds = Array.from(selectedAgentIds);
+      const namePreview = contacts
+        ?.filter((c) => agentIds.includes(c.id))
+        .map((c) => c.name)
+        .slice(0, 3)
+        .join(", ");
+      const conv = await createConversation(
+        newChatTitle || `GROUP: ${namePreview}...`,
+        "group",
+        agentIds,
+      );
+      onSelectConversation(conv.id);
+      resetModal();
+      fetchConversations();
+    } catch {
+      // silent
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDeleteConversation(convId: string) {
+    setDeletingConv(true);
+    try {
+      await api.delete(`/api/conversations/${convId}/delete`);
+      fetchConversations();
+      if (activeConversationId === convId) {
+        onSelectConversation(null);
+      }
+    } catch {
+      // silent
+    } finally {
+      setDeleteConfirmConvId(null);
+      setDeletingConv(false);
     }
   }
 
@@ -137,8 +218,8 @@ export default function Sidebar({
 
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto py-1">
-        <div className="section-header mx-4 mb-1">
-          <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+        <div className="px-4 pb-1 pt-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
+          <span className="font-mono text-xs tracking-widest font-semibold" style={{ color: "var(--theme-text-secondary)" }}>
             {t("sidebar").sessions}
           </span>
         </div>
@@ -157,31 +238,123 @@ export default function Sidebar({
         ) : (
           filteredConversations.map((conv) => {
             const isActive = activeConversationId === conv.id;
+            const isHovered = hoveredConvId === conv.id;
+            const isDeleteConfirm = deleteConfirmConvId === conv.id;
             return (
-              <button
+              <div
                 key={conv.id}
-                onClick={() => onSelectConversation(conv.id)}
-                className={`sidebar-item w-full text-left ${isActive ? "active" : ""}`}
+                className="relative group"
+                onMouseEnter={() => setHoveredConvId(conv.id)}
+                onMouseLeave={() => setHoveredConvId(null)}
               >
-                <div className="px-4 py-2.5">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="text-sm font-mono tracking-tight truncate hover-text-glow"
+                <button
+                  onClick={() => onSelectConversation(conv.id)}
+                  className={`sidebar-item w-full text-left ${isActive ? "active" : ""}`}
+                >
+                  <div className="flex items-center gap-3 pl-6 pr-4 py-2.5">
+                    {/* Icon: group vs single */}
+                    <div
+                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-xs"
                       style={{
-                        color: isActive ? "var(--theme-accent)" : "var(--theme-text-primary)",
-                        fontWeight: isActive ? 700 : 500,
+                        backgroundColor: isActive ? "var(--theme-accent-dim)" : "var(--theme-bg-elevated)",
+                        color: isActive ? "var(--theme-accent)" : "var(--theme-text-muted)",
                       }}
                     >
-                      {getDisplayName(conv)}
-                    </span>
-                    {getLastActive(conv) && (
-                      <span className="font-mono text-xs flex-shrink-0 ml-3" style={{ color: "var(--theme-text-muted)" }}>
-                        {getLastActive(conv)}
-                      </span>
-                    )}
+                      {conv.type === "group" ? (
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                      ) : (
+                        <span className="text-xs font-bold">{getDisplayName(conv).charAt(0).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span
+                          className="font-mono text-xs tracking-tight truncate"
+                          style={{
+                            color: isActive ? "var(--theme-accent)" : "var(--theme-text-muted)",
+                            fontWeight: isActive ? 700 : 400,
+                          }}
+                        >
+                          {getDisplayName(conv)}
+                        </span>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          {getLastActive(conv) && !isHovered && (
+                            <span className="font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+                              {getLastActive(conv)}
+                            </span>
+                          )}
+                          {/* Delete button on hover */}
+                          {isHovered && !isDeleteConfirm && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmConvId(conv.id);
+                              }}
+                              className="rounded p-1 transition-colors"
+                              style={{ color: "var(--theme-text-muted)" }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = "var(--theme-danger)";
+                                e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.1)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = "var(--theme-text-muted)";
+                                e.currentTarget.style.backgroundColor = "transparent";
+                              }}
+                              title="Delete"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {conv.type === "group" && (
+                        <span className="font-mono text-[10px] tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                          {t("sidebar").newSessionModal.members(conv.contactIds?.length ?? 0)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                {/* Delete confirmation */}
+                {isDeleteConfirm && (
+                  <div
+                    className="absolute right-2 top-1/2 z-10 flex -translate-y-1/2 items-center gap-2 rounded-lg border px-3 py-2 shadow-lg"
+                    style={{
+                      backgroundColor: "var(--theme-bg-surface)",
+                      borderColor: "var(--theme-border)",
+                    }}
+                  >
+                    <span className="font-mono text-xs whitespace-nowrap" style={{ color: "var(--theme-text-muted)" }}>
+                      Confirm?
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConversation(conv.id);
+                      }}
+                      disabled={deletingConv}
+                      className="rounded px-2 py-1 font-mono text-xs font-bold disabled:opacity-50"
+                      style={{ backgroundColor: "var(--theme-danger)", color: "#ffffff" }}
+                    >
+                      {deletingConv ? "..." : "Delete"}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirmConvId(null);
+                      }}
+                      className="rounded px-2 py-1 font-mono text-xs"
+                      style={{ color: "var(--theme-text-muted)" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })
         )}
@@ -215,6 +388,30 @@ export default function Sidebar({
               {t("sidebar").newSessionModal.subtitle}
             </p>
 
+            {/* Mode toggle */}
+            <div className="mb-4 flex rounded-lg border p-0.5" style={{ borderColor: "var(--theme-border-light)", backgroundColor: "var(--theme-bg-primary)" }}>
+              <button
+                onClick={() => { setChatMode("single"); setSelectedAgentIds(new Set()); }}
+                className="flex-1 rounded-md px-3 py-1.5 font-mono text-xs tracking-wider transition-all"
+                style={{
+                  backgroundColor: chatMode === "single" ? "var(--theme-accent)" : "transparent",
+                  color: chatMode === "single" ? "var(--theme-text-inverse)" : "var(--theme-text-secondary)",
+                }}
+              >
+                {t("sidebar").newSessionModal.singleMode}
+              </button>
+              <button
+                onClick={() => { setChatMode("group"); setSelectedAgentIds(new Set()); }}
+                className="flex-1 rounded-md px-3 py-1.5 font-mono text-xs tracking-wider transition-all"
+                style={{
+                  backgroundColor: chatMode === "group" ? "var(--theme-accent)" : "transparent",
+                  color: chatMode === "group" ? "var(--theme-text-inverse)" : "var(--theme-text-secondary)",
+                }}
+              >
+                {t("sidebar").newSessionModal.groupMode}
+              </button>
+            </div>
+
             <input
               type="text"
               value={newChatTitle}
@@ -228,43 +425,68 @@ export default function Sidebar({
                 {t("sidebar").newSessionModal.availableAgents}
               </p>
               <div className="max-h-48 space-y-1 overflow-y-auto">
-                {agents.length === 0 ? (
+                {contacts.length === 0 ? (
                   <p className="py-4 text-center font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
                     {t("sidebar").newSessionModal.noAgents}
                   </p>
                 ) : (
-                  agents.map((agent) => (
-                    <button
-                      key={agent.id}
-                      onClick={() => handleCreateConversation(agent.id)}
-                      className="agent-item flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left"
-                      style={{ color: "var(--theme-text-primary)" }}
-                    >
-                      <div
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold flex-shrink-0"
-                        style={{
-                          backgroundColor: "var(--theme-accent-dim)",
-                          color: "var(--theme-accent)",
-                          border: "1px solid var(--theme-border-light)",
+                  contacts.map((contact) => {
+                    const isSelected = selectedAgentIds.has(contact.id);
+                    return (
+                      <button
+                        key={contact.id}
+                        onClick={() => {
+                          if (chatMode === "single") {
+                            handleCreateConversation(contact.id);
+                          } else {
+                            toggleAgentSelection(contact.id);
+                          }
                         }}
+                        className="agent-item flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left"
+                        style={{ color: "var(--theme-text-primary)" }}
                       >
-                        {agent.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">{agent.name}</p>
-                        <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-                          {agent.provider}
-                        </span>
-                      </div>
-                    </button>
-                  ))
+                        {/* Checkbox for group mode */}
+                        {chatMode === "group" && (
+                          <div
+                            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border"
+                            style={{
+                              borderColor: isSelected ? "var(--theme-accent)" : "var(--theme-border-light)",
+                              backgroundColor: isSelected ? "var(--theme-accent)" : "transparent",
+                            }}
+                          >
+                            {isSelected && (
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="var(--theme-text-inverse)" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                        )}
+                        <div
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold flex-shrink-0"
+                          style={{
+                            backgroundColor: "var(--theme-accent-dim)",
+                            color: "var(--theme-accent)",
+                            border: "1px solid var(--theme-border-light)",
+                          }}
+                        >
+                          {contact.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">{contact.name}</p>
+                          <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                            {contact.provider}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </div>
 
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowNewChat(false)}
+                onClick={resetModal}
                 className="btn-ghost rounded-xl border px-5 py-2.5 font-mono text-xs tracking-wider"
                 style={{
                   borderColor: "var(--theme-border-light)",
@@ -273,6 +495,26 @@ export default function Sidebar({
               >
                 {t("common").cancel}
               </button>
+
+              {/* Group create button */}
+              {chatMode === "group" && (
+                <button
+                  onClick={handleCreateGroup}
+                  disabled={selectedAgentIds.size < 2 || creating}
+                  className="rounded-xl border px-5 py-2.5 font-mono text-xs font-bold tracking-wider transition-all disabled:opacity-40"
+                  style={{
+                    borderColor: "var(--theme-accent)",
+                    color: "var(--theme-accent)",
+                    backgroundColor: "var(--theme-accent-dim)",
+                  }}
+                >
+                  {selectedAgentIds.size < 2
+                    ? t("sidebar").newSessionModal.minAgents
+                    : creating
+                      ? t("common").loading
+                      : t("sidebar").newSessionModal.createGroup}
+                </button>
+              )}
             </div>
           </div>
         </div>

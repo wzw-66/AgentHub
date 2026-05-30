@@ -3,23 +3,44 @@ import {
   listContacts,
   createContact as dbCreateContact,
   getContact,
-  getAgent,
   updateContact as dbUpdateContact,
   deleteContact as dbDeleteContact,
+  findUserById,
 } from "@agenthub/db";
+import type { AgentProvider } from "@agenthub/shared";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import { SERVER_ROOT } from "../config/env.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type CreateContactBody = {
-  agentId: string;
-  displayName?: string;
-  tags?: string[];
-};
-
-type UpdateContactBody = {
+  name: string;
+  provider: AgentProvider;
+  avatarUrl?: string;
+  systemPrompt?: string;
+  model?: string;
   displayName?: string;
   tags?: string[];
   isPinned?: boolean;
+  config?: {
+    providerName?: string;
+    apiUrl?: string;
+    apiKey?: string;
+  };
+};
+
+type UpdateContactBody = {
+  name?: string;
+  displayName?: string;
+  tags?: string[];
+  isPinned?: boolean;
+  systemPrompt?: string;
+  model?: string;
+};
+
+type ListContactsQuery = {
+  provider?: AgentProvider;
 };
 
 type ContactParams = {
@@ -28,32 +49,31 @@ type ContactParams = {
 
 // ─── Validation helpers ─────────────────────────────────────────────────────
 
+const VALID_PROVIDERS = ["Claude", "OpenCode", "Custom"] as const;
+
 function validateCreateContact(body: unknown): body is CreateContactBody {
   if (!body || typeof body !== "object") return false;
   const b = body as Record<string, unknown>;
-  return typeof b.agentId === "string" && b.agentId.length > 0;
+  return (
+    typeof b.name === "string" &&
+    b.name.length > 0 &&
+    typeof b.provider === "string" &&
+    VALID_PROVIDERS.includes(b.provider as AgentProvider)
+  );
 }
 
 function validateUpdateContact(body: unknown): body is UpdateContactBody {
   if (!body || typeof body !== "object") return false;
-  const b = body as Record<string, unknown>;
-  return (
-    b.displayName === undefined ||
-    b.tags === undefined ||
-    b.isPinned === undefined ||
-    typeof b.displayName === "string" ||
-    Array.isArray(b.tags) ||
-    typeof b.isPinned === "boolean"
-  );
+  return true; // partial updates handled by Prisma
 }
 
 // ─── Route handlers ─────────────────────────────────────────────────────────
 
 async function handleList(
-  request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: ListContactsQuery }>,
   reply: FastifyReply
 ): Promise<void> {
-  const contacts = await listContacts(request.userId!);
+  const contacts = await listContacts(request.userId!, { provider: request.query.provider });
   return reply.status(200).send(contacts);
 }
 
@@ -66,17 +86,55 @@ async function handleCreate(
   }
 
   const body = request.body as CreateContactBody;
-  // Fetch agent to use its name as default displayName
-  const agent = await getAgent(body.agentId);
+  const userId = request.userId!;
+
+  // Fetch user to get email for workspace path
+  const user = await findUserById(userId);
+  if (!user) {
+    return reply.status(404).send({ error: "User not found" });
+  }
+
+  // Build workspace path
+  const safeEmail = user.email.replace(/[^a-zA-Z0-9@._-]/g, "_");
+  const safeName = body.name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+  const workspacePath = `agent-workspace/${safeEmail}/${safeName}`;
+
+  // Create workspace directory
+  try {
+    await mkdir(resolve(SERVER_ROOT, workspacePath), { recursive: true });
+  } catch (err) {
+    request.server.log.error({ err }, "Failed to create workspace directory");
+    return reply.status(500).send({ error: "Failed to create workspace directory" });
+  }
 
   const contact = await dbCreateContact({
-    userId: request.userId!,
-    agentId: body.agentId,
-    displayName: body.displayName ?? agent?.name ?? "Unknown Agent",
+    userId,
+    name: body.name,
+    provider: body.provider,
+    avatarUrl: body.avatarUrl ?? null,
+    systemPrompt: body.systemPrompt ?? null,
+    model: body.model ?? null,
+    workspacePath,
+    displayName: body.displayName ?? body.name,
     tags: body.tags ?? [],
+    isPinned: body.isPinned ?? false,
+    config: (body.config ?? undefined) as any,
   });
 
   return reply.status(201).send(contact);
+}
+
+async function handleDetail(
+  request: FastifyRequest<{ Params: ContactParams }>,
+  reply: FastifyReply
+): Promise<void> {
+  const contact = await getContact(request.params.id);
+
+  if (!contact) {
+    return reply.status(404).send({ error: "Contact not found" });
+  }
+
+  return reply.status(200).send(contact);
 }
 
 async function handleUpdate(
@@ -125,6 +183,7 @@ async function handleDelete(
 export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get("/list", handleList);
   app.post("/create", handleCreate);
+  app.get("/:id/detail", handleDetail);
   app.patch("/:id/update", handleUpdate);
   app.delete("/:id/delete", handleDelete);
 }

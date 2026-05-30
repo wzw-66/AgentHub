@@ -27,7 +27,8 @@ export function createAdapter(
   provider: AgentProvider | string,
   config: Record<string, unknown> = {},
 ): AgentAdapter {
-  switch (provider) {
+  const normalized = String(provider).toLowerCase();
+  switch (normalized) {
     case "claude":
       return new ClaudeAdapter(config as unknown as ClaudeAdapterConfig);
     case "opencode":
@@ -36,7 +37,7 @@ export function createAdapter(
       return new CustomAgentAdapter(config as unknown as CustomAgentAdapterConfig);
     default:
       throw new Error(
-        `Unsupported agent provider: "${provider}". Expected one of: claude, opencode, custom`,
+        `Unsupported agent provider: "${provider}". Expected one of: Claude, OpenCode, Custom`,
       );
   }
 }

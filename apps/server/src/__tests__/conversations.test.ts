@@ -43,10 +43,10 @@ describe("Conversation API", () => {
   describe("GET /api/conversations/list", () => {
     it("should return paginated conversation list", async () => {
       await prisma.conversation.create({
-        data: { title: "Test Conv 1", type: "Single", ownerId: userId },
+        data: { title: "Test Conv 1", type: "single", ownerId: userId },
       });
       await prisma.conversation.create({
-        data: { title: "Test Conv 2", type: "Group", ownerId: userId },
+        data: { title: "Test Conv 2", type: "group", ownerId: userId },
       });
 
       const res = await app.inject({
@@ -66,7 +66,7 @@ describe("Conversation API", () => {
       await prisma.conversation.create({
         data: {
           title: "Test Active Conv",
-          type: "Single",
+          type: "single",
           ownerId: userId,
           isArchived: false,
         },
@@ -74,7 +74,7 @@ describe("Conversation API", () => {
       await prisma.conversation.create({
         data: {
           title: "Test Archived Conv",
-          type: "Single",
+          type: "single",
           ownerId: userId,
           isArchived: true,
         },
@@ -95,7 +95,7 @@ describe("Conversation API", () => {
       await prisma.conversation.create({
         data: {
           title: "Test Archived Conv",
-          type: "Single",
+          type: "single",
           ownerId: userId,
           isArchived: true,
         },
@@ -129,13 +129,13 @@ describe("Conversation API", () => {
         method: "POST",
         url: "/api/conversations/create",
         headers: auth,
-        payload: { title: "New Test Conv", type: "Single" },
+        payload: { title: "New Test Conv", type: "single" },
       });
 
       expect(res.statusCode).toBe(201);
       const body = res.json();
       expect(body.title).toBe("New Test Conv");
-      expect(body.type).toBe("Single");
+      expect(body.type).toBe("single");
       expect(body.ownerId).toBe(userId);
     });
 
@@ -144,11 +144,11 @@ describe("Conversation API", () => {
         method: "POST",
         url: "/api/conversations/create",
         headers: auth,
-        payload: { title: "New Group Conv", type: "Group", contactIds: [] },
+        payload: { title: "New Group Conv", type: "group", contactIds: ["test-agent-1", "test-agent-2"] },
       });
 
       expect(res.statusCode).toBe(201);
-      expect(res.json().type).toBe("Group");
+      expect(res.json().type).toBe("group");
     });
 
     it("should reject missing title", async () => {
@@ -156,7 +156,7 @@ describe("Conversation API", () => {
         method: "POST",
         url: "/api/conversations/create",
         headers: auth,
-        payload: { type: "Single" },
+        payload: { type: "single" },
       });
 
       expect(res.statusCode).toBe(400);
@@ -177,7 +177,7 @@ describe("Conversation API", () => {
   describe("GET /api/conversations/:id/detail", () => {
     it("should return conversation detail with recent messages", async () => {
       const conv = await prisma.conversation.create({
-        data: { title: "Test Detail", type: "Single", ownerId: userId },
+        data: { title: "Test Detail", type: "single", ownerId: userId },
       });
 
       const res = await app.inject({
@@ -205,7 +205,7 @@ describe("Conversation API", () => {
   describe("PATCH /api/conversations/:id/update", () => {
     it("should update conversation title", async () => {
       const conv = await prisma.conversation.create({
-        data: { title: "Before Update", type: "Single", ownerId: userId },
+        data: { title: "Before Update", type: "single", ownerId: userId },
       });
 
       const res = await app.inject({
@@ -221,7 +221,7 @@ describe("Conversation API", () => {
 
     it("should archive a conversation", async () => {
       const conv = await prisma.conversation.create({
-        data: { title: "To Archive", type: "Single", ownerId: userId },
+        data: { title: "To Archive", type: "single", ownerId: userId },
       });
 
       const res = await app.inject({
@@ -250,7 +250,7 @@ describe("Conversation API", () => {
   describe("DELETE /api/conversations/:id/delete", () => {
     it("should delete a conversation and return 204", async () => {
       const conv = await prisma.conversation.create({
-        data: { title: "To Delete", type: "Single", ownerId: userId },
+        data: { title: "To Delete", type: "single", ownerId: userId },
       });
 
       const res = await app.inject({

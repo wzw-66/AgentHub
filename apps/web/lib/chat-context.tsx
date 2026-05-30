@@ -12,10 +12,11 @@ import {
 import { api, getStoredAccessToken } from "./api-client";
 import type { Conversation, Message } from "@agenthub/shared";
 import { SenderType, MessageType } from "@agenthub/shared";
+import type { Dispatch, SetStateAction } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
-interface AgentInfo {
+interface ContactInfo {
   id: string;
   name: string;
   provider: string;
@@ -39,11 +40,11 @@ interface ChatContextValue {
   activeConversationId: string | null;
   messages: Message[];
   streamingMessage: StreamingMessage | null;
-  agents: AgentInfo[];
+  contacts: ContactInfo[];
   typingAgents: Map<string, boolean>;
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
-  isLoadingAgents: boolean;
+  isLoadingContacts: boolean;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: string, cursor?: string) => Promise<Message[]>;
@@ -56,6 +57,7 @@ interface ChatContextValue {
   setTypingAgent: (agentId: string, isTyping: boolean) => void;
   appendMessageChunk: (chunkText: string) => void;
   finalizeMessage: () => void;
+  setMessages: Dispatch<SetStateAction<Message[]>>;
 }
 
 // ─── Context ───────────────────────────────────────────────────────────
@@ -70,13 +72,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     string | null
   >(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [contacts, setContacts] = useState<ContactInfo[]>([]);
   const [typingAgents, setTypingAgents] = useState<Map<string, boolean>>(
     new Map(),
   );
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
   // ─── Streaming message state ─────────────────────────────────────
   const [streamingMessage, setStreamingMessage] =
@@ -87,10 +89,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoadingConversations(true);
     try {
       const data = await api.get<{
-        conversations: Conversation[];
+        data: Conversation[];
         total: number;
       }>("/api/conversations/list");
-      setConversations(data.conversations);
+      setConversations(data.data);
     } catch {
       // Silently fail - user can retry
     } finally {
@@ -105,8 +107,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const path = cursor
           ? `/api/conversations/${conversationId}/messages/list?cursor=${cursor}`
           : `/api/conversations/${conversationId}/messages/list`;
-        const data = await api.get<{ messages: Message[] }>(path);
-        return data.messages;
+        const data = await api.get<{ data: Message[] }>(path);
+        return data.data;
       } finally {
         setIsLoadingMessages(false);
       }
@@ -116,12 +118,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback(
     async (conversationId: string, content: string): Promise<Message> => {
-      const data = await api.post<{ message: Message }>(
+      const message = await api.post<Message>(
         `/api/conversations/${conversationId}/messages/create`,
         { content },
       );
-      setMessages((prev) => [...prev, data.message]);
-      return data.message;
+      setMessages((prev) => [...prev, message]);
+      return message;
     },
     [],
   );
@@ -132,7 +134,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       type: "single" | "group",
       contactIds: string[],
     ): Promise<Conversation> => {
-      const data = await api.post<{ conversation: Conversation }>(
+      const conversation = await api.post<Conversation>(
         "/api/conversations/create",
         {
           title,
@@ -140,8 +142,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           contactIds,
         },
       );
-      setConversations((prev) => [data.conversation, ...prev]);
-      return data.conversation;
+      setConversations((prev) => [conversation, ...(prev ?? [])]);
+      return conversation;
     },
     [],
   );
@@ -206,23 +208,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setTypingAgents(new Map());
   }, []);
 
-  // ─── Load agents on mount (only if authenticated) ───────────────
+  // ─── Load contacts (agents) on mount (only if authenticated) ────
   useEffect(() => {
-    async function loadAgents() {
-      setIsLoadingAgents(true);
+    async function loadContacts() {
+      setIsLoadingContacts(true);
       try {
-        const data = await api.get<{ agents: AgentInfo[] }>("/api/agents/list");
-        setAgents(data.agents);
+        const data = await api.get<ContactInfo[]>("/api/contacts/list");
+        setContacts(data);
       } catch {
         // API not available yet
       } finally {
-        setIsLoadingAgents(false);
+        setIsLoadingContacts(false);
       }
     }
     if (getStoredAccessToken()) {
-      loadAgents();
+      loadContacts();
     } else {
-      setIsLoadingAgents(false);
+      setIsLoadingContacts(false);
     }
   }, []);
 
@@ -249,11 +251,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeConversationId,
         messages,
         streamingMessage,
-        agents,
+        contacts,
         typingAgents,
         isLoadingConversations,
         isLoadingMessages,
-        isLoadingAgents,
+        isLoadingContacts,
         setActiveConversation: setActiveConversationId,
         fetchConversations,
         fetchMessages,
@@ -262,6 +264,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setTypingAgent,
         appendMessageChunk,
         finalizeMessage,
+        setMessages,
       }}
     >
       {children}

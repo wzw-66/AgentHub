@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   createTestApp,
   createTestUser,
-  createTestAgent,
+  createTestContact,
   getAuthHeader,
 } from "./helpers";
 import type { FastifyInstance } from "fastify";
@@ -17,7 +17,6 @@ describe("Contact API", () => {
   let prisma: PrismaClient;
   let userId: string;
   let otherUserId: string;
-  let agentId: string;
   let auth: { authorization: string };
 
   beforeAll(async () => {
@@ -32,9 +31,6 @@ describe("Contact API", () => {
 
     const otherUser = await createTestUser(prisma, "test.co.other@example.com");
     otherUserId = otherUser.id;
-
-    const agent = await createTestAgent(prisma, { name: "Co-Agent" });
-    agentId = agent.id;
   });
 
   afterAll(async () => {
@@ -47,20 +43,14 @@ describe("Contact API", () => {
 
   afterEach(async () => {
     await prisma.contact.deleteMany({
-      where: { displayName: { startsWith: "Test" } },
+      where: { name: { startsWith: "Co-" } },
     });
   });
 
   describe("GET /api/contacts/list", () => {
     it("should return contact list for the authenticated user", async () => {
-      const agentA = await createTestAgent(prisma, { name: "Co-ListA" });
-      const agentB = await createTestAgent(prisma, { name: "Co-ListB" });
-      await prisma.contact.create({
-        data: { userId, agentId: agentA.id, displayName: "Test Contact A", tags: [] },
-      });
-      await prisma.contact.create({
-        data: { userId, agentId: agentB.id, displayName: "Test Contact B", tags: [] },
-      });
+      await createTestContact(prisma, { name: "Co-ListA", userId });
+      await createTestContact(prisma, { name: "Co-ListB", userId });
 
       const res = await app.inject({
         method: "GET",
@@ -70,7 +60,7 @@ describe("Contact API", () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      const testContacts = body.filter((c: any) => c.displayName.startsWith("Test"));
+      const testContacts = body.filter((c: any) => c.name.startsWith("Co-"));
       expect(testContacts.length).toBe(2);
     });
 
@@ -85,27 +75,27 @@ describe("Contact API", () => {
   });
 
   describe("POST /api/contacts/create", () => {
-    it("should create a contact and return 201", async () => {
+    it("should create a contact with agent config and return 201", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/contacts/create",
         headers: auth,
-        payload: { agentId, displayName: "Test New Contact" },
+        payload: { name: "Co-New", provider: "Claude" },
       });
 
       expect(res.statusCode).toBe(201);
       const body = res.json();
-      expect(body.displayName).toBe("Test New Contact");
-      expect(body.agentId).toBe(agentId);
+      expect(body.name).toBe("Co-New");
+      expect(body.provider).toBe("Claude");
       expect(body.userId).toBe(userId);
     });
 
-    it("should reject missing agentId", async () => {
+    it("should reject missing name", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/contacts/create",
         headers: auth,
-        payload: {},
+        payload: { provider: "Claude" },
       });
 
       expect(res.statusCode).toBe(400);
@@ -114,19 +104,17 @@ describe("Contact API", () => {
 
   describe("PATCH /api/contacts/:id/update", () => {
     it("should update a contact", async () => {
-      const contact = await prisma.contact.create({
-        data: { userId, agentId, displayName: "Test Before Update", tags: [] },
-      });
+      const contact = await createTestContact(prisma, { name: "Co-Before", userId });
 
       const res = await app.inject({
         method: "PATCH",
         url: `/api/contacts/${contact.id}/update`,
         headers: auth,
-        payload: { displayName: "Test After Update", isPinned: true },
+        payload: { displayName: "Co-After", isPinned: true },
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json().displayName).toBe("Test After Update");
+      expect(res.json().displayName).toBe("Co-After");
       expect(res.json().isPinned).toBe(true);
     });
 
@@ -142,9 +130,7 @@ describe("Contact API", () => {
     });
 
     it("should return 403 when updating another user's contact", async () => {
-      const contact = await prisma.contact.create({
-        data: { userId: otherUserId, agentId, displayName: "Test Others Contact", tags: [] },
-      });
+      const contact = await createTestContact(prisma, { name: "Co-Others", userId: otherUserId });
 
       const res = await app.inject({
         method: "PATCH",
@@ -159,9 +145,7 @@ describe("Contact API", () => {
 
   describe("DELETE /api/contacts/:id/delete", () => {
     it("should delete a contact and return 204", async () => {
-      const contact = await prisma.contact.create({
-        data: { userId, agentId, displayName: "Test To Delete", tags: [] },
-      });
+      const contact = await createTestContact(prisma, { name: "Co-Delete", userId });
 
       const res = await app.inject({
         method: "DELETE",
@@ -187,9 +171,7 @@ describe("Contact API", () => {
     });
 
     it("should return 403 when deleting another user's contact", async () => {
-      const contact = await prisma.contact.create({
-        data: { userId: otherUserId, agentId, displayName: "Test Others Delete", tags: [] },
-      });
+      const contact = await createTestContact(prisma, { name: "Co-OthersDel", userId: otherUserId });
 
       const res = await app.inject({
         method: "DELETE",

@@ -3,10 +3,13 @@ import { createInterface } from "node:readline";
 import type { AgentAdapter, AgentContext, Chunk, HealthStatus } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createChunk, parseOpenCodeEvent } from "../utils/chunk-parser.js";
+import { resolveCommand } from "../utils/resolve-cli.js";
 
 export interface OpenCodeAdapterConfig {
   /** Path to the `opencode` binary. Defaults to "opencode". */
   cliPath?: string;
+  /** Working directory for the subprocess. */
+  cwd?: string;
   /** Additional CLI arguments. */
   args?: string[];
   /** Model identifier (e.g., "anthropic/claude-sonnet-4-6"). */
@@ -52,8 +55,10 @@ export class OpenCodeAdapter implements AgentAdapter {
       args.push(...this.config.args);
     }
 
-    this.process = spawn(cliPath, args, {
+    const resolved = resolveCommand(cliPath);
+    this.process = spawn(resolved.command, [...resolved.prefixArgs, ...args], {
       stdio: ["pipe", "pipe", "pipe"],
+      cwd: this.config.cwd,
     });
 
     // Register close handler immediately
@@ -94,21 +99,33 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   abort(): void {
-    this.process?.kill("SIGTERM");
-    // Force kill after 5s grace period
-    setTimeout(() => {
+    if (!this.process) return;
+    if (process.platform === "win32") {
       try {
-        this.process?.kill("SIGKILL");
+        const { execSync } = require("node:child_process");
+        execSync(`taskkill /PID ${this.process.pid} /T /F`, { timeout: 3000 });
       } catch {
-        // Process may already be dead
+        this.process.kill("SIGTERM");
       }
-    }, 5000);
+    } else {
+      this.process?.kill("SIGTERM");
+      setTimeout(() => {
+        try {
+          this.process?.kill("SIGKILL");
+        } catch {
+          // Process may already be dead
+        }
+      }, 5000);
+    }
   }
 
   async healthCheck(): Promise<HealthStatus> {
     const start = Date.now();
     try {
-      const proc = spawn(this.config.cliPath ?? "opencode", ["--version"], {
+      const { command: healthCmd, prefixArgs: healthPrefix } = resolveCommand(
+        this.config.cliPath ?? "opencode",
+      );
+      const proc = spawn(healthCmd, [...healthPrefix, "--version"], {
         stdio: "pipe",
       });
       const exitCode = await new Promise<number>((resolve) => {

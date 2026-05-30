@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { createTestApp, createTestUser, getAuthHeader, createTestAgent } from "./helpers";
+import { createTestApp, createTestUser, getAuthHeader, createTestContact } from "./helpers";
 import type { FastifyInstance } from "fastify";
 
 const TEST_DATABASE_URL =
   process.env["TEST_DATABASE_URL"] ||
   "postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test";
 
-describe("Agent API", () => {
+describe("Contact API (Agent functionality)", () => {
   let app: FastifyInstance;
   let prisma: PrismaClient;
   let userId: string;
@@ -31,35 +31,34 @@ describe("Agent API", () => {
   });
 
   afterEach(async () => {
-    await prisma.agent.deleteMany({ where: { name: { startsWith: "Ag-" } } });
+    await prisma.contact.deleteMany({ where: { name: { startsWith: "Ag-" } } });
   });
 
-  describe("GET /api/agents/list", () => {
-    it("should return agent list", async () => {
-      await createTestAgent(prisma, { name: "Ag-Alpha" });
-      await createTestAgent(prisma, { name: "Ag-Beta", provider: "OpenCode" });
+  describe("GET /api/contacts/list", () => {
+    it("should return contact list", async () => {
+      await createTestContact(prisma, { name: "Ag-Alpha", userId });
+      await createTestContact(prisma, { name: "Ag-Beta", provider: "OpenCode", userId });
 
       const res = await app.inject({
         method: "GET",
-        url: "/api/agents/list",
+        url: "/api/contacts/list",
         headers: auth,
       });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(Array.isArray(body)).toBe(true);
-      // At least our test agents exist
-      const testAgents = body.filter((a: any) => a.name.startsWith("Ag-"));
-      expect(testAgents.length).toBe(2);
+      const testContacts = body.filter((a: any) => a.name.startsWith("Ag-"));
+      expect(testContacts.length).toBe(2);
     });
 
     it("should filter by provider", async () => {
-      await createTestAgent(prisma, { name: "Ag-Claude", provider: "Claude" });
-      await createTestAgent(prisma, { name: "Ag-OpenCode", provider: "OpenCode" });
+      await createTestContact(prisma, { name: "Ag-Claude", provider: "Claude", userId });
+      await createTestContact(prisma, { name: "Ag-OpenCode", provider: "OpenCode", userId });
 
       const res = await app.inject({
         method: "GET",
-        url: "/api/agents/list?provider=Claude",
+        url: "/api/contacts/list?provider=Claude",
         headers: auth,
       });
 
@@ -72,18 +71,18 @@ describe("Agent API", () => {
     it("should return 401 without auth", async () => {
       const res = await app.inject({
         method: "GET",
-        url: "/api/agents/list",
+        url: "/api/contacts/list",
       });
 
       expect(res.statusCode).toBe(401);
     });
   });
 
-  describe("POST /api/agents/create", () => {
-    it("should create an agent and return 201", async () => {
+  describe("POST /api/contacts/create", () => {
+    it("should create a contact with agent config and return 201", async () => {
       const res = await app.inject({
         method: "POST",
-        url: "/api/agents/create",
+        url: "/api/contacts/create",
         headers: auth,
         payload: {
           name: "Ag-Custom",
@@ -98,12 +97,13 @@ describe("Agent API", () => {
       expect(body.provider).toBe("Custom");
       expect(body.systemPrompt).toBe("You are a test agent");
       expect(body.id).toBeDefined();
+      expect(body.userId).toBe(userId);
     });
 
     it("should reject missing name", async () => {
       const res = await app.inject({
         method: "POST",
-        url: "/api/agents/create",
+        url: "/api/contacts/create",
         headers: auth,
         payload: { provider: "Claude" },
       });
@@ -114,7 +114,7 @@ describe("Agent API", () => {
     it("should reject invalid provider", async () => {
       const res = await app.inject({
         method: "POST",
-        url: "/api/agents/create",
+        url: "/api/contacts/create",
         headers: auth,
         payload: { name: "Bad Agent", provider: "InvalidProvider" },
       });
@@ -123,13 +123,13 @@ describe("Agent API", () => {
     });
   });
 
-  describe("GET /api/agents/:id/detail", () => {
-    it("should return agent detail", async () => {
-      const agent = await createTestAgent(prisma, { name: "Ag-Detail" });
+  describe("GET /api/contacts/:id/detail", () => {
+    it("should return contact detail", async () => {
+      const contact = await createTestContact(prisma, { name: "Ag-Detail", userId });
 
       const res = await app.inject({
         method: "GET",
-        url: `/api/agents/${agent.id}/detail`,
+        url: `/api/contacts/${contact.id}/detail`,
         headers: auth,
       });
 
@@ -137,10 +137,10 @@ describe("Agent API", () => {
       expect(res.json().name).toBe("Ag-Detail");
     });
 
-    it("should return 404 for non-existent agent", async () => {
+    it("should return 404 for non-existent contact", async () => {
       const res = await app.inject({
         method: "GET",
-        url: "/api/agents/non-existent-id/detail",
+        url: "/api/contacts/non-existent-id/detail",
         headers: auth,
       });
 

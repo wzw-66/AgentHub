@@ -6,15 +6,17 @@ import type { PrismaClient } from "@prisma/client";
 
 export type CreateConversationInput = {
   title: string;
-  type: "Single" | "Group";
+  type: "single" | "group";
   ownerId: string;
   contactIds?: string[];
+  workspacePath?: string | null;
 };
 
 export type UpdateConversationInput = {
   title?: string;
   isArchived?: boolean;
   lastActiveAt?: Date;
+  workspacePath?: string | null;
 };
 
 export type PaginatedResult<T> = {
@@ -73,6 +75,24 @@ export async function listConversations(
 
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
+export async function findSingleConversationByAgentId(
+  userId: string,
+  agentId: string,
+  prisma: PrismaClient = defaultPrisma
+): Promise<Conversation | null> {
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      ownerId: userId,
+      type: "single",
+      contactIds: { has: agentId },
+      isArchived: false,
+    },
+    orderBy: { lastActiveAt: "desc" },
+    take: 1,
+  });
+  return conversations[0] ?? null;
+}
+
 export async function createConversation(
   data: CreateConversationInput,
   prisma: PrismaClient = defaultPrisma
@@ -83,6 +103,7 @@ export async function createConversation(
       type: data.type,
       ownerId: data.ownerId,
       contactIds: data.contactIds ?? [],
+      workspacePath: data.workspacePath ?? null,
     },
   });
 }

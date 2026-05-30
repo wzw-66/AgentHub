@@ -83,3 +83,22 @@ export async function pinMessage(
     data: { isPinned: !message.isPinned },
   });
 }
+
+export type UpdateMessageInput = {
+  content?: string;
+};
+
+export async function updateMessage(
+  id: string,
+  data: UpdateMessageInput,
+  prisma: PrismaClient = defaultPrisma
+): Promise<Message> {
+  return prisma.message.update({ where: { id }, data });
+}
+
+export async function deleteMessage(
+  id: string,
+  prisma: PrismaClient = defaultPrisma
+): Promise<Message> {
+  return prisma.message.delete({ where: { id } });
+}

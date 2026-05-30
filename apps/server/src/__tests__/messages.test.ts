@@ -37,7 +37,7 @@ describe("Message API", () => {
 
   beforeEach(async () => {
     const conv = await prisma.conversation.create({
-      data: { title: "Test Message Conv", type: "Single", ownerId: userId },
+      data: { title: "Test Message Conv", type: "single", ownerId: userId },
     });
     conversationId = conv.id;
   });
@@ -216,7 +216,7 @@ describe("Message API", () => {
 
     it("should return 404 when message doesn't belong to conversation", async () => {
       const otherConv = await prisma.conversation.create({
-        data: { title: "Other Conv", type: "Single", ownerId: userId },
+        data: { title: "Other Conv", type: "single", ownerId: userId },
       });
       const msg = await prisma.message.create({
         data: {

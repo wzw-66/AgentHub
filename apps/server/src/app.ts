@@ -4,7 +4,6 @@ import websocket from "@fastify/websocket";
 import type { FastifyInstance } from "fastify";
 import type { ConnectionManager } from "./realtime/connection-manager";
 import { authRoutes } from "./routes/auth";
-import { agentRoutes } from "./routes/agents";
 import { contactRoutes } from "./routes/contacts";
 import { conversationRoutes } from "./routes/conversations";
 import { messageRoutes } from "./routes/messages";
@@ -66,7 +65,6 @@ export async function buildApp(connectionManager?: ConnectionManager): Promise<F
   await app.register(async function (protectedApp) {
     protectedApp.addHook("preHandler", authenticate);
 
-    await protectedApp.register(agentRoutes, { prefix: "/api/agents" });
     await protectedApp.register(contactRoutes, { prefix: "/api/contacts" });
     await protectedApp.register(conversationRoutes, { prefix: "/api/conversations" });
     await protectedApp.register(messageRoutes, { prefix: "/api/conversations/:conversationId/messages" });

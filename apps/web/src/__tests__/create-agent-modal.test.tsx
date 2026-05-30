@@ -63,7 +63,7 @@ describe("CreateAgentModal", () => {
     fireEvent.click(screen.getByText("创建"));
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith("/api/agents/create", {
+      expect(mockPost).toHaveBeenCalledWith("/api/contacts/create", {
         name: "My Agent",
         provider: "custom",
         model: "gpt-4",

@@ -33,10 +33,13 @@ async function handleSSEStream(
 
   // ─── SSE headers ───────────────────────────────────────────────────
 
+  reply.hijack();
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
+    "Access-Control-Allow-Origin": request.headers.origin ?? "*",
+    "Access-Control-Allow-Credentials": "true",
   });
 
   // Register connection
@@ -56,4 +59,15 @@ async function handleSSEStream(
 
 export async function sseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/sse/conversations/:conversationId/stream", handleSSEStream);
+
+  // CORS preflight for SSE endpoint
+  app.options("/sse/conversations/:conversationId/stream", async (request, reply) => {
+    reply.headers({
+      "Access-Control-Allow-Origin": request.headers.origin ?? "*",
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    });
+    return reply.status(204).send();
+  });
 }

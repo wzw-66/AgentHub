@@ -5,13 +5,18 @@ import {
   createConversation as dbCreateConversation,
   updateConversation as dbUpdateConversation,
   deleteConversation as dbDeleteConversation,
+  findSingleConversationByAgentId,
+  findUserById,
 } from "@agenthub/db";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import { WORKSPACE_ROOT } from "../config/env.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type CreateConversationBody = {
   title: string;
-  type: "Single" | "Group";
+  type: "single" | "group";
   contactIds?: string[];
 };
 
@@ -35,12 +40,24 @@ type ListConversationsQuery = {
 function validateCreateConversation(body: unknown): body is CreateConversationBody {
   if (!body || typeof body !== "object") return false;
   const b = body as Record<string, unknown>;
-  return (
-    typeof b.title === "string" &&
-    b.title.length > 0 &&
-    (b.type === "Single" || b.type === "Group")
-  );
+  if (
+    typeof b.title !== "string" ||
+    b.title.length === 0 ||
+    (b.type !== "single" && b.type !== "group")
+  ) {
+    return false;
+  }
+  // Group conversations require at least 2 contacts
+  if (b.type === "group") {
+    const contactIds = b.contactIds;
+    if (!Array.isArray(contactIds) || contactIds.length < 2) return false;
+  }
+  return true;
 }
+
+type FindByAgentParams = {
+  agentId: string;
+};
 
 // ─── Route handlers ─────────────────────────────────────────────────────────
 
@@ -70,14 +87,38 @@ async function handleCreate(
   }
 
   const body = request.body as CreateConversationBody;
+  const userId = request.userId!;
+
+  // Fetch user to get email for workspace path
+  const user = await findUserById(userId);
+  if (!user) {
+    return reply.status(404).send({ error: "User not found" });
+  }
+
   const conversation = await dbCreateConversation({
     title: body.title,
     type: body.type,
-    ownerId: request.userId!,
+    ownerId: userId,
     contactIds: body.contactIds ?? [],
   });
 
-  return reply.status(201).send(conversation);
+  // Create workspace directory: agent-workspace/{email}/conversations/{id}/
+  const safeEmail = user.email.replace(/[^a-zA-Z0-9@._-]/g, "_");
+  const workspacePath = `agent-workspace/${safeEmail}/conversations/${conversation.id}`;
+
+  try {
+    await mkdir(resolve(WORKSPACE_ROOT, workspacePath), { recursive: true });
+  } catch (err) {
+    request.server.log.error({ err }, "Failed to create conversation workspace directory");
+    return reply.status(500).send({ error: "Failed to create workspace directory" });
+  }
+
+  // update conversation with workspacePath
+  const updated = await dbUpdateConversation(conversation.id, {
+    workspacePath,
+  });
+
+  return reply.status(201).send(updated);
 }
 
 async function handleDetail(
@@ -122,6 +163,18 @@ async function handleDelete(
   return reply.status(204).send();
 }
 
+async function handleFindByAgent(
+  request: FastifyRequest<{ Params: FindByAgentParams }>,
+  reply: FastifyReply
+): Promise<void> {
+  const conversation = await findSingleConversationByAgentId(
+    request.userId!,
+    request.params.agentId,
+  );
+
+  return reply.status(200).send({ conversation });
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export async function conversationRoutes(app: FastifyInstance): Promise<void> {
@@ -130,4 +183,5 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/:id/detail", handleDetail);
   app.patch("/:id/update", handleUpdate);
   app.delete("/:id/delete", handleDelete);
+  app.get("/find-by-agent/:agentId", handleFindByAgent);
 }

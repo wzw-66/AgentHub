@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { api } from "@/lib/api-client";
+import { api, getStoredUser } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRipple } from "@/hooks/useRipple";
+
+type AgentProvider = "Claude" | "OpenCode" | "Custom";
 
 interface CreateAgentModalProps {
   onClose: () => void;
@@ -12,13 +14,25 @@ interface CreateAgentModalProps {
 
 export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModalProps) {
   const { t } = useI18n();
+  const [provider, setProvider] = useState<AgentProvider>("Claude");
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [model, setModel] = useState("gpt-4");
+  const [customProviderName, setCustomProviderName] = useState("");
+  const [apiUrl, setApiUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const { addRipple, renderRipples } = useRipple();
+
+  // Build workspace preview from stored user email + agent name
+  const user = typeof window !== "undefined" ? getStoredUser() : null;
+  const safeEmail = user?.email?.replace(/[^a-zA-Z0-9@._-]/g, "_") ?? "{email}";
+  const safeName = name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_") || "{name}";
+  const workspacePreview = `agent-workspace/${safeEmail}/${safeName}/`;
+
+  const isCustom = provider === "Custom";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,12 +42,22 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
     if (systemPrompt.length > 4000) { setValidationError(t("createAgent").promptTooLong); return; }
     setIsSubmitting(true);
     try {
-      await api.post("/api/agents/create", {
+      const body: Record<string, unknown> = {
         name: name.trim(),
-        provider: "custom",
-        model: model || undefined,
+        provider,
         systemPrompt: systemPrompt.trim() || undefined,
-      });
+      };
+
+      if (isCustom) {
+        body.model = model.trim() || undefined;
+        body.config = {
+          providerName: customProviderName.trim() || undefined,
+          apiUrl: apiUrl.trim() || undefined,
+          apiKey: apiKey.trim() || undefined,
+        };
+      }
+
+      await api.post("/api/contacts/create", body);
       onCreated();
     } catch { setError(t("createAgent").creationFailed); }
     finally { setIsSubmitting(false); }
@@ -59,6 +83,34 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Provider segmented control */}
+          <div>
+            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+              {t("createAgent").provider}
+            </label>
+            <div className="mt-1.5 flex rounded-lg border p-0.5" style={{ borderColor: "var(--theme-border-light)", backgroundColor: "var(--theme-bg-primary)" }}>
+              {([
+                { key: "Claude" as const, label: t("createAgent").claudeCode },
+                { key: "OpenCode" as const, label: t("createAgent").openCode },
+                { key: "Custom" as const, label: t("createAgent").custom },
+              ] as const).map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setProvider(p.key)}
+                  className="flex-1 rounded-md px-3 py-1.5 font-mono text-xs tracking-wider transition-all"
+                  style={{
+                    backgroundColor: provider === p.key ? "var(--theme-accent)" : "transparent",
+                    color: provider === p.key ? "var(--theme-text-inverse)" : "var(--theme-text-secondary)",
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
           <div>
             <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
               {t("createAgent").name} <span style={{ color: "var(--theme-danger)" }}>{t("createAgent").nameRequired}</span>
@@ -72,12 +124,27 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
             />
           </div>
 
+          {/* Workspace path preview */}
           <div>
             <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-              {t("createAgent").model}
+              {t("createAgent").workspacePath}
             </label>
-            <input type="text" value={model} onChange={(e) => setModel(e.target.value)}
-              placeholder={t("createAgent").modelPlaceholder}
+            <div
+              className="mt-1.5 w-full rounded-lg border px-3 py-2 font-mono text-xs truncate"
+              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-muted)", backgroundColor: "var(--theme-bg-primary)" }}
+            >
+              {workspacePreview}
+            </div>
+          </div>
+
+          {/* System Prompt */}
+          <div>
+            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+              {t("createAgent").systemPrompt}
+            </label>
+            <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder={t("createAgent").systemPromptPlaceholder}
+              rows={3}
               className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
               style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
               onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
@@ -85,19 +152,62 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
             />
           </div>
 
-          <div>
-            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-              {t("createAgent").systemPrompt}
-            </label>
-            <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder={t("createAgent").systemPromptPlaceholder}
-              rows={4}
-              className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
-            />
-          </div>
+          {/* Custom provider fields */}
+          {isCustom && (
+            <>
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").customProviderName}
+                </label>
+                <input type="text" value={customProviderName} onChange={(e) => setCustomProviderName(e.target.value)}
+                  placeholder={t("createAgent").customProviderNamePlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").apiUrl}
+                </label>
+                <input type="text" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)}
+                  placeholder={t("createAgent").apiUrlPlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").apiKey}
+                </label>
+                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={t("createAgent").apiKeyPlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").model}
+                </label>
+                <input type="text" value={model} onChange={(e) => setModel(e.target.value)}
+                  placeholder={t("createAgent").modelPlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+            </>
+          )}
 
           {/* Validation Error */}
           {validationError && (

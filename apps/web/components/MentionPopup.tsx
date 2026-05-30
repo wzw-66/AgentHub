@@ -6,7 +6,7 @@ import { useChat } from "@/lib/chat-context";
 interface MentionPopupProps {
   searchQuery: string;
   selectedIndex: number;
-  onSelect: (agentName: string) => void;
+  onSelect: (contactName: string) => void;
   onHover: (index: number) => void;
 }
 
@@ -16,12 +16,12 @@ export default function MentionPopup({
   onSelect,
   onHover,
 }: MentionPopupProps) {
-  const { agents } = useChat();
+  const { contacts } = useChat();
   const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = searchQuery
-    ? (agents || []).filter((a) => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : (agents || []);
+    ? (contacts || []).filter((a) => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : (contacts || []);
 
   useEffect(() => {
     const item = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
@@ -39,10 +39,10 @@ export default function MentionPopup({
       }}
     >
       <div ref={listRef} className="max-h-48 overflow-y-auto py-1">
-        {filtered.map((agent, index) => (
+        {filtered.map((contact, index) => (
           <button
-            key={agent.id}
-            onClick={() => onSelect(agent.name)}
+            key={contact.id}
+            onClick={() => onSelect(contact.name)}
             onMouseEnter={() => onHover(index)}
             className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors"
             style={{
@@ -57,13 +57,13 @@ export default function MentionPopup({
                 color: "var(--theme-accent)",
               }}
             >
-              {agent.name.charAt(0).toUpperCase()}
+              {contact.name.charAt(0).toUpperCase()}
             </div>
             <span className="flex-1 min-w-0 font-mono text-xs">
-              {agent.name}
+              {contact.name}
             </span>
             <span className="font-mono text-xs flex-shrink-0" style={{ color: "var(--theme-text-dim)" }}>
-              {agent.provider}
+              {contact.provider}
             </span>
           </button>
         ))}

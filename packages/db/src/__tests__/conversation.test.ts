@@ -35,7 +35,7 @@ describe("Conversation Repository", () => {
     const conv = await createConversation(
       {
         title: "[TEST] My Conversation",
-        type: "Single",
+        type: "single",
         ownerId: userId,
       },
       prisma
@@ -43,13 +43,13 @@ describe("Conversation Repository", () => {
 
     expect(conv.id).toBeDefined();
     expect(conv.title).toBe("[TEST] My Conversation");
-    expect(conv.type).toBe("Single");
+    expect(conv.type).toBe("single");
     expect(conv.isArchived).toBe(false);
   });
 
   it("should get a conversation with messages", async () => {
     const created = await createConversation(
-      { title: "[TEST] Get Conversation", type: "Group", ownerId: userId },
+      { title: "[TEST] Get Conversation", type: "group", ownerId: userId },
       prisma
     );
 
@@ -61,11 +61,11 @@ describe("Conversation Repository", () => {
 
   it("should list conversations for a user", async () => {
     await createConversation(
-      { title: "[TEST] List 1", type: "Single", ownerId: userId },
+      { title: "[TEST] List 1", type: "single", ownerId: userId },
       prisma
     );
     await createConversation(
-      { title: "[TEST] List 2", type: "Group", ownerId: userId },
+      { title: "[TEST] List 2", type: "group", ownerId: userId },
       prisma
     );
 
@@ -83,7 +83,7 @@ describe("Conversation Repository", () => {
 
   it("should exclude archived by default", async () => {
     const archived = await createConversation(
-      { title: "[TEST] Archived", type: "Single", ownerId: userId },
+      { title: "[TEST] Archived", type: "single", ownerId: userId },
       prisma
     );
     await updateConversation(archived.id, { isArchived: true }, prisma);
@@ -104,7 +104,7 @@ describe("Conversation Repository", () => {
 
   it("should update a conversation", async () => {
     const conv = await createConversation(
-      { title: "[TEST] Before Update", type: "Single", ownerId: userId },
+      { title: "[TEST] Before Update", type: "single", ownerId: userId },
       prisma
     );
 

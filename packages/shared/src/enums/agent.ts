@@ -1,5 +1,5 @@
 export enum AgentProvider {
-  Claude = "claude",
-  OpenCode = "opencode",
-  Custom = "custom",
+  Claude = "Claude",
+  OpenCode = "OpenCode",
+  Custom = "Custom",
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AgentDetailContent from "@/components/AgentDetailContent";
+import EditAgentModal from "@/components/EditAgentModal";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRipple } from "@/hooks/useRipple";
@@ -16,10 +17,10 @@ interface AgentData {
   systemPrompt?: string | null;
 }
 
-async function checkIsContact(agentId: string): Promise<boolean> {
+async function checkIsContact(contactId: string): Promise<boolean> {
   try {
-    const contacts = await api.get<{ id: string; agentId: string }[]>("/api/contacts/list");
-    return contacts.some((c) => c.agentId === agentId);
+    await api.get(`/api/contacts/${contactId}/detail`);
+    return true;
   } catch { return false; }
 }
 
@@ -34,13 +35,15 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isContact, setIsContact] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const { addRipple: addRippleChat, renderRipples: renderRipplesChat } = useRipple();
 
   const fetchAgent = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.get<AgentData>(`/api/agents/${id}/detail`);
+      const data = await api.get<AgentData>(`/api/contacts/${id}/detail`);
       setAgent(data);
       const contactStatus = await checkIsContact(id);
       setIsContact(contactStatus);
@@ -56,6 +59,15 @@ export default function AgentDetailPage() {
   async function handleStartChat() {
     setActionLoading("chat");
     try {
+      // Check if a single conversation with this agent already exists
+      const existing = await api.get<{ conversation: { id: string } | null }>(
+        `/api/conversations/find-by-agent/${id}`,
+      );
+      if (existing.conversation) {
+        router.push("/chat");
+        return;
+      }
+
       await api.post("/api/conversations/create", {
         title: `SESSION:${agent!.name}`,
         type: "single",
@@ -72,6 +84,15 @@ export default function AgentDetailPage() {
       setIsContact(true);
     } catch { /* silent */ }
     finally { setActionLoading(null); }
+  }
+
+  async function handleDelete() {
+    setActionLoading("delete");
+    try {
+      await api.delete(`/api/contacts/${id}/delete`);
+      router.push("/agents");
+    } catch { /* silent */ }
+    finally { setActionLoading(null); setDeleteConfirm(false); }
   }
 
   if (isLoading) {
@@ -152,6 +173,23 @@ export default function AgentDetailPage() {
       <div className="px-6 py-4" style={{ borderTop: "1px solid var(--theme-border)" }}>
         <div className="flex gap-3">
           <button
+            onClick={() => setShowEditModal(true)}
+            disabled={actionLoading !== null}
+            className="flex-1 rounded-lg border py-2.5 font-mono text-xs tracking-wider transition-all disabled:opacity-40"
+            style={{
+              borderColor: "var(--theme-border-light)",
+              color: "var(--theme-text-secondary)",
+            }}
+            onMouseEnter={(e) => {
+              if (!actionLoading) e.currentTarget.style.borderColor = "var(--theme-accent)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--theme-border-light)";
+            }}
+          >
+            {t("agentDetail").edit}
+          </button>
+          <button
             onClick={handleStartChat}
             onMouseDown={addRippleChat}
             disabled={actionLoading !== null}
@@ -194,8 +232,61 @@ export default function AgentDetailPage() {
           >
             {actionLoading === "contact" ? t("agentDetail").adding : isContact ? t("agentDetail").inContacts : t("agentDetail").addContact}
           </button>
+
+          {/* Delete button */}
+          {deleteConfirm ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDelete}
+                disabled={actionLoading === "delete"}
+                className="rounded-lg px-3 py-2.5 font-mono text-xs font-bold disabled:opacity-50"
+                style={{ backgroundColor: "var(--theme-danger)", color: "#ffffff" }}
+              >
+                {actionLoading === "delete" ? t("agentDetail").deleting || "..." : t("agentDetail").confirmDelete || "Confirm"}
+              </button>
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                className="rounded-lg px-3 py-2.5 font-mono text-xs"
+                style={{ color: "var(--theme-text-muted)" }}
+              >
+                {t("common").cancel || "Cancel"}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              disabled={actionLoading !== null}
+              className="flex-1 rounded-lg border py-2.5 font-mono text-xs tracking-wider transition-all disabled:opacity-40"
+              style={{
+                borderColor: "var(--theme-danger)",
+                color: "var(--theme-danger)",
+              }}
+              onMouseEnter={(e) => {
+                if (!actionLoading) {
+                  e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.15)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              {t("agentDetail").delete || "Delete"}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Edit Agent Modal */}
+      {showEditModal && agent && (
+        <EditAgentModal
+          agent={agent}
+          onClose={() => setShowEditModal(false)}
+          onSaved={() => {
+            setShowEditModal(false);
+            fetchAgent();
+          }}
+        />
+      )}
     </div>
   );
 }

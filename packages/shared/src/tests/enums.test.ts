@@ -53,9 +53,9 @@ describe("ArtifactStatus", () => {
 
 describe("AgentProvider", () => {
   it("should have correct values", () => {
-    expect(AgentProvider.Claude).toBe("claude");
-    expect(AgentProvider.OpenCode).toBe("opencode");
-    expect(AgentProvider.Custom).toBe("custom");
+    expect(AgentProvider.Claude).toBe("Claude");
+    expect(AgentProvider.OpenCode).toBe("OpenCode");
+    expect(AgentProvider.Custom).toBe("Custom");
   });
 });
 

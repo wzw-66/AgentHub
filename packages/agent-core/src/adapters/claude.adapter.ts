@@ -8,10 +8,13 @@ import type {
 } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createChunk, parseClaudeStreamJson } from "../utils/chunk-parser.js";
+import { resolveCommand } from "../utils/resolve-cli.js";
 
 export interface ClaudeAdapterConfig {
   /** Path to the `claude` binary. Defaults to "claude". */
   cliPath?: string;
+  /** Working directory for the subprocess. */
+  cwd?: string;
   /** Additional CLI arguments. */
   args?: string[];
   /** Timeout in milliseconds. Default: 300000 (5 min). */
@@ -58,8 +61,10 @@ export class ClaudeAdapter implements AgentAdapter {
       ...(this.config.args ?? []),
     ];
 
-    this.process = spawn(cliPath, args, {
+    const resolved = resolveCommand(cliPath);
+    this.process = spawn(resolved.command, [...resolved.prefixArgs, ...args], {
       stdio: ["pipe", "pipe", "pipe"],
+      cwd: this.config.cwd,
     });
 
     // Register close handler immediately — ensures exitCode promise
@@ -101,21 +106,34 @@ export class ClaudeAdapter implements AgentAdapter {
   }
 
   abort(): void {
-    this.process?.kill("SIGTERM");
-    // Force kill after 5s grace period
-    setTimeout(() => {
+    if (!this.process) return;
+    if (process.platform === "win32") {
+      // On Windows, taskkill /T kills the entire process tree
       try {
-        this.process?.kill("SIGKILL");
+        const { execSync } = require("node:child_process");
+        execSync(`taskkill /PID ${this.process.pid} /T /F`, { timeout: 3000 });
       } catch {
-        // Process may already be dead
+        this.process.kill("SIGTERM");
       }
-    }, 5000);
+    } else {
+      this.process?.kill("SIGTERM");
+      setTimeout(() => {
+        try {
+          this.process?.kill("SIGKILL");
+        } catch {
+          // Process may already be dead
+        }
+      }, 5000);
+    }
   }
 
   async healthCheck(): Promise<HealthStatus> {
     const start = Date.now();
     try {
-      const proc = spawn(this.config.cliPath ?? "claude", ["--version"], {
+      const { command: healthCmd, prefixArgs: healthPrefix } = resolveCommand(
+        this.config.cliPath ?? "claude",
+      );
+      const proc = spawn(healthCmd, [...healthPrefix, "--version"], {
         stdio: "pipe",
       });
       const exitCode = await new Promise<number>((resolve) => {

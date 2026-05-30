@@ -2,7 +2,6 @@ import { buildApp } from "../app";
 import { signAccessToken, signRefreshToken, generateJti } from "../utils/jwt";
 import {
   createUser,
-  createAgent as dbCreateAgent,
   createContact as dbCreateContact,
   createConversation as dbCreateConversation,
 } from "@agenthub/db";
@@ -66,44 +65,30 @@ export function getAuthHeader(userId: string): { authorization: string } {
 
 // ─── Resource factories ─────────────────────────────────────────────────────
 
-export async function createTestAgent(
+export async function createTestContact(
   prisma: PrismaClient,
-  overrides: { name?: string; provider?: string } = {}
-): Promise<{ id: string; name: string; provider: string }> {
-  return dbCreateAgent(
+  overrides: { name?: string; provider?: string; userId?: string } = {}
+): Promise<{ id: string; name: string; provider: string; userId: string }> {
+  const contact = await dbCreateContact(
     {
-      name: overrides.name ?? "Test Agent",
+      userId: overrides.userId!,
+      name: overrides.name ?? "Test Contact",
       provider: (overrides.provider ?? "Claude") as any,
     },
     prisma
   );
-}
-
-export async function createTestContact(
-  prisma: PrismaClient,
-  userId: string,
-  agentId: string,
-  overrides: { displayName?: string } = {}
-) {
-  return dbCreateContact(
-    {
-      userId,
-      agentId,
-      displayName: overrides.displayName ?? "Test Contact",
-    },
-    prisma
-  );
+  return { id: contact.id, name: contact.name, provider: contact.provider, userId: contact.userId };
 }
 
 export async function createTestConversation(
   prisma: PrismaClient,
   userId: string,
-  overrides: { title?: string; type?: "Single" | "Group" } = {}
+  overrides: { title?: string; type?: "single" | "group" } = {}
 ) {
   return dbCreateConversation(
     {
       title: overrides.title ?? "Test Conversation",
-      type: overrides.type ?? "Single",
+      type: overrides.type ?? "single",
       ownerId: userId,
     },
     prisma

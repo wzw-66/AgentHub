@@ -29,7 +29,7 @@ export default function AgentListPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.get<AgentItem[]>("/api/agents/list");
+      const data = await api.get<AgentItem[]>("/api/contacts/list");
       setAgents(data);
     } catch {
       setError(t("agentMarket").failedToLoad);

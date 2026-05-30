@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/chat-context";
 import { useI18n } from "@/lib/i18n";
+import { api } from "@/lib/api-client";
 import { MessageBubble, CodeBlock } from "@agenthub/ui";
 import type { Message } from "@agenthub/shared";
 import MentionPopup from "./MentionPopup";
@@ -42,19 +43,34 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, agents, streamingMessage } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, setMessages } = useChat();
   const { t } = useI18n();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [mentionState, setMentionState] = useState<{ atIndex: number; query: string } | null>(null);
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const { addRipple, renderRipples } = useRipple();
 
+  // ─── Message edit / delete state ─────────────────────────────────
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+
   const activeConversation = (conversations || []).find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
+
+  // Determine the last user message index
+  const lastUserMsgIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]!.senderType === "user") return i;
+    }
+    return -1;
+  })();
 
   // ─── Auto-scroll ────────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
@@ -111,7 +127,7 @@ export default function ChatPanel({
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (mentionState) {
-      const filtered = (agents || []).filter((a) =>
+      const filtered = (contacts || []).filter((a) =>
         a.name.toLowerCase().includes(mentionState.query),
       );
       if (filtered.length > 0) {
@@ -126,6 +142,55 @@ export default function ChatPanel({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  }
+
+  // ─── Message edit / delete handlers ─────────────────────────────
+
+  function startEditing(msg: Message) {
+    setEditingMessageId(msg.id);
+    setEditContent(msg.content);
+    // Focus the edit textarea on next render
+    setTimeout(() => editTextareaRef.current?.focus(), 0);
+  }
+
+  async function handleSaveEdit() {
+    const trimmed = editContent.trim();
+    if (!trimmed || !editingMessageId || !conversationId) return;
+
+    try {
+      await api.patch(
+        `/api/conversations/${conversationId}/messages/${editingMessageId}/update`,
+        { content: trimmed },
+      );
+      // Update local messages array
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === editingMessageId ? { ...m, content: trimmed } : m,
+        ),
+      );
+      setEditingMessageId(null);
+      setEditContent("");
+    } catch {
+      // silent
+    }
+  }
+
+  function handleCancelEdit() {
+    setEditingMessageId(null);
+    setEditContent("");
+  }
+
+  async function handleDelete(msgId: string) {
+    if (!conversationId) return;
+    try {
+      await api.delete(
+        `/api/conversations/${conversationId}/messages/${msgId}/delete`,
+      );
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      setShowDeleteConfirm(null);
+    } catch {
+      // silent
     }
   }
 
@@ -185,7 +250,9 @@ export default function ChatPanel({
                 style={{ backgroundColor: "var(--theme-accent)" }}
               />
               <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-                {isGroupChat ? t("chat").groupSession : t("chat").directChannel}
+                {isGroupChat
+                  ? `${t("chat").groupSession} (${activeConversation?.contactIds?.length ?? 0})`
+                  : t("chat").directChannel}
               </span>
             </div>
           </div>
@@ -212,11 +279,110 @@ export default function ChatPanel({
               const variant =
                 msg.senderType === "user" ? "user" :
                 msg.senderType === "system" ? "system" : "contact";
+
+              const isLastUserMsg = idx === lastUserMsgIdx;
+              const isEditing = editingMessageId === msg.id;
+
               return (
-                <div key={msg.id} className="animate-fade-in-up message-bubble" style={{ animationDelay: `${Math.min(idx * 15, 200)}ms` }}>
+                <div
+                  key={msg.id}
+                  className="relative animate-fade-in-up message-bubble group"
+                  style={{ animationDelay: `${Math.min(idx * 15, 200)}ms` }}
+                  onMouseEnter={() => setHoveredMsgId(msg.id)}
+                  onMouseLeave={() => setHoveredMsgId(null)}
+                >
                   <MessageBubble message={msg} variant={variant}>
-                    <MessageContent message={msg} />
+                    {isEditing ? (
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          ref={editTextareaRef}
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          className="w-full resize-none rounded border bg-transparent px-2 py-1 font-mono text-sm outline-none"
+                          style={{ borderColor: "var(--theme-accent)", color: "var(--theme-text-primary)" }}
+                          rows={3}
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={handleCancelEdit}
+                            className="rounded px-2 py-1 font-mono text-xs"
+                            style={{ color: "var(--theme-text-muted)" }}
+                          >
+                            {t("common").cancel}
+                          </button>
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={!editContent.trim()}
+                            className="rounded px-2 py-1 font-mono text-xs font-bold disabled:opacity-50"
+                            style={{
+                              color: "var(--theme-accent)",
+                              backgroundColor: "var(--theme-accent-dim)",
+                            }}
+                          >
+                            {t("common").save}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <MessageContent message={msg} />
+                    )}
                   </MessageBubble>
+
+                  {/* Hover actions: only on last user message, when not editing */}
+                  {isLastUserMsg && hoveredMsgId === msg.id && !isEditing && (
+                    <div
+                      className="absolute right-0 top-0 flex gap-1"
+                      style={{ transform: "translateX(calc(100% + 8px))" }}
+                    >
+                      <button
+                        onClick={() => startEditing(msg)}
+                        className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                        style={{ color: "var(--theme-text-muted)" }}
+                        title={t("common").edit}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(msg.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                        style={{ color: "var(--theme-text-muted)" }}
+                        title={t("common").delete}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-danger)"; e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.1)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Delete confirmation */}
+                  {showDeleteConfirm === msg.id && (
+                    <div className="mt-1 flex items-center gap-2 justify-end">
+                      <span className="font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+                        {t("common").confirm}?
+                      </span>
+                      <button
+                        onClick={() => handleDelete(msg.id)}
+                        className="rounded px-2 py-0.5 font-mono text-xs"
+                        style={{ color: "var(--theme-danger)", backgroundColor: "rgba(255,51,85,0.1)" }}
+                      >
+                        {t("common").delete}
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(null)}
+                        className="rounded px-2 py-0.5 font-mono text-xs"
+                        style={{ color: "var(--theme-text-muted)" }}
+                      >
+                        {t("common").cancel}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

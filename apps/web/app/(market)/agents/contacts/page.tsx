@@ -6,19 +6,14 @@ import { AgentAvatar } from "@agenthub/ui";
 import { useI18n } from "@/lib/i18n";
 import { API_BASE_URL } from "@/lib/api-client";
 
-interface ContactAgent {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  provider: string;
-}
-
 interface ContactItem {
   id: string;
+  name: string;
   displayName: string;
+  avatarUrl: string | null;
+  provider: string;
   isPinned: boolean;
   tags: string[];
-  agent: ContactAgent;
 }
 
 export default function ContactListPage() {
@@ -92,7 +87,7 @@ export default function ContactListPage() {
   const sortedContacts = [...contacts].sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
-    return a.displayName.localeCompare(b.displayName);
+    return (a.displayName || a.name).localeCompare(b.displayName || b.name);
   });
 
   return (
@@ -177,7 +172,7 @@ export default function ContactListPage() {
               <div key={contact.id}
                 className="flex items-center gap-4 rounded-xl border px-5 py-4"
                 style={{ borderColor: "var(--theme-border)", backgroundColor: "var(--theme-bg-surface)" }}>
-                <AgentAvatar name={contact.displayName} avatarUrl={contact.agent.avatarUrl} size="md" />
+                <AgentAvatar name={contact.displayName || contact.name} avatarUrl={contact.avatarUrl} size="md" />
 
                 <div className="flex-1 min-w-0">
                   {editingId === contact.id ? (
@@ -201,7 +196,7 @@ export default function ContactListPage() {
                     <>
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate" style={{ color: "var(--theme-text-primary)" }}>
-                          {contact.displayName}
+                          {contact.displayName || contact.name}
                         </p>
                         {contact.isPinned && (
                           <svg className="h-3 w-3 flex-shrink-0" fill="var(--theme-accent)" viewBox="0 0 20 20">
@@ -210,7 +205,7 @@ export default function ContactListPage() {
                         )}
                       </div>
                       <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-                        {contact.agent.name}
+                        {contact.provider}
                       </p>
                     </>
                   )}
@@ -229,7 +224,7 @@ export default function ContactListPage() {
                     </svg>
                   </button>
 
-                  <button onClick={() => { setEditingId(contact.id); setEditName(contact.displayName); }}
+                  <button onClick={() => { setEditingId(contact.id); setEditName(contact.displayName || contact.name); }}
                     className="rounded p-1.5 transition-colors" style={{ color: "var(--theme-text-muted)" }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; e.currentTarget.style.color = "var(--theme-accent)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--theme-text-muted)"; }}

@@ -1,10 +1,15 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { resolve } from "node:path";
+import { WORKSPACE_ROOT } from "../config/env.js";
 import {
   listMessages,
   createMessage as dbCreateMessage,
   getMessage,
   pinMessage as dbPinMessage,
+  updateMessage as dbUpdateMessage,
+  deleteMessage as dbDeleteMessage,
   getConversation,
+  getContact,
   listContacts,
 } from "@agenthub/db";
 import { createAdapter } from "@agenthub/agent-core";
@@ -34,6 +39,15 @@ type MessageRouteParams = {
 };
 
 type PinRouteParams = {
+  conversationId: string;
+  messageId: string;
+};
+
+type UpdateMessageBody = {
+  content: string;
+};
+
+type MessageIdRouteParams = {
   conversationId: string;
   messageId: string;
 };
@@ -140,7 +154,7 @@ async function handleCreate(
 
   if (
     conversation &&
-    conversation.type === "Group" &&
+    conversation.type === "group" &&
     mentions.length >= 2
   ) {
     // Launch orchestrator as background task
@@ -150,6 +164,19 @@ async function handleCreate(
         cm.pushToConversation(conversationId, "error", {
           message: err instanceof Error ? err.message : "Orchestration failed",
           code: "ORCHESTRATION_ERROR",
+        });
+      }
+    });
+  }
+
+  // Single conversation: trigger agent execution
+  if (conversation && conversation.type === "single") {
+    runAgentExecution(conversationId, body.content, cm).catch((err) => {
+      request.server.log.error({ err, messageId: message.id }, "Agent execution failed");
+      if (cm) {
+        cm.pushToConversation(conversationId, "error", {
+          message: err instanceof Error ? err.message : "Execution failed",
+          code: "EXECUTION_ERROR",
         });
       }
     });
@@ -174,6 +201,60 @@ async function handlePin(
 
   const updated = await dbPinMessage(request.params.messageId);
   return reply.status(200).send(updated);
+}
+
+// ─── Message update / delete ──────────────────────────────────────────────────
+
+async function handleUpdateMessage(
+  request: FastifyRequest<{ Params: MessageIdRouteParams }>,
+  reply: FastifyReply
+): Promise<void> {
+  const message = await getMessage(request.params.messageId);
+
+  if (!message) {
+    return reply.status(404).send({ error: "Message not found" });
+  }
+
+  if (message.conversationId !== request.params.conversationId) {
+    return reply.status(404).send({ error: "Message not found" });
+  }
+
+  // Only the sender can update their own message
+  if (message.senderId !== request.userId!) {
+    return reply.status(403).send({ error: "Forbidden" });
+  }
+
+  const body = request.body as UpdateMessageBody | undefined;
+  const content = body?.content?.trim();
+  if (!content) {
+    return reply.status(400).send({ error: "Content is required" });
+  }
+
+  const updated = await dbUpdateMessage(request.params.messageId, { content });
+  return reply.status(200).send(updated);
+}
+
+async function handleDeleteMessage(
+  request: FastifyRequest<{ Params: MessageIdRouteParams }>,
+  reply: FastifyReply
+): Promise<void> {
+  const message = await getMessage(request.params.messageId);
+
+  if (!message) {
+    return reply.status(404).send({ error: "Message not found" });
+  }
+
+  if (message.conversationId !== request.params.conversationId) {
+    return reply.status(404).send({ error: "Message not found" });
+  }
+
+  // Only the sender can delete their own message
+  if (message.senderId !== request.userId!) {
+    return reply.status(403).send({ error: "Forbidden" });
+  }
+
+  await dbDeleteMessage(request.params.messageId);
+  return reply.status(204).send();
 }
 
 // ─── Execute handler ─────────────────────────────────────────────────────────
@@ -245,7 +326,7 @@ async function runOrchestration(
   if (!message) return;
 
   for (const contact of contacts) {
-    const agent = contact.agent as unknown as Agent;
+    const agent = contact as unknown as Agent;
     agentMap.set(agent.id, agent);
   }
 
@@ -254,7 +335,7 @@ async function runOrchestration(
   const mentions = extractMentions(message.content);
 
   for (const contact of contacts) {
-    const agent = contact.agent as unknown as Agent;
+    const agent = contact as unknown as Agent;
     if (
       mentions.some(
         (m) => agent.name.toLowerCase().includes(m.toLowerCase()),
@@ -306,25 +387,32 @@ async function runAgentExecution(
   content: string,
   cm: FastifyInstance["connectionManager"],
 ): Promise<void> {
-  // Get conversation contacts to find agents
   const conv = await getConversation(conversationId);
   if (!conv) return;
 
   const contactIds = conv.contactIds ?? [];
   if (contactIds.length === 0) return;
 
-  // Use the first contact's agent for now
-  // (Orchestrator module will handle multi-agent dispatch)
-  const contacts = await Promise.all(
-    contactIds.map(() => listContacts(conv.ownerId)),
-  );
+  if (conv.type === "single") {
+    // Single-agent conversation: resolve the target agent and execute
+    const contactId = contactIds[0]!;
+    const agent = await getContact(contactId);
+    if (!agent) {
+      cm.pushToConversation(conversationId, "error", {
+        message: "Agent not found",
+        code: "AGENT_NOT_FOUND",
+      });
+      return;
+    }
 
-  const flatContacts = contacts.flat();
-  for (const contact of flatContacts) {
-    const provider = contact.agent.provider.toLowerCase();
+    const cwd = conv.workspacePath
+      ? resolve(WORKSPACE_ROOT, conv.workspacePath)
+      : agent.workspacePath
+        ? resolve(WORKSPACE_ROOT, agent.workspacePath)
+        : undefined;
 
     try {
-      const adapter = createAdapter(provider);
+      const adapter = createAdapter(agent.provider, { cwd });
       const context = {
         conversationId,
         message: content,
@@ -347,6 +435,7 @@ async function runAgentExecution(
       });
     }
   }
+  // Group-type conversations use the orchestrator path (handled in handleCreate)
 }
 
 function pushChunk(
@@ -396,4 +485,6 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
   app.post("/create", handleCreate);
   app.post("/:messageId/pin", handlePin);
   app.post("/:messageId/execute", handleExecute);
+  app.patch("/:messageId/update", handleUpdateMessage);
+  app.delete("/:messageId/delete", handleDeleteMessage);
 }
