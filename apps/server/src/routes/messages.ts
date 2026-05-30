@@ -420,12 +420,35 @@ async function runAgentExecution(
         agents: [],
       };
 
+      let fullResponse = "";
+
       for await (const chunk of adapter.execute(context)) {
-        pushChunk(cm, conversationId, chunk);
+        if (chunk.type === ChunkType.Text) {
+          fullResponse += chunk.content;
+        }
+        // Don't forward Done chunk — we persist first, then push done event
+        if (chunk.type !== ChunkType.Done) {
+          pushChunk(cm, conversationId, chunk, agent.id);
+        }
+      }
+
+      // Save AI response to database
+      let messageId = "";
+      if (fullResponse) {
+        const saved = await dbCreateMessage({
+          conversationId,
+          senderType: "Contact",
+          senderId: agent.id,
+          type: "Text",
+          content: fullResponse,
+          parentId: null,
+        });
+        messageId = saved.id;
       }
 
       cm.pushToConversation(conversationId, "done", {
-        messageId: "",
+        messageId,
+        agentId: agent.id,
         tokenUsage: { input: 0, output: 0 },
       });
     } catch (err) {
@@ -442,6 +465,7 @@ function pushChunk(
   cm: FastifyInstance["connectionManager"],
   conversationId: string,
   chunk: Chunk,
+  agentId: string,
 ): void {
   switch (chunk.type) {
     case ChunkType.Text:
@@ -451,6 +475,7 @@ function pushChunk(
         type: chunk.type,
         content: chunk.content,
         timestamp: chunk.timestamp,
+        agentId,
       });
       break;
 

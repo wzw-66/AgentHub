@@ -70,7 +70,11 @@
       "Bash(grep -A2 '\"\"dev\"\"' packages/*/package.json apps/*/package.json tooling/*/package.json)",
       "Bash(npx kill-port:*)",
       "Bash(npx next:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(auth\\\\\\)/)",
+      "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(chat\\\\\\)/)",
+      "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(market\\\\\\)/)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

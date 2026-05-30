@@ -1,5 +1,5 @@
 export enum SenderType {
-  User = "user",
-  Contact = "contact",
-  System = "system",
+  User = "User",
+  Contact = "Contact",
+  System = "System",
 }

@@ -4,7 +4,7 @@
   --ui-color-primary-light: rgba(0, 255, 65, 0.15);
   --ui-color-primary-dark: #00cc33;
   --ui-color-bg-user: #00c853;
-  --ui-color-bg-contact: rgba(12, 28, 12, 0.7);
+  --ui-color-bg-contact: rgba(12, 28, 12, 0.85);
   --ui-color-bg-system: rgba(12, 28, 12, 0.4);
   --ui-color-bg-code: #0a140a;
   --ui-color-bg-card: rgba(15, 23, 15, 0.6);
@@ -28,7 +28,7 @@
   --ui-color-primary-light: rgba(0, 180, 216, 0.15);
   --ui-color-primary-dark: #0096c7;
   --ui-color-bg-user: #0077b6;
-  --ui-color-bg-contact: rgba(10, 25, 40, 0.7);
+  --ui-color-bg-contact: rgba(10, 25, 40, 0.85);
   --ui-color-bg-system: rgba(10, 25, 40, 0.4);
   --ui-color-bg-code: #0a141e;
   --ui-color-bg-card: rgba(15, 23, 32, 0.6);
@@ -52,7 +52,7 @@
   --ui-color-primary-light: rgba(187, 134, 252, 0.15);
   --ui-color-primary-dark: #9c27b0;
   --ui-color-bg-user: #9c27b0;
-  --ui-color-bg-contact: rgba(24, 10, 34, 0.7);
+  --ui-color-bg-contact: rgba(24, 10, 34, 0.85);
   --ui-color-bg-system: rgba(24, 10, 34, 0.4);
   --ui-color-bg-code: #140a1e;
   --ui-color-bg-card: rgba(24, 15, 32, 0.6);
@@ -76,7 +76,7 @@
   --ui-color-primary-light: rgba(255, 51, 51, 0.15);
   --ui-color-primary-dark: #cc0000;
   --ui-color-bg-user: #d32f2f;
-  --ui-color-bg-contact: rgba(34, 10, 10, 0.7);
+  --ui-color-bg-contact: rgba(34, 10, 10, 0.85);
   --ui-color-bg-system: rgba(34, 10, 10, 0.4);
   --ui-color-bg-code: #1e0a0a;
   --ui-color-bg-card: rgba(26, 15, 15, 0.6);

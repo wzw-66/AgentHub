@@ -23,7 +23,7 @@ export function useSSEStream(conversationId: string | null) {
           timestamp?: string;
           agentId?: string;
         };
-        appendMessageChunk(data.content);
+        appendMessageChunk(data.content, data.agentId);
         if (data.agentId) {
           setTypingAgent(data.agentId, true);
         }
@@ -46,7 +46,7 @@ export function useSSEStream(conversationId: string | null) {
         if (data.agentId) {
           setTypingAgent(data.agentId, false);
         }
-        finalizeMessage();
+        finalizeMessage(data.messageId, data.agentId);
       } catch {
         // Ignore malformed messages
       }

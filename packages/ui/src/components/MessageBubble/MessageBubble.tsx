@@ -10,26 +10,31 @@ function formatTime(iso: string): string {
 
 const variants = {
   user: {
-    alignSelf: "flex-end",
     alignItems: "flex-end" as const,
+    maxWidth: "100%" as const,
     content: {
-      backgroundColor: "var(--ui-color-bg-user)",
-      color: "var(--ui-color-text-inverse)",
+      backgroundColor: "var(--ui-color-bg-contact)",
+      color: "var(--ui-color-text-primary)",
       borderBottomRightRadius: "var(--ui-radius-sm)",
+      borderTop: "1px solid var(--ui-color-border)",
+      borderRight: "1px solid var(--ui-color-border)",
+      borderBottom: "1px solid var(--ui-color-border)",
+      borderLeft: "2px solid var(--ui-color-primary)",
     },
   },
   contact: {
-    alignSelf: "flex-start",
     alignItems: "flex-start" as const,
     content: {
       backgroundColor: "var(--ui-color-bg-contact)",
       color: "var(--ui-color-text-primary)",
       borderBottomLeftRadius: "var(--ui-radius-sm)",
-      border: "1px solid var(--ui-color-border)",
+      borderTop: "1px solid var(--ui-color-border)",
+      borderRight: "1px solid var(--ui-color-border)",
+      borderBottom: "1px solid var(--ui-color-border)",
+      borderLeft: "2px solid var(--ui-color-primary)",
     },
   },
   system: {
-    alignSelf: "center",
     alignItems: "center" as const,
     maxWidth: "100%" as const,
     content: {
@@ -58,7 +63,6 @@ export function MessageBubble({
     maxWidth: vMaxWidth,
     marginBottom: "var(--ui-space-3)",
     gap: "var(--ui-space-1)",
-    alignSelf: v.alignSelf,
     alignItems: v.alignItems,
   };
 

@@ -55,8 +55,8 @@ interface ChatContextValue {
     contactIds: string[],
   ) => Promise<Conversation>;
   setTypingAgent: (agentId: string, isTyping: boolean) => void;
-  appendMessageChunk: (chunkText: string) => void;
-  finalizeMessage: () => void;
+  appendMessageChunk: (chunkText: string, agentId?: string) => void;
+  finalizeMessage: (messageId?: string, agentId?: string) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
 }
 
@@ -164,7 +164,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   const appendMessageChunk = useCallback(
-    (chunkText: string) => {
+    (chunkText: string, agentId?: string) => {
       setStreamingMessage((prev) => {
         if (prev) {
           return { ...prev, content: prev.content + chunkText };
@@ -176,7 +176,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           conversationId: activeConversationId || "",
           content: chunkText,
           senderType: SenderType.Contact,
-          senderId: "agent",
+          senderId: agentId ?? "agent",
           type: MessageType.Text,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -187,21 +187,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [activeConversationId],
   );
 
-  const finalizeMessage = useCallback(() => {
+  const finalizeMessage = useCallback((messageId?: string, agentId?: string) => {
     setStreamingMessage((prev) => {
       if (prev) {
         // Convert streaming message to a permanent message
+        // Use the real DB messageId if available, otherwise keep the streaming id
+        const id = messageId || prev.id;
         const permanent: Message = {
-          id: prev.id,
+          id,
           conversationId: prev.conversationId,
           content: prev.content,
           senderType: SenderType.Contact,
-          senderId: "agent",
+          senderId: agentId ?? prev.senderId,
           type: MessageType.Text,
           createdAt: prev.createdAt,
           updatedAt: new Date().toISOString(),
         };
-        setMessages((msgs) => [...msgs, permanent]);
+        setMessages((msgs) => {
+          // Avoid duplicates: if a message with the same DB id already exists
+          // (e.g., loaded from API after a re-fetch), don't add it again
+          if (messageId && msgs.some((m) => m.id === messageId)) {
+            return msgs;
+          }
+          return [...msgs, permanent];
+        });
       }
       return null;
     });

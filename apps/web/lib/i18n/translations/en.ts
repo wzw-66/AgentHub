@@ -79,6 +79,7 @@ export const en = {
     mentionPlaceholder: "TYPE @ TO MENTION...",
     messagePlaceholder: "TYPE YOUR MESSAGE...",
     send: "SEND",
+    you: "YOU",
   },
   rightPanel: {
     artifactView: "ARTIFACT VIEW",

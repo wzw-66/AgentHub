@@ -2,36 +2,20 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/chat-context";
+import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api-client";
-import { MessageBubble, CodeBlock } from "@agenthub/ui";
+import { MessageBubble } from "@agenthub/ui";
 import type { Message } from "@agenthub/shared";
 import MentionPopup from "./MentionPopup";
 import TypingIndicator from "./TypingIndicator";
 import { useRipple } from "@/hooks/useRipple";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-interface CodeBlockMatch {
-  isCode: boolean;
-  code: string;
-  language: string;
-}
-
-function isCodeBlock(content: string): CodeBlockMatch {
-  const match = content.match(/^```(\w+)?\n([\s\S]*?)```$/);
-  if (match) {
-    return { isCode: true, code: match[2]!, language: match[1] || "text" };
-  }
-  return { isCode: false, code: content, language: "text" };
-}
-
 function MessageContent({ message }: { message: Message }) {
-  const { isCode, code, language } = isCodeBlock(message.content);
-  if (isCode) {
-    return <CodeBlock code={code} language={language} />;
-  }
-  return <>{message.content}</>;
+  return <MarkdownRenderer content={message.content} />;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────
@@ -44,6 +28,7 @@ export default function ChatPanel({
   onShowAgent?: (id: string) => void;
 }) {
   const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, setMessages } = useChat();
+  const { user } = useAuth();
   const { t } = useI18n();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -67,7 +52,7 @@ export default function ChatPanel({
   // Determine the last user message index
   const lastUserMsgIdx = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i]!.senderType === "user") return i;
+      if (messages[i]!.senderType?.toLowerCase?.() === "user") return i;
     }
     return -1;
   })();
@@ -276,9 +261,10 @@ export default function ChatPanel({
         ) : (
           <div className="flex flex-col gap-3">
             {messages.map((msg, idx) => {
+              const senderType = msg.senderType?.toLowerCase?.() ?? "";
               const variant =
-                msg.senderType === "user" ? "user" :
-                msg.senderType === "system" ? "system" : "contact";
+                senderType === "user" ? "user" :
+                senderType === "system" ? "system" : "contact";
 
               const isLastUserMsg = idx === lastUserMsgIdx;
               const isEditing = editingMessageId === msg.id;
@@ -287,11 +273,25 @@ export default function ChatPanel({
                 <div
                   key={msg.id}
                   className="relative animate-fade-in-up message-bubble group"
-                  style={{ animationDelay: `${Math.min(idx * 15, 200)}ms` }}
+                  style={{
+                    alignSelf: variant === "user" ? "flex-end" : variant === "system" ? "center" : "flex-start",
+                    animationDelay: `${Math.min(idx * 15, 200)}ms`,
+                  }}
                   onMouseEnter={() => setHoveredMsgId(msg.id)}
                   onMouseLeave={() => setHoveredMsgId(null)}
                 >
                   <MessageBubble message={msg} variant={variant}>
+                    {variant !== "system" && (
+                      <div
+                        className="font-mono text-xs mb-1"
+                        style={{ color: "var(--theme-text-muted)", opacity: 0.8 }}
+                      >
+                        {variant === "user"
+                          ? user?.username ?? t("chat").you
+                          : contacts?.find((c) => c.id === msg.senderId)?.name ?? msg.senderId
+                        }
+                      </div>
+                    )}
                     {isEditing ? (
                       <div className="flex flex-col gap-2">
                         <textarea
@@ -363,7 +363,14 @@ export default function ChatPanel({
 
                   {/* Delete confirmation */}
                   {showDeleteConfirm === msg.id && (
-                    <div className="mt-1 flex items-center gap-2 justify-end">
+                    <div
+                      className="mt-1 flex items-center gap-2 justify-end"
+                      style={{
+                        width: "fit-content",
+                        marginLeft: variant === "user" ? "auto" : variant === "system" ? "auto" : undefined,
+                        marginRight: variant === "system" ? "auto" : undefined,
+                      }}
+                    >
                       <span className="font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
                         {t("common").confirm}?
                       </span>
@@ -388,18 +395,26 @@ export default function ChatPanel({
             })}
             {/* Streaming message */}
             {streamingMessage && (
-              <div className="animate-fade-in-up message-bubble">
+              <div className="animate-fade-in-up message-bubble" style={{ alignSelf: "flex-start" }}>
                 <MessageBubble message={streamingMessage} variant="contact">
-                  <span>
-                    {streamingMessage.content}
-                    <span
-                      className="ml-0.5 inline-block h-4 w-2 align-text-bottom"
-                      style={{
-                        backgroundColor: "var(--theme-accent)",
-                        animation: "cursor-blink 1s step-end infinite",
-                      }}
-                    />
-                  </span>
+                  <div>
+                    <div
+                      className="font-mono text-xs mb-1"
+                      style={{ color: "var(--theme-text-muted)", opacity: 0.8 }}
+                    >
+                      {contacts?.find((c) => c.id === streamingMessage.senderId)?.name ?? streamingMessage.senderId}
+                    </div>
+                    <span>
+                      {streamingMessage.content}
+                      <span
+                        className="ml-0.5 inline-block h-4 w-2 align-text-bottom"
+                        style={{
+                          backgroundColor: "var(--theme-accent)",
+                          animation: "cursor-blink 1s step-end infinite",
+                        }}
+                      />
+                    </span>
+                  </div>
                 </MessageBubble>
               </div>
             )}

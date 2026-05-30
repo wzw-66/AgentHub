@@ -81,6 +81,7 @@ export const zh: Translations = {
     mentionPlaceholder: "输入 @ 提及智能体...",
     messagePlaceholder: "输入消息...",
     send: "发送",
+    you: "你",
   },
   rightPanel: {
     artifactView: "产物预览",

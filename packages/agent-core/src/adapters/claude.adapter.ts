@@ -54,6 +54,7 @@ export class ClaudeAdapter implements AgentAdapter {
       prompt,
       "--output-format",
       "stream-json",
+      "--verbose",
       "--include-partial-messages",
       "--dangerously-skip-permissions",
       "--max-turns",
