@@ -6,14 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AgentHub is a multi-Agent collaboration platform using IM chat as the core interaction paradigm. Users interact with AI Agents (Claude, OpenCode, custom) through chat conversations — like WeChat/Feishu but for AI collaboration.
 
-**Current status — 4 packages implemented:**
+**Current status — 6 packages implemented:**
 
 | Package | Status | Description |
 |---------|--------|-------------|
 | `@agenthub/shared` | Done | Type definitions, enums, DTOs (zero runtime deps) |
 | `@agenthub/db` | Done | Prisma schema, CRUD repositories, seed data |
 | `@agenthub/agent-core` | Done | Agent adapter layer (Claude CLI, OpenCode CLI, custom LLM) |
+| `@agenthub/ui` | Done | Shared React components (MessageBubble, ArtifactCard, etc.) |
 | `@agenthub/server` | Done | Fastify REST API + JWT dual-token auth |
+| `@agenthub/web` | Done | Next.js 14 chat UI with Tailwind CSS |
 
 ## Commands
 
@@ -44,6 +46,18 @@ pnpm --filter @agenthub/server test                    # run all server tests
 pnpm --filter @agenthub/server test src/__tests__/auth.test.ts
 pnpm --filter @agenthub/server dev                     # watch mode build
 pnpm --filter @agenthub/server start                   # run built server (node dist/index.js)
+
+pnpm --filter @agenthub/ui test                        # run all UI component tests
+pnpm --filter @agenthub/ui test:watch                  # watch mode
+pnpm --filter @agenthub/ui dev                         # tsup watch mode
+
+pnpm --filter @agenthub/web test                       # run all web tests
+pnpm --filter @agenthub/web test:watch                 # watch mode
+pnpm --filter @agenthub/web dev                        # Next.js dev server (reads WEB_PORT/PORT from root .env)
+pnpm --filter @agenthub/web dev:clean                  # dev with clean cache
+pnpm --filter @agenthub/web build                      # next build
+pnpm --filter @agenthub/web start                      # next start
+pnpm --filter @agenthub/web typecheck                  # tsc --noEmit
 ```
 
 ### Database (packages/db)
@@ -95,13 +109,15 @@ AgentHub/
 ├── packages/
 │   ├── shared/              # Type definitions, enums, DTOs (zero deps)
 │   ├── db/                  # Prisma schema, CRUD repositories, seed
-│   └── agent-core/          # Agent adapter layer (Claude, OpenCode, custom)
+│   ├── agent-core/          # Agent adapter layer (Claude, OpenCode, custom)
+│   └── ui/                  # Shared React components (MessageBubble, etc.)
 ├── apps/
-│   └── server/              # Fastify REST API + JWT auth
+│   ├── server/              # Fastify REST API + JWT auth + SSE/WS
+│   └── web/                 # Next.js 14 IM chat UI
 ├── tooling/
 │   ├── eslint-config/       # Shared ESLint config
 │   └── tsconfig/            # Shared TypeScript configs
-├── docs/                    # Design docs
+├── docs/                    # Design docs (superpowers specs, architecture deep dives)
 ├── openspec/                # OpenSpec change management
 ├── docker-compose.yaml      # PostgreSQL 16
 ├── turbo.json               # Task orchestration
@@ -112,15 +128,13 @@ AgentHub/
 
 ```
 @agenthub/shared  (zero deps)
-       |
-       v
-@agenthub/db  (depends on shared + Prisma)
-       |
-       v
-@agenthub/server  (depends on shared + db + Fastify)
-       |
-       v
-@agenthub/agent-core  (depends on shared only)
+       │
+       ├──→ @agenthub/db           (shared + Prisma)
+       ├──→ @agenthub/agent-core   (shared only)
+       ├──→ @agenthub/ui           (shared + prism-react-renderer)
+       │
+       ├──→ @agenthub/server       (shared + db + agent-core + Fastify)
+       └──→ @agenthub/web          (shared + ui + Next.js 14)
 ```
 
 ### Database Layer (packages/db)
@@ -190,6 +204,50 @@ Fastify v5 REST API with module-based route registration:
 - `src/middleware/jwt.ts` — `authenticate` hook for Bearer token, `verifyQueryToken` for SSE/WS
 - `src/utils/jwt.ts` — sign/verify access+refresh tokens, jti generation
 - `src/utils/password.ts` — bcrypt hash/compare with 10 salt rounds
+
+### Web App (apps/web)
+
+Next.js 14 App Router chat UI with three route groups:
+
+```
+app/
+├── (auth)/                    # /login, /register pages
+├── (chat)/                    # /chat — main conversation panel
+└── (market)/                  # /agents, /agents/[id], /agents/contacts
+```
+
+**Context provider stack** (wraps entire app via `app/providers.tsx`):
+- `I18nProvider` → `ThemeProvider` → `AuthProvider` → `WSProvider` → `ChatProvider`
+
+**Key patterns:**
+- `lib/api-client.ts` — centralized API fetch wrapper (reads `NEXT_PUBLIC_API_URL`)
+- `hooks/useSSEStream.ts` — SSE stream connection for real-time agent output
+- `hooks/useNebulaCanvas.ts` — Canvas-based animated nebula background
+- `hooks/useRipple.tsx` — Button ripple effect
+- Custom `scripts/dev.mjs` — reads `WEB_PORT` / `PORT` from root `.env`, passes `NEXT_PUBLIC_API_URL` to Next.js
+- `next.config.js` — transpiles `@agenthub/shared` and `@agenthub/ui` packages; loads `NEXT_PUBLIC_*` from root `.env`
+- `tailwind.config.ts` — CSS custom property-based theming system (theme-accent, theme-surface, etc.)
+- i18n via React context (`lib/i18n/`) with zh/en translations; LanguageSwitcher component
+- Vitest with jsdom environment, `@/` path alias to project root
+
+### UI Component Library (packages/ui)
+
+Six shared React components built with `tsup` (ESM + CJS dual output):
+
+| Component | Description |
+|-----------|-------------|
+| `AgentAvatar` | Agent profile avatar with status indicator |
+| `MessageBubble` | Chat message display (text, code, tool calls) |
+| `CodeBlock` | Syntax-highlighted code with copy button |
+| `DiffCard` | Side-by-side diff view for code changes |
+| `PreviewCard` | Rich link preview card |
+| `ArtifactCard` | Artifact file display with status |
+
+**Component conventions:**
+- Each component in its own directory with co-located `__tests__/` and `__tests__/*.test.tsx`
+- Shared CSS tokens in `src/styles/tokens.css`, component styles in `src/styles/components.css`
+- Peer dependencies on `react` and `react-dom` (not bundled, consumed by host app)
+- Tailwind classes used in components; host app's Tailwind config includes `../packages/ui/src/**/*.{ts,tsx}`
 
 ### Shared Types (packages/shared)
 
