@@ -517,6 +517,104 @@ function pushChunk(
   }
 }
 
+// ─── Regenerate ──────────────────────────────────────────────────────────────
+
+type RegenerateRouteParams = {
+  conversationId: string;
+  messageId: string;
+};
+
+async function handleRegenerate(
+  request: FastifyRequest<{ Params: RegenerateRouteParams }>,
+  reply: FastifyReply
+): Promise<void> {
+  const { conversationId, messageId } = request.params;
+  const cm = request.server.connectionManager;
+
+  // 1. Find the AI reply message
+  const aiMessage = await getMessage(messageId);
+  if (!aiMessage || aiMessage.senderType !== "Contact") {
+    return reply.status(400).send({ error: "Not an AI message" });
+  }
+
+  // 2. Find the most recent user message before this AI message
+  const allMessages = await listMessages(conversationId, { limit: 100 });
+  const userMessages = allMessages.data.filter((m) => m.senderType === "User");
+  const userMessage = userMessages[userMessages.length - 1];
+  if (!userMessage) {
+    return reply.status(400).send({ error: "No user message to regenerate from" });
+  }
+
+  // Acknowledge
+  await reply.status(202).send({ status: "regenerating", messageId });
+
+  // 3. Re-execute agent (reuse existing logic)
+  const conv = await getConversation(conversationId);
+  if (!conv) return;
+
+  const contactIds = conv.contactIds ?? [];
+  if (contactIds.length === 0) return;
+
+  if (conv.type === "single") {
+    const contactId = contactIds[0]!;
+    const agent = await getContact(contactId);
+    if (!agent) {
+      cm.pushToConversation(conversationId, "error", {
+        message: "Agent not found",
+        code: "AGENT_NOT_FOUND",
+      });
+      return;
+    }
+
+    const cwd = conv.workspacePath
+      ? resolve(WORKSPACE_ROOT, conv.workspacePath)
+      : agent.workspacePath
+        ? resolve(WORKSPACE_ROOT, agent.workspacePath)
+        : undefined;
+
+    try {
+      const adapter = createAdapter(agent.provider, { cwd });
+      const context = {
+        conversationId,
+        message: userMessage.content,
+        history: [],
+        agents: [],
+      };
+
+      let fullResponse = "";
+      for await (const chunk of adapter.execute(context)) {
+        if (
+          chunk.type === ChunkType.Text ||
+          chunk.type === ChunkType.Code ||
+          chunk.type === ChunkType.ToolCall
+        ) {
+          fullResponse += chunk.content;
+        }
+        if (chunk.type !== ChunkType.Done) {
+          pushChunk(cm, conversationId, chunk, agent.id);
+        }
+      }
+
+      // 4. Update the AI reply message content (replace, not create new)
+      if (fullResponse) {
+        await dbUpdateMessage(messageId, { content: fullResponse });
+      }
+
+      cm.pushToConversation(conversationId, "replace", {
+        messageId,
+        content: fullResponse,
+        agentId: agent.id,
+      });
+    } catch (err) {
+      cm.pushToConversation(conversationId, "error", {
+        message: err instanceof Error ? err.message : "Regeneration failed",
+        code: "ADAPTER_ERROR",
+      });
+    }
+  }
+  // Group conversation regeneration skipped for now (higher complexity)
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
@@ -524,6 +622,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
   app.post("/create", handleCreate);
   app.post("/:messageId/pin", handlePin);
   app.post("/:messageId/execute", handleExecute);
+  app.post("/:messageId/regenerate", handleRegenerate);
   app.patch("/:messageId/update", handleUpdateMessage);
   app.delete("/:messageId/delete", handleDeleteMessage);
 }
