@@ -354,6 +354,24 @@ export default function ChatPanel({
                       >
                         ↩
                       </button>
+                      {variant === "contact" && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await api.post(
+                                `/api/conversations/${conversationId}/messages/${msg.id}/regenerate`
+                              );
+                            } catch { /* silent */ }
+                          }}
+                          className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                          style={{ color: "var(--theme-text-muted)" }}
+                          title="Regenerate"
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                        >
+                          🔄
+                        </button>
+                      )}
                       {isLastUserMsg && (
                         <>
                           <button

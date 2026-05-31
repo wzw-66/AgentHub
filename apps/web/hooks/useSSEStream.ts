@@ -11,7 +11,7 @@ export function useSSEStream(conversationId: string | null) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
   const maxRetries = 5;
-  const { setTypingAgent, appendMessageChunk, finalizeMessage } = useChat();
+  const { setTypingAgent, appendMessageChunk, finalizeMessage, replaceMessage } = useChat();
 
   // ─── Chunk event handler ──────────────────────────────────────────
   const handleChunk = useCallback(
@@ -67,6 +67,27 @@ export function useSSEStream(conversationId: string | null) {
     }
   }, []);
 
+  // ─── Replace event handler (regeneration) ─────────────────────────
+  const handleReplace = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data) as {
+          messageId: string;
+          content: string;
+          agentId?: string;
+        };
+        replaceMessage(data.messageId, data.content);
+        if (data.agentId) {
+          setTypingAgent(data.agentId, false);
+        }
+        finalizeMessage(undefined, undefined);
+      } catch {
+        // Ignore malformed messages
+      }
+    },
+    [replaceMessage, setTypingAgent, finalizeMessage],
+  );
+
   // ─── Connect ────────────────────────────────────────────────────
   const connect = useCallback(
     (convId: string) => {
@@ -91,6 +112,7 @@ export function useSSEStream(conversationId: string | null) {
       // Register named event listeners matching server-side events
       es.addEventListener("chunk", handleChunk as EventListener);
       es.addEventListener("done", handleDone as EventListener);
+      es.addEventListener("replace", handleReplace as EventListener);
       es.addEventListener("error", handleErrorEvent as EventListener);
 
       es.onerror = () => {

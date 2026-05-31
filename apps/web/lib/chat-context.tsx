@@ -49,6 +49,7 @@ interface ChatContextValue {
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: string, cursor?: string) => Promise<Message[]>;
   sendMessage: (conversationId: string, content: string, parentId?: string) => Promise<Message>;
+  replaceMessage: (messageId: string, content: string) => void;
   createConversation: (
     title: string,
     type: "single" | "group",
@@ -217,6 +218,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setTypingAgents(new Map());
   }, []);
 
+  const replaceMessage = useCallback(
+    (messageId: string, content: string) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, content } : m)),
+      );
+    },
+    [],
+  );
+
   // ─── Load contacts (agents) on mount (only if authenticated) ────
   useEffect(() => {
     async function loadContacts() {
@@ -273,6 +283,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setTypingAgent,
         appendMessageChunk,
         finalizeMessage,
+        replaceMessage,
         setMessages,
       }}
     >
