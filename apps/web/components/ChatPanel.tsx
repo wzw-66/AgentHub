@@ -46,6 +46,12 @@ export default function ChatPanel({
   const [editContent, setEditContent] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
+  // ─── Reply state ────────────────────────────────────────────────
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const replyTargetMessage = replyTargetId
+    ? messages.find((m) => m.id === replyTargetId) ?? null
+    : null;
+
   const activeConversation = (conversations || []).find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
 
@@ -100,8 +106,9 @@ export default function ChatPanel({
     if (!trimmed || !conversationId || sending) return;
     setSending(true);
     try {
-      await sendMessage(conversationId, trimmed);
+      await sendMessage(conversationId, trimmed, replyTargetId ?? undefined);
       setInput("");
+      setReplyTargetId(null);
       textareaRef.current?.focus();
     } catch {
       // silent
@@ -268,6 +275,9 @@ export default function ChatPanel({
 
               const isLastUserMsg = idx === lastUserMsgIdx;
               const isEditing = editingMessageId === msg.id;
+              const parentMessage = msg.parentId
+                ? messages.find((m) => m.id === msg.parentId) ?? null
+                : null;
 
               return (
                 <div
@@ -280,7 +290,7 @@ export default function ChatPanel({
                   onMouseEnter={() => setHoveredMsgId(msg.id)}
                   onMouseLeave={() => setHoveredMsgId(null)}
                 >
-                  <MessageBubble message={msg} variant={variant}>
+                  <MessageBubble message={msg} variant={variant} parentMessage={parentMessage}>
                     {variant !== "system" && (
                       <div
                         className="font-mono text-xs mb-1"
@@ -327,6 +337,25 @@ export default function ChatPanel({
                       <MessageContent message={msg} />
                     )}
                   </MessageBubble>
+
+                  {/* Reply button on hover for all messages */}
+                  {variant !== "system" && hoveredMsgId === msg.id && !isEditing && (
+                    <div
+                      className="absolute flex gap-1"
+                      style={{ right: 0, top: 0, transform: "translateX(calc(100% + 8px))", zIndex: 10 }}
+                    >
+                      <button
+                        onClick={() => setReplyTargetId(msg.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                        style={{ color: "var(--theme-text-muted)" }}
+                        title="Reply"
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                      >
+                        ↩
+                      </button>
+                    </div>
+                  )}
 
                   {/* Hover actions: only on last user message, when not editing */}
                   {isLastUserMsg && hoveredMsgId === msg.id && !isEditing && (
@@ -431,6 +460,34 @@ export default function ChatPanel({
         className="px-4 py-3"
         style={{ borderTop: "1px solid var(--theme-border)" }}
       >
+        {/* Reply quote bar */}
+        {replyTargetMessage && (
+          <div
+            className="flex items-center gap-2 px-3 py-2 mb-2"
+            style={{
+              borderLeft: "3px solid var(--theme-accent)",
+              backgroundColor: "var(--theme-accent-dim)",
+              borderRadius: "0 8px 8px 0",
+            }}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-mono text-xs font-bold" style={{ color: "var(--theme-accent)" }}>
+                {t("chat").replyingTo} {replyTargetMessage.senderId}
+              </div>
+              <div className="font-mono text-xs truncate" style={{ color: "var(--theme-text-muted)" }}>
+                {replyTargetMessage.content.slice(0, 120)}
+              </div>
+            </div>
+            <button
+              onClick={() => setReplyTargetId(null)}
+              className="flex-shrink-0 rounded p-1"
+              style={{ color: "var(--theme-text-muted)" }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="relative flex items-end gap-2">
           <div
             className="flex items-center font-mono text-sm font-bold tracking-wider flex-shrink-0 mb-2"

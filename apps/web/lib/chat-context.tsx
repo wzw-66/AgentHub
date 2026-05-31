@@ -48,7 +48,7 @@ interface ChatContextValue {
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: string, cursor?: string) => Promise<Message[]>;
-  sendMessage: (conversationId: string, content: string) => Promise<Message>;
+  sendMessage: (conversationId: string, content: string, parentId?: string) => Promise<Message>;
   createConversation: (
     title: string,
     type: "single" | "group",
@@ -117,10 +117,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   const sendMessage = useCallback(
-    async (conversationId: string, content: string): Promise<Message> => {
+    async (conversationId: string, content: string, parentId?: string): Promise<Message> => {
       const message = await api.post<Message>(
         `/api/conversations/${conversationId}/messages/create`,
-        { content },
+        { content, parentId },
       );
       setMessages((prev) => [...prev, message]);
       return message;
