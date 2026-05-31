@@ -42,4 +42,20 @@ export const config = {
       return env["JWT_REFRESH_EXPIRES_IN"] || "7d";
     },
   },
+
+  llm: {
+    get apiKey(): string | undefined {
+      return env["API_KEY"];
+    },
+    get baseUrl(): string {
+      return env["LLM_BASE_URL"] || "https://api.deepseek.com";
+    },
+    get model(): string {
+      return env["LLM_MODEL"] || "deepseek-chat";
+    },
+    get endpoint(): string {
+      const base = this.baseUrl.replace(/\/+$/, "");
+      return `${base}/v1/chat/completions`;
+    },
+  },
 };

@@ -7,7 +7,7 @@ import type {
   HealthStatus,
 } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
-import { createChunk, parseClaudeStreamJson } from "../utils/chunk-parser.js";
+import { createChunk, parseClaudeStreamJson, createClaudeStreamState } from "../utils/chunk-parser.js";
 import { resolveCommand } from "../utils/resolve-cli.js";
 
 export interface ClaudeAdapterConfig {
@@ -82,11 +82,12 @@ export class ClaudeAdapter implements AgentAdapter {
     }
 
     const rl = createInterface({ input: this.process.stdout! });
+    const parseState = createClaudeStreamState();
 
     for await (const line of rl) {
       if (!line.trim()) continue;
 
-      const chunk = parseClaudeStreamJson(line);
+      const chunk = parseClaudeStreamJson(line, parseState);
       if (chunk) {
         yield chunk;
         if (chunk.type === ChunkType.Done) break;

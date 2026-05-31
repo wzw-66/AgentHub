@@ -1,138 +1,248 @@
 import type { Agent, Message } from "@agenthub/shared";
 import type { SubTask, TaskDecomposition } from "./types.js";
 import { buildLayers } from "./task-graph.js";
+import { config } from "../config/env.js";
 
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────
 
-const MENTION_RE = /@(\S+?)(?:\s|$|，|。|、|\.|,)/g;
-
-/** Sequence words that indicate dependency between tasks */
-const SEQUENCE_WORDS = [
-  "先", "再", "然后", "接着", "之后", "随后",
-  "first", "then", "next", "after that", "subsequently",
-];
-
-/**
- * Check if text contains sequence words indicating ordered execution.
- */
-function containsSequenceWord(text: string): boolean {
-  return SEQUENCE_WORDS.some((word) => text.includes(word));
+export interface LLMIntentResult {
+  intent: string;
+  assignedAgents: Array<{
+    agentId: string;
+    instruction: string;
+  }>;
+  order: "parallel" | "serial";
+  summary: string;
 }
 
-/**
- * Extract unique @mentions from message content, preserving order of appearance.
- */
-export function extractMentions(content: string): string[] {
-  const mentions: string[] = [];
-  const seen = new Set<string>();
-  let match: RegExpExecArray | null;
+export interface LLMIntentAnalyzerOptions {
+  /** Timeout in ms for the LLM API call. Default: 15000 */
+  timeout?: number;
+  /** Maximum retries on failure. Default: 1 */
+  maxRetries?: number;
+}
 
-  const re = new RegExp(MENTION_RE.source, "g");
-  while ((match = re.exec(content)) !== null) {
-    const name = (match[1]?.trim() ?? "");
-    if (name && !seen.has(name)) {
-      seen.add(name);
-      mentions.push(name);
+// ─── LLM Intent Analyzer ────────────────────────────────────────────
+
+export class LLMIntentAnalyzer {
+  private apiKey: string | undefined;
+  private endpoint: string;
+  private model: string;
+
+  constructor(
+    private options: LLMIntentAnalyzerOptions = {},
+  ) {
+    this.apiKey = config.llm.apiKey;
+    this.endpoint = config.llm.endpoint;
+    this.model = config.llm.model;
+  }
+
+  /**
+   * Analyze a user message and determine which agents should handle it
+   * and what instructions they should receive.
+   *
+   * @param content - Raw user message
+   * @param agents  - Available agents in the conversation
+   * @returns LLMIntentResult with task assignments, or null if no agents needed
+   */
+  async analyze(
+    content: string,
+    agents: Agent[],
+  ): Promise<LLMIntentResult | null> {
+    if (!this.apiKey) {
+      // No API key configured — fallback to assigning all agents
+      return this.fallbackResult(content, agents);
+    }
+
+    if (agents.length === 0) return null;
+
+    const prompt = this.buildPrompt(content, agents);
+    const timeout = this.options.timeout ?? 15000;
+    const maxRetries = this.options.maxRetries ?? 1;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.callLLM(prompt, timeout);
+        if (result && result.assignedAgents.length > 0) {
+          return result;
+        }
+        // LLM returned no agents — message doesn't need orchestration
+        if (result && result.assignedAgents.length === 0) {
+          return null;
+        }
+      } catch (err) {
+        if (attempt < maxRetries) continue;
+        // Fallback: assign all agents
+        return this.fallbackResult(content, agents);
+      }
+    }
+
+    return this.fallbackResult(content, agents);
+  }
+
+  /**
+   * Build the system prompt for LLM intent analysis.
+   */
+  private buildPrompt(content: string, agents: Agent[]): Array<{ role: string; content: string }> {
+    const agentList = agents.map((a) =>
+      `- ID: ${a.id} | Name: ${a.name}${a.systemPrompt ? ` | Role: ${a.systemPrompt}` : ""}`
+    ).join("\n");
+
+    return [
+      {
+        role: "system",
+        content: [
+          "You are an intent analyzer for a multi-agent collaboration platform. The current conversation has the following agents:",
+          "",
+          agentList,
+          "",
+          "Analyze the user's message and determine:",
+          "1. Which agents should participate in the task (use their ID, not name)",
+          "2. What specific instruction each agent should receive",
+          "3. Whether agents should execute in parallel or serial order",
+          "4. A brief summary of the overall intent",
+          "",
+          "RULES:",
+          "- If the user @mentions an agent name or role, find the matching agent ID from the list above",
+          "- If the user doesn't @mention anyone, infer the appropriate agents from the message content",
+          "- Only assign agents that are relevant to the task. If the message is a greeting or casual chat, return empty assignedAgents",
+          "- Instructions must be specific and actionable in Chinese",
+          "- Use \"serial\" order when tasks have dependencies (e.g., design before implementation)",
+          "- Use \"parallel\" order when tasks are independent",
+          "",
+          'You MUST respond with valid JSON using EXACTLY these field names:',
+          '{',
+          '  "intent": "Brief description of the user intent",',
+          '  "assignedAgents": [',
+          '    { "agentId": "THE_EXACT_ID_FROM_THE_LIST_ABOVE", "instruction": "Instruction in Chinese" }',
+          '  ],',
+          '  "order": "serial" or "parallel",',
+          '  "summary": "Brief execution plan summary"',
+          '}',
+          "",
+          "IMPORTANT: The \"agentId\" field MUST contain the exact ID string from the list, NOT the agent name.",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content,
+      },
+    ];
+  }
+
+  /**
+   * Call the LLM API with the prompt.
+   */
+  private async callLLM(
+    prompt: Array<{ role: string; content: string }>,
+    timeout: number,
+  ): Promise<LLMIntentResult | null> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(this.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: prompt,
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+          max_tokens: 1024,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`LLM API error: ${response.status} ${response.statusText}`);
+      }
+
+      const body = (await response.json()) as {
+        choices: Array<{ message: { content: string } }>;
+      };
+
+      const raw = body.choices?.[0]?.message?.content;
+      if (!raw) {
+        throw new Error("Empty LLM response");
+      }
+
+      const parsed = this.parseResponse(raw);
+
+      return parsed;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  return mentions;
-}
+  /**
+   * Parse the LLM JSON response into a structured result.
+   * Accepts both the canonical field names and common LLM variations.
+   */
+  private parseResponse(raw: string): LLMIntentResult | null {
+    try {
+      const parsed = JSON.parse(raw) as LLMIntentResult & {
+        executionOrder?: string;
+        assignedAgents?: Array<{ agentId?: string; agentName?: string; instruction?: string }>;
+      };
 
-/**
- * Resolve @mentions to actual Agent records.
- * Uses case-insensitive matching on agent name.
- */
-export function resolveMentions(
-  mentions: string[],
-  agents: Agent[],
-): Agent[] {
-  const agentMap = new Map<string, Agent>();
-  for (const agent of agents) {
-    agentMap.set(agent.name.toLowerCase(), agent);
-  }
+      // Validate required fields
+      if (!Array.isArray(parsed.assignedAgents)) {
+        return null;
+      }
 
-  const resolved: Agent[] = [];
-  for (const mention of mentions) {
-    const agent = agentMap.get(mention.toLowerCase());
-    if (agent) {
-      resolved.push(agent);
+      // Accept entries with either agentId or agentName (defensive)
+      const filteredAgents = parsed.assignedAgents.filter(
+        (a) => (Boolean(a.agentId) || Boolean(a.agentName)) && Boolean(a.instruction),
+      );
+
+      // Accept both "order" and "executionOrder" field names
+      const order = parsed.order === "serial"
+        ? "serial"
+        : parsed.executionOrder === "serial"
+          ? "serial"
+          : "parallel";
+
+      return {
+        intent: parsed.intent ?? "",
+        assignedAgents: filteredAgents.map((a) => ({
+          agentId: a.agentId ?? a.agentName ?? "",
+          instruction: a.instruction ?? "",
+        })),
+        order,
+        summary: parsed.summary ?? "",
+      };
+    } catch {
+      return null;
     }
   }
 
-  return resolved;
+  /**
+   * Fallback result: assign all agents in parallel with the original message as instruction.
+   */
+  private fallbackResult(
+    content: string,
+    agents: Agent[],
+  ): LLMIntentResult {
+    return {
+      intent: "fallback",
+      assignedAgents: agents.map((a) => ({
+        agentId: a.id,
+        instruction: content,
+      })),
+      order: "parallel",
+      summary: "",
+    };
+  }
 }
 
-/**
- * Split message content into instruction fragments per agent.
- *
- * Strategy:
- * - Find each @AgentName occurrence and take the text after it until
- *   the next @AgentName or end of string as that agent's instruction.
- * - If no @ prefix is found for an agent name (e.g. just mentioned by name),
- *   assign the whole message.
- */
-function assignInstructions(
-  content: string,
-  agents: Agent[],
-): Map<string, string> {
-  const instructions = new Map<string, string>();
-  const agentNames = agents.map((a) => a.name);
-
-  // Build a pattern to match any @AgentName
-  const namesPattern = agentNames
-    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|");
-  const mentionPattern = new RegExp(`@(${namesPattern})`, "g");
-
-  // Find all mentions with their positions
-  const mentions: Array<{ name: string; index: number }> = [];
-  let m: RegExpExecArray | null;
-  while ((m = mentionPattern.exec(content)) !== null) {
-    mentions.push({ name: (m[1] ?? ""), index: m.index });
-  }
-
-  if (mentions.length === 0) {
-    // No @mentions found — each agent gets the full content
-    for (const agent of agents) {
-      instructions.set(agent.id, content);
-    }
-    return instructions;
-  }
-
-  // Assign text between mentions as instruction for the preceding agent
-  for (let i = 0; i < mentions.length; i++) {
-    const current = mentions[i]!;
-    const next = mentions[i + 1];
-    const start = current.index + current.name.length + 1; // +1 for @
-    const end = next ? next.index : content.length;
-    const instruction = content.slice(start, end).trim();
-    instructions.set(current.name, instruction || content);
-  }
-
-  return instructions;
-}
+// ─── Decompose Message ─────────────────────────────────────────────
 
 /**
- * Detect whether the message implies sequential (serial) execution
- * based on sequence words in the content.
- */
-function detectExecutionOrder(
-  content: string,
-  agents: Agent[],
-): "parallel" | "serial" {
-  if (agents.length <= 1) return "serial";
-  return containsSequenceWord(content) ? "serial" : "parallel";
-}
-
-/**
- * Decompose a user message into sub-tasks for each mentioned agent.
- *
- * This is the Phase 1 rule-based implementation:
- * - Extracts @mentions from message content
- * - Resolves mentions to Agent records
- * - Assigns instruction fragments
- * - Builds dependency chains based on sequence words
+ * Decompose a user message into sub-tasks using LLM intent analysis.
  *
  * @param content   - Raw user message content
  * @param agents    - Available agents in the current conversation
@@ -141,21 +251,24 @@ function detectExecutionOrder(
  * @param history   - Recent conversation history messages
  * @returns TaskDecomposition with sub-tasks and layer plan
  */
-export function decomposeMessage(params: {
+export async function decomposeMessage(params: {
   content: string;
   agents: Agent[];
   conversationId: string;
   parentMessageId: string;
   history?: Message[];
-}): TaskDecomposition {
-  const { content, agents, conversationId, parentMessageId, history } = params;
+  analyzer?: LLMIntentAnalyzer;
+}): Promise<TaskDecomposition> {
+  const {
+    content,
+    agents,
+    conversationId,
+    parentMessageId,
+    history,
+    analyzer,
+  } = params;
 
-  // Extract and resolve mentions
-  const mentions = extractMentions(content);
-  const resolvedAgents =
-    mentions.length > 0 ? resolveMentions(mentions, agents) : agents;
-
-  if (resolvedAgents.length === 0) {
+  if (agents.length === 0) {
     return {
       originalMessageId: parentMessageId,
       conversationId,
@@ -164,11 +277,19 @@ export function decomposeMessage(params: {
     };
   }
 
-  // Assign instruction fragments
-  const instructions = assignInstructions(content, resolvedAgents);
+  // Run LLM intent analysis
+  const intentAnalyzer = analyzer ?? new LLMIntentAnalyzer();
+  const result = await intentAnalyzer.analyze(content, agents);
 
-  // Determine execution order
-  const order = detectExecutionOrder(content, resolvedAgents);
+  // LLM determined no agents needed (greeting, etc.)
+  if (!result || result.assignedAgents.length === 0) {
+    return {
+      originalMessageId: parentMessageId,
+      conversationId,
+      subtasks: [],
+      layers: [],
+    };
+  }
 
   // Build context from history
   const context: { role: string; content: string }[] =
@@ -177,29 +298,39 @@ export function decomposeMessage(params: {
       content: msg.content,
     })) ?? [];
 
-  // Create sub-tasks (first pass without dependency references)
-  const subtasks: SubTask[] = resolvedAgents.map((agent) => {
-    const instruction =
-      instructions.get(agent.id) ??
-      instructions.get(agent.name) ??
-      content;
+  // Build agent lookup map
+  const agentMap = new Map<string, Agent>();
+  for (const agent of agents) {
+    agentMap.set(agent.id, agent);
+  }
 
-    return {
+  // Create sub-tasks from LLM result
+  const subtasks: SubTask[] = [];
+
+  for (const assignment of result.assignedAgents) {
+    // Try to find agent by ID first, then fall back to name matching
+    let agent = agentMap.get(assignment.agentId);
+    if (!agent) {
+      agent = agents.find((a) => a.name === assignment.agentId);
+    }
+    if (!agent) continue;
+
+    subtasks.push({
       id: `subtask_${parentMessageId}_${agent.id}`,
       parentMessageId,
       conversationId,
       agentId: agent.id,
       agentName: agent.name,
-      instruction,
-      dependsOn: [], // will be assigned in second pass
+      instruction: assignment.instruction,
+      dependsOn: [],
       context,
       status: "pending" as const,
       retryCount: 0,
-    };
-  });
+    });
+  }
 
-  // Second pass: assign dependency chains (separated to avoid TDZ)
-  if (order === "serial") {
+  // Set dependency chain for serial execution
+  if (result.order === "serial") {
     for (let i = 1; i < subtasks.length; i++) {
       const prev = subtasks[i - 1];
       if (prev) {
@@ -218,4 +349,3 @@ export function decomposeMessage(params: {
     layers,
   };
 }
-

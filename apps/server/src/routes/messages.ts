@@ -10,7 +10,6 @@ import {
   deleteMessage as dbDeleteMessage,
   getConversation,
   getContact,
-  listContacts,
 } from "@agenthub/db";
 import { createAdapter } from "@agenthub/agent-core";
 import type { Chunk, Agent } from "@agenthub/shared";
@@ -69,24 +68,6 @@ function validateCreateMessage(body: unknown): body is CreateMessageBody {
     b.content.length > 0 &&
     (b.type === undefined || VALID_MESSAGE_TYPES.includes(b.type as string))
   );
-}
-
-// ─── @mention helpers ────────────────────────────────────────────────────────
-
-const MENTION_RE = /@(\S+?)(?=\s|$|，|。|、|\.|,)/g;
-
-/**
- * Extract unique @mention names from message content.
- */
-function extractMentions(content: string): string[] {
-  const mentions = new Set<string>();
-  let match: RegExpExecArray | null;
-  const re = new RegExp(MENTION_RE.source, "g");
-  while ((match = re.exec(content)) !== null) {
-    const name = match[1]?.trim();
-    if (name) mentions.add(name);
-  }
-  return Array.from(mentions);
 }
 
 // ─── Route handlers ─────────────────────────────────────────────────────────
@@ -150,15 +131,11 @@ async function handleCreate(
 
   // Check if this should trigger orchestration
   const conversation = await getConversation(conversationId);
-  const mentions = extractMentions(body.content);
 
-  if (
-    conversation &&
-    conversation.type === "group" &&
-    mentions.length >= 2
-  ) {
+  if (conversation && conversation.type === "group") {
     // Launch orchestrator as background task
-    runOrchestration(message.id, conversation, request).catch((err) => {
+    // LLM will determine if and which agents should handle the message
+    runOrchestration(message.id, conversation, cm, request.server.log).catch((err) => {
       request.server.log.error({ err, messageId: message.id }, "Orchestration failed");
       if (cm) {
         cm.pushToConversation(conversationId, "error", {
@@ -297,80 +274,109 @@ async function handleExecute(
  * Run the full orchestration pipeline in the background.
  *
  * Steps:
- * 1. Resolve mentioned agents from conversation contacts
- * 2. Decompose the message into sub-tasks
+ * 1. Resolve conversation members from contactIds
+ * 2. Decompose the message into sub-tasks via LLM intent analysis
  * 3. Dispatch tasks via dispatcher (parallel/serial)
  * 4. Persist aggregated results via aggregator
  */
 async function runOrchestration(
   messageId: string,
   conversation: Awaited<ReturnType<typeof getConversation>>,
-  request: FastifyRequest,
+  cm: FastifyInstance["connectionManager"],
+  log: FastifyInstance["log"],
 ): Promise<void> {
   if (!conversation) return;
 
-  const cm = request.server.connectionManager;
   const conversationId = conversation.id;
+
+  log.info({ conversationId, messageId }, "Starting orchestration");
 
   // Build SSE push function
   const pushSSE: PushSSEFn = (event: string, data: unknown) => {
     cm.pushToConversation(conversationId, event, data);
   };
 
-  // Resolve agents from conversation contacts
-  const contacts = await listContacts(conversation.ownerId);
-  const agentMap = new Map<string, Agent>();
-
-  // Only include agents whose names are mentioned in the user's contacts
-  const message = await getMessage(messageId);
-  if (!message) return;
-
-  for (const contact of contacts) {
-    const agent = contact as unknown as Agent;
-    agentMap.set(agent.id, agent);
+  // Resolve agents from conversation contactIds only
+  const contactIds = conversation.contactIds ?? [];
+  if (contactIds.length === 0) {
+    log.warn({ conversationId }, "No contactIds in group conversation");
+    return;
   }
 
-  // Get the full agent records from shared types
-  const mentionedAgents: Agent[] = [];
-  const mentions = extractMentions(message.content);
+  const message = await getMessage(messageId);
+  if (!message) {
+    log.warn({ messageId }, "Message not found for orchestration");
+    return;
+  }
 
-  for (const contact of contacts) {
-    const agent = contact as unknown as Agent;
-    if (
-      mentions.some(
-        (m) => agent.name.toLowerCase().includes(m.toLowerCase()),
-      )
-    ) {
-      mentionedAgents.push(agent);
+  log.info({ contactIds }, "Resolving agents from contactIds");
+
+  // Get full agent records for each conversation member
+  const agents: Agent[] = [];
+  for (const contactId of contactIds) {
+    const contact = await getContact(contactId);
+    if (contact) {
+      agents.push(contact as unknown as Agent);
     }
   }
 
-  if (mentionedAgents.length < 2) return; // Not a multi-agent message
+  if (agents.length === 0) {
+    log.warn({ conversationId }, "No agents resolved from contactIds");
+    return;
+  }
 
-  // Step 1: Decompose
-  const decomposition = decomposeMessage({
+  log.info({ agentCount: agents.length, agentNames: agents.map((a) => a.name) }, "Agents resolved");
+
+  // Step 1: Decompose via LLM intent analysis
+  log.info({ content: message.content }, "Decomposing message");
+  const decomposition = await decomposeMessage({
     content: message.content,
-    agents: mentionedAgents,
+    agents,
     conversationId,
     parentMessageId: messageId,
     history: [],
   });
 
-  if (decomposition.subtasks.length === 0) return;
+  // LLM determined no agents needed (greeting, etc.) — finish silently
+  if (decomposition.subtasks.length === 0) {
+    log.info({ conversationId }, "No subtasks to execute (LLM returned empty)");
+    return;
+  }
+
+  log.info({ subtaskCount: decomposition.subtasks.length, layers: decomposition.layers }, "Sub-tasks created");
 
   // Build agent map for dispatcher
-  const agents = new Map<string, Agent>();
-  for (const agent of mentionedAgents) {
-    agents.set(agent.id, agent);
+  const agentMap = new Map<string, Agent>();
+  for (const agent of agents) {
+    agentMap.set(agent.id, agent);
   }
 
   // Step 2: Dispatch
   const dispatcher = new TaskDispatcher();
   const aggregated = await dispatcher.dispatchAll(
     decomposition,
-    agents,
+    agentMap,
     pushSSE,
+    undefined, // onAgentChunk
+    // onTaskCompleted: save each agent's full response as a Contact message
+    async (subtask, result) => {
+      try {
+        await createMessage({
+          conversationId,
+          senderType: "Contact",
+          senderId: subtask.agentId,
+          type: "Text",
+          content: result.content,
+          parentId: messageId,
+        });
+        log.info({ agentId: subtask.agentId }, "Agent message saved");
+      } catch (err) {
+        log.error({ err, agentId: subtask.agentId }, "Failed to save agent message");
+      }
+    },
   );
+
+  log.info({ totalTasks: aggregated.totalTasks, completed: aggregated.completedTasks, failed: aggregated.failedTasks }, "Dispatch completed");
 
   // Step 3: Aggregate & persist
   const aggregator = new ResultAggregator(
@@ -378,6 +384,8 @@ async function runOrchestration(
     (data) => createArtifact(data),
   );
   await aggregator.persist(aggregated, conversationId, messageId, pushSSE);
+
+  log.info({ messageId: aggregated.messageId }, "Orchestration results persisted");
 }
 
 // ─── Agent execution ─────────────────────────────────────────────────────────
@@ -423,7 +431,11 @@ async function runAgentExecution(
       let fullResponse = "";
 
       for await (const chunk of adapter.execute(context)) {
-        if (chunk.type === ChunkType.Text) {
+        if (
+          chunk.type === ChunkType.Text ||
+          chunk.type === ChunkType.Code ||
+          chunk.type === ChunkType.ToolCall
+        ) {
           fullResponse += chunk.content;
         }
         // Don't forward Done chunk — we persist first, then push done event
@@ -484,6 +496,7 @@ function pushChunk(
         id: chunk.metadata?.id ?? "",
         status: chunk.metadata?.status ?? "building",
         title: chunk.metadata?.title,
+        agentId,
       });
       break;
 
@@ -491,6 +504,7 @@ function pushChunk(
       cm.pushToConversation(conversationId, "error", {
         message: chunk.content,
         code: "ADAPTER_ERROR",
+        agentId,
       });
       break;
 

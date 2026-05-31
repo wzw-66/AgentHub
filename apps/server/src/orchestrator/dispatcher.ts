@@ -40,6 +40,7 @@ export class TaskDispatcher {
     agents: Map<string, Agent>,
     pushSSE: PushSSEFn,
     onAgentChunk?: (subtaskId: string, chunk: Chunk) => void,
+    onTaskCompleted?: (subtask: SubTask, result: SubTaskResult) => void,
   ): Promise<AggregatedResult> {
     const { subtasks, layers } = decomposition;
 
@@ -102,6 +103,13 @@ export class TaskDispatcher {
           this.results.set(sub.id, settled.value);
           if (settled.value.success) {
             this.pushTaskStatus(sub, "completed", layerIdx, pushSSE);
+            onTaskCompleted?.(sub, settled.value);
+            // Push done event after task completion + message persistence
+            pushSSE("done", {
+              messageId: "",
+              tokenUsage: settled.value.tokenUsage,
+              agentId: sub.agentId,
+            });
           } else {
             this.pushTaskStatus(sub, "failed", layerIdx, pushSSE, settled.value.error);
           }
@@ -157,7 +165,9 @@ export class TaskDispatcher {
   }
 
   /**
-   * Push an agent chunk as an SSE event tagged with the agent ID.
+   * Push an agent chunk as an SSE event.
+   * Uses the same event naming as single-chat for frontend compatibility.
+   * Done chunks are handled separately after task completion + message persistence.
    */
   private pushAgentChunk(
     sub: SubTask,
@@ -168,32 +178,32 @@ export class TaskDispatcher {
       case ChunkType.Text:
       case ChunkType.Code:
       case ChunkType.ToolCall:
-        pushSSE(`agent:${sub.agentId}:chunk`, {
+        pushSSE("chunk", {
           type: chunk.type,
           content: chunk.content,
           timestamp: chunk.timestamp,
+          agentId: sub.agentId,
         });
         break;
 
       case ChunkType.Artifact:
-        pushSSE(`agent:${sub.agentId}:artifact_status`, {
+        pushSSE("artifact_status", {
           id: chunk.metadata?.id ?? "",
           status: chunk.metadata?.status ?? "building",
           title: chunk.metadata?.title,
+          agentId: sub.agentId,
         });
         break;
 
       case ChunkType.Done:
-        pushSSE(`agent:${sub.agentId}:done`, {
-          messageId: "",
-          tokenUsage: chunk.metadata?.tokenUsage,
-        });
+        // Handled separately in dispatchAll after task completion + persistence
         break;
 
       case ChunkType.Error:
-        pushSSE(`agent:${sub.agentId}:error`, {
+        pushSSE("error", {
           message: chunk.content,
           code: "ADAPTER_ERROR",
+          agentId: sub.agentId,
         });
         break;
     }

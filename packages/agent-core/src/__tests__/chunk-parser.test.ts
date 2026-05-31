@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ChunkType, AgentProvider, type Chunk } from "@agenthub/shared";
+import { ChunkType, AgentProvider } from "@agenthub/shared";
 import {
   createChunk,
   isDoneChunk,
   parseClaudeStreamJson,
+  createClaudeStreamState,
   parseOpenCodeEvent,
   parseOpenAIStreamEvent,
   parseEventLine,
@@ -89,6 +90,154 @@ describe("parseClaudeStreamJson", () => {
   it("should return null for empty lines", () => {
     expect(parseClaudeStreamJson("")).toBeNull();
     expect(parseClaudeStreamJson("  ")).toBeNull();
+  });
+
+  describe("tool call parsing (stateful)", () => {
+    it("should track tool_use content_block_start and finalize on content_block_stop", () => {
+      const state = createClaudeStreamState();
+
+      // content_block_start with tool_use
+      const startLine = JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: {
+            type: "tool_use",
+            id: "toolu_123",
+            name: "bash",
+            input: {},
+          },
+        },
+      });
+      expect(parseClaudeStreamJson(startLine, state)).toBeNull();
+      expect(state.pendingToolCall).toEqual({
+        id: "toolu_123",
+        name: "bash",
+        input: "",
+      });
+
+      // content_block_stop → finalizes tool call
+      const stopLine = JSON.stringify({
+        type: "stream_event",
+        event: { type: "content_block_stop", index: 0 },
+      });
+      const chunk = parseClaudeStreamJson(stopLine, state);
+      expect(chunk).not.toBeNull();
+      expect(chunk!.type).toBe(ChunkType.ToolCall);
+      const parsed = JSON.parse(chunk!.content);
+      expect(parsed.id).toBe("toolu_123");
+      expect(parsed.name).toBe("bash");
+      expect(parsed.input).toBe("");
+      expect(state.pendingToolCall).toBeNull();
+    });
+
+    it("should accumulate input_json_delta between start and stop", () => {
+      const state = createClaudeStreamState();
+
+      // Start tool_use with empty input
+      const startLine = JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "content_block_start",
+          index: 1,
+          content_block: {
+            type: "tool_use",
+            id: "toolu_456",
+            name: "edit",
+            input: {},
+          },
+        },
+      });
+      parseClaudeStreamJson(startLine, state);
+      expect(state.pendingToolCall).not.toBeNull();
+
+      // Stream partial JSON deltas
+      const delta1 = JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 1,
+          delta: { type: "input_json_delta", partial_json: '{"file":' },
+        },
+      });
+      expect(parseClaudeStreamJson(delta1, state)).toBeNull();
+
+      const delta2 = JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 1,
+          delta: { type: "input_json_delta", partial_json: '"src/main.ts",' },
+        },
+      });
+      expect(parseClaudeStreamJson(delta2, state)).toBeNull();
+
+      const delta3 = JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 1,
+          delta: { type: "input_json_delta", partial_json: '"content":"edited"}' },
+        },
+      });
+      expect(parseClaudeStreamJson(delta3, state)).toBeNull();
+
+      // Stop → finalize with accumulated input
+      const stopLine = JSON.stringify({
+        type: "stream_event",
+        event: { type: "content_block_stop", index: 1 },
+      });
+      const chunk = parseClaudeStreamJson(stopLine, state);
+      expect(chunk).not.toBeNull();
+      expect(chunk!.type).toBe(ChunkType.ToolCall);
+      const parsed = JSON.parse(chunk!.content);
+      expect(parsed.id).toBe("toolu_456");
+      expect(parsed.name).toBe("edit");
+      expect(parsed.input).toBe('{"file":"src/main.ts","content":"edited"}');
+      expect(state.pendingToolCall).toBeNull();
+    });
+
+    it("should not emit tool call without state", () => {
+      // Without state, content_block_start/stop are ignored
+      const startLine = JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "tool_use", id: "toolu_1", name: "Read", input: {} },
+        },
+      });
+      expect(parseClaudeStreamJson(startLine)).toBeNull();
+
+      const stopLine = JSON.stringify({
+        type: "stream_event",
+        event: { type: "content_block_stop", index: 0 },
+      });
+      expect(parseClaudeStreamJson(stopLine)).toBeNull();
+    });
+
+    it("should handle multiple tool calls sequentially", () => {
+      const state = createClaudeStreamState();
+
+      // First tool call
+      const s1 = JSON.stringify({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_1", name: "bash", input: {} } } });
+      parseClaudeStreamJson(s1, state);
+      const stop1 = JSON.stringify({ type: "stream_event", event: { type: "content_block_stop", index: 0 } });
+      const c1 = parseClaudeStreamJson(stop1, state);
+      expect(c1).not.toBeNull();
+      expect(JSON.parse(c1!.content).id).toBe("toolu_1");
+      expect(state.pendingToolCall).toBeNull();
+
+      // Second tool call
+      const s2 = JSON.stringify({ type: "stream_event", event: { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_2", name: "Read", input: {} } } });
+      parseClaudeStreamJson(s2, state);
+      const stop2 = JSON.stringify({ type: "stream_event", event: { type: "content_block_stop", index: 1 } });
+      const c2 = parseClaudeStreamJson(stop2, state);
+      expect(c2).not.toBeNull();
+      expect(JSON.parse(c2!.content).id).toBe("toolu_2");
+      expect(state.pendingToolCall).toBeNull();
+    });
   });
 });
 

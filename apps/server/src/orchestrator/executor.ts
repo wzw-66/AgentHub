@@ -1,7 +1,10 @@
 import type { Agent, AgentContext, Chunk } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createAdapter } from "@agenthub/agent-core";
+import { getConversation } from "@agenthub/db";
 import type { SubTask, SubTaskResult } from "./types.js";
+import { resolve } from "node:path";
+import { WORKSPACE_ROOT } from "../config/env.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
@@ -25,11 +28,14 @@ export class SubTaskExecutor {
   ): Promise<SubTaskResult> {
     let lastError: Error | undefined;
 
+    // Resolve workspace path from conversation or agent
+    const cwd = await this.resolveWorkspace(subtask, agent);
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       let adapter = null as ReturnType<typeof createAdapter> | null;
 
       try {
-        adapter = this.createAdapterForAgent(agent);
+        adapter = this.createAdapterForAgent(agent, cwd);
         const context = this.buildContext(subtask);
 
         let fullContent = "";
@@ -46,7 +52,8 @@ export class SubTaskExecutor {
 
           if (
             chunk.type === ChunkType.Text ||
-            chunk.type === ChunkType.Code
+            chunk.type === ChunkType.Code ||
+            chunk.type === ChunkType.ToolCall
           ) {
             fullContent += chunk.content;
           }
@@ -113,13 +120,40 @@ export class SubTaskExecutor {
   }
 
   /**
-   * Create an AgentAdapter for the given agent.
+   * Resolve the workspace directory for a subtask's conversation.
+   * Falls back to agent's workspace path if conversation doesn't have one.
    */
-  private createAdapterForAgent(agent: Agent): ReturnType<typeof createAdapter> {
+  private async resolveWorkspace(subtask: SubTask, agent: Agent): Promise<string | undefined> {
+    try {
+      const conv = await getConversation(subtask.conversationId);
+      if (conv?.workspacePath) {
+        return resolve(WORKSPACE_ROOT, conv.workspacePath);
+      }
+    } catch {
+      // Conversation may have been deleted — proceed without workspace
+    }
+    // Fallback to agent's workspace path (same behavior as single-chat)
+    if (agent.workspacePath) {
+      return resolve(WORKSPACE_ROOT, agent.workspacePath);
+    }
+    return undefined;
+  }
+
+  /**
+   * Create an AgentAdapter for the given agent with workspace path.
+   */
+  private createAdapterForAgent(
+    agent: Agent,
+    cwd?: string,
+  ): ReturnType<typeof createAdapter> {
     const provider = agent.provider.toLowerCase();
     const config: Record<string, unknown> = {
       model: agent.model,
     };
+
+    if (cwd) {
+      config["cwd"] = cwd;
+    }
 
     if (agent.systemPrompt) {
       config["systemPrompt"] = agent.systemPrompt;

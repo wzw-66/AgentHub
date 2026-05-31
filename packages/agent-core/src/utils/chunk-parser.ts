@@ -37,16 +37,43 @@ interface ClaudeStreamEvent {
     delta?: {
       type: string;
       text?: string;
+      partial_json?: string;
     };
     index?: number;
+    content_block?: {
+      type: string;
+      id?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    };
   };
+  session_id?: string;
+  usage?: Record<string, unknown>;
+}
+
+/**
+ * State tracker for Claude stream parsing.
+ * Required to handle multi-line tool call events (input_json_delta).
+ */
+export interface ClaudeStreamState {
+  /** Accumulated tool call info while streaming input_json_delta */
+  pendingToolCall: { id: string; name: string; input: string } | null;
+}
+
+export function createClaudeStreamState(): ClaudeStreamState {
+  return { pendingToolCall: null };
 }
 
 /**
  * Parse a single line from `claude --output-format stream-json`.
+ *
+ * For basic text streaming, call without state (backward compatible).
+ * For full parsing including tool calls, pass a `ClaudeStreamState` created
+ * via `createClaudeStreamState()` and reuse it across all lines of the stream.
+ *
  * Returns a Chunk or null if the line is not a content-bearing event.
  */
-export function parseClaudeStreamJson(line: string): Chunk | null {
+export function parseClaudeStreamJson(line: string, state?: ClaudeStreamState): Chunk | null {
   if (!line.trim()) return null;
 
   let parsed: ClaudeStreamEvent;
@@ -56,25 +83,72 @@ export function parseClaudeStreamJson(line: string): Chunk | null {
     return null;
   }
 
-  // stream_event with content_block_delta / text_delta → text chunk
-  if (
-    parsed.type === "stream_event" &&
-    parsed.event?.type === "content_block_delta" &&
-    parsed.event.delta?.type === "text_delta" &&
-    parsed.event.delta.text
-  ) {
-    return createChunk(ChunkType.Text, parsed.event.delta.text);
+  // ── stream_event sub-types ────────────────────────────────────────
+  if (parsed.type === "stream_event") {
+    const event = parsed.event;
+    if (!event) return null;
+
+    // content_block_delta → text_delta (text) or input_json_delta (tool args)
+    if (event.type === "content_block_delta") {
+      const delta = event.delta;
+      if (!delta) return null;
+
+      // Text content
+      if (delta.type === "text_delta" && delta.text) {
+        return createChunk(ChunkType.Text, delta.text);
+      }
+
+      // Tool call input (accumulated across multiple lines)
+      if (delta.type === "input_json_delta" && state?.pendingToolCall) {
+        state.pendingToolCall.input += delta.partial_json ?? "";
+        return null;
+      }
+
+      return null;
+    }
+
+    // content_block_start → detect tool_use blocks
+    if (event.type === "content_block_start" && state) {
+      const block = event.content_block;
+      if (block?.type === "tool_use") {
+        state.pendingToolCall = {
+          id: block.id ?? "",
+          name: block.name ?? "",
+          input: block.input && Object.keys(block.input).length > 0 ? JSON.stringify(block.input) : "",
+        };
+        return null;
+      }
+      return null;
+    }
+
+    // content_block_stop → finalize accumulated tool call
+    if (event.type === "content_block_stop" && state?.pendingToolCall) {
+      const tool = state.pendingToolCall;
+      state.pendingToolCall = null;
+      return createChunk(ChunkType.ToolCall, JSON.stringify({
+        id: tool.id,
+        name: tool.name,
+        input: tool.input,
+      }));
+    }
+
+    return null;
   }
 
-  // result event → done chunk with usage metadata
+  // ── message_delta (informational, e.g. stop_reason) ───────────────
+  if (parsed.type === "message_delta") {
+    return null;
+  }
+
+  // ── result event → done chunk with usage metadata ─────────────────
   if (parsed.type === "result") {
-    const result = parsed as unknown as Record<string, unknown>;
     return createChunk(ChunkType.Done, "", {
-      usage: result.usage,
-      sessionId: result.session_id,
+      usage: parsed.usage,
+      sessionId: parsed.session_id,
     });
   }
 
+  // init, ping, etc. → silently ignored
   return null;
 }
 

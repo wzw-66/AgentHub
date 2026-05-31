@@ -1,5 +1,5 @@
 import type { AgentAdapter, AgentContext, Chunk, HealthStatus } from "@agenthub/shared";
-import { ChunkType } from "@agenthub/shared";
+import { ChunkType, SenderType } from "@agenthub/shared";
 import { createChunk, parseOpenAIStreamEvent } from "../utils/chunk-parser.js";
 
 export interface CustomAgentAdapterConfig {
@@ -161,7 +161,7 @@ export class CustomAgentAdapter implements AgentAdapter {
 
     for (const msg of context.history) {
       const role =
-        msg.senderType === "user" || msg.senderType === "contact"
+        msg.senderType === SenderType.User || msg.senderType === SenderType.Contact
           ? "user"
           : "assistant";
       messages.push({ role, content: msg.content });

@@ -16,6 +16,7 @@ export interface Agent {
   systemPrompt?: string;
   config: Record<string, unknown>;
   avatarUrl?: string;
+  workspacePath?: string;
   createdAt: string;
   updatedAt: string;
 }
