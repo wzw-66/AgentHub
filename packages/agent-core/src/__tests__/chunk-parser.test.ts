@@ -90,20 +90,82 @@ describe("parseClaudeStreamJson", () => {
     expect(parseClaudeStreamJson("")).toBeNull();
     expect(parseClaudeStreamJson("  ")).toBeNull();
   });
+
+  it("should parse assistant message with text content block (v2.1+ format)", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        id: "msg-1",
+        content: [{ type: "text", text: "Hello world" }],
+        role: "assistant",
+      },
+    });
+    const chunk = parseClaudeStreamJson(line);
+    expect(chunk).not.toBeNull();
+    expect(chunk!.type).toBe(ChunkType.Text);
+    expect(chunk!.content).toBe("Hello world");
+  });
+
+  it("should parse assistant message with thinking block (ignored, returns text block)", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        id: "msg-1",
+        content: [
+          { type: "thinking", thinking: "internal reasoning" },
+          { type: "text", text: "Final answer" },
+        ],
+      },
+    });
+    const chunk = parseClaudeStreamJson(line);
+    expect(chunk).not.toBeNull();
+    expect(chunk!.type).toBe(ChunkType.Text);
+    // Returns the text block, not the thinking block
+    expect(chunk!.content).toBe("Final answer");
+  });
+
+  it("should return null for assistant message with no text block", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        id: "msg-1",
+        content: [{ type: "tool_use", name: "bash", input: { command: "ls" } }],
+      },
+    });
+    expect(parseClaudeStreamJson(line)).toBeNull();
+  });
 });
 
 describe("parseOpenCodeEvent", () => {
-  it("should parse a text event", () => {
+  it("should parse a text event using part.text field (v1.15.13+ format)", () => {
     const line = JSON.stringify({
       type: "text",
-      content: "Here is the result",
+      part: { type: "text", text: "Hello from part field" },
       timestamp: 1712345678000,
       sessionID: "sess-abc",
     });
     const chunk = parseOpenCodeEvent(line);
     expect(chunk).not.toBeNull();
     expect(chunk!.type).toBe(ChunkType.Text);
-    expect(chunk!.content).toBe("Here is the result");
+    expect(chunk!.content).toBe("Hello from part field");
+  });
+
+  it("should parse a text event preferring content over part.text", () => {
+    const line = JSON.stringify({
+      type: "text",
+      content: "Primary content",
+      part: { type: "text", text: "Fallback content" },
+    });
+    const chunk = parseOpenCodeEvent(line);
+    expect(chunk).not.toBeNull();
+    expect(chunk!.type).toBe(ChunkType.Text);
+    // content takes priority over part.text
+    expect(chunk!.content).toBe("Primary content");
+  });
+
+  it("should return null for text events with no content and no part.text", () => {
+    const line = JSON.stringify({ type: "text", timestamp: 1712345678000 });
+    expect(parseOpenCodeEvent(line)).toBeNull();
   });
 
   it("should parse a tool_use event", () => {
@@ -120,7 +182,7 @@ describe("parseOpenCodeEvent", () => {
     expect(chunk!.content).toContain("read_file");
   });
 
-  it("should parse an error event", () => {
+  it("should parse an error event with message field", () => {
     const line = JSON.stringify({
       type: "error",
       message: "Something went wrong",
@@ -129,6 +191,28 @@ describe("parseOpenCodeEvent", () => {
     expect(chunk).not.toBeNull();
     expect(chunk!.type).toBe(ChunkType.Error);
     expect(chunk!.content).toBe("Something went wrong");
+  });
+
+  it("should parse an error event using error.data.message fallback", () => {
+    const line = JSON.stringify({
+      type: "error",
+      error: {
+        name: "ModelError",
+        data: { message: "Model rate limit exceeded" },
+      },
+    });
+    const chunk = parseOpenCodeEvent(line);
+    expect(chunk).not.toBeNull();
+    expect(chunk!.type).toBe(ChunkType.Error);
+    expect(chunk!.content).toBe("Model rate limit exceeded");
+  });
+
+  it("should fall back to generic message when error has no relevant fields", () => {
+    const line = JSON.stringify({ type: "error" });
+    const chunk = parseOpenCodeEvent(line);
+    expect(chunk).not.toBeNull();
+    expect(chunk!.type).toBe(ChunkType.Error);
+    expect(chunk!.content).toBe("Unknown opencode error");
   });
 
   it("should parse a step_finish event as done", () => {

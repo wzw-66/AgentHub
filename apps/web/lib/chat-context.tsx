@@ -40,6 +40,7 @@ interface ChatContextValue {
   activeConversationId: string | null;
   messages: Message[];
   streamingMessage: StreamingMessage | null;
+  streamError: string | null;
   contacts: ContactInfo[];
   typingAgents: Map<string, boolean>;
   isLoadingConversations: boolean;
@@ -57,6 +58,7 @@ interface ChatContextValue {
   setTypingAgent: (agentId: string, isTyping: boolean) => void;
   appendMessageChunk: (chunkText: string, agentId?: string) => void;
   finalizeMessage: (messageId?: string, agentId?: string) => void;
+  setStreamError: (error: string | null) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
 }
 
@@ -83,6 +85,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ─── Streaming message state ─────────────────────────────────────
   const [streamingMessage, setStreamingMessage] =
     useState<StreamingMessage | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const streamIdRef = useRef(0);
 
   const fetchConversations = useCallback(async () => {
@@ -260,6 +263,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeConversationId,
         messages,
         streamingMessage,
+        streamError,
         contacts,
         typingAgents,
         isLoadingConversations,
@@ -273,6 +277,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setTypingAgent,
         appendMessageChunk,
         finalizeMessage,
+        setStreamError,
         setMessages,
       }}
     >

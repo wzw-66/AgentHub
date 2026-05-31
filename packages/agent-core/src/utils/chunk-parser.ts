@@ -40,11 +40,24 @@ interface ClaudeStreamEvent {
     };
     index?: number;
   };
+  // v2.1+ format: top-level assistant messages with content blocks
+  message?: {
+    content?: Array<{
+      type: string;
+      text?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    }>;
+  };
 }
 
 /**
  * Parse a single line from `claude --output-format stream-json`.
  * Returns a Chunk or null if the line is not a content-bearing event.
+ *
+ * Supports two output formats:
+ * - Old format: stream_event with content_block_delta / text_delta
+ * - New format (v2.1+): top-level assistant messages with content blocks
  */
 export function parseClaudeStreamJson(line: string): Chunk | null {
   if (!line.trim()) return null;
@@ -64,6 +77,16 @@ export function parseClaudeStreamJson(line: string): Chunk | null {
     parsed.event.delta.text
   ) {
     return createChunk(ChunkType.Text, parsed.event.delta.text);
+  }
+
+  // assistant message → extract text content blocks
+  if (parsed.type === "assistant" && parsed.message?.content) {
+    for (const block of parsed.message.content) {
+      if (block.type === "text" && block.text) {
+        return createChunk(ChunkType.Text, block.text);
+      }
+      // Tool calls will be yielded in subsequent assistant messages
+    }
   }
 
   // result event → done chunk with usage metadata
@@ -92,6 +115,17 @@ interface OpenCodeEvent {
   reason?: string;
   timestamp?: number;
   sessionID?: string;
+  part?: {
+    type?: string;
+    text?: string;
+    id?: string;
+  };
+  error?: {
+    name?: string;
+    data?: {
+      message?: string;
+    };
+  };
 }
 
 /**
@@ -113,6 +147,9 @@ export function parseOpenCodeEvent(line: string): Chunk | null {
       if (parsed.content !== undefined) {
         return createChunk(ChunkType.Text, parsed.content);
       }
+      if (parsed.part?.text !== undefined) {
+        return createChunk(ChunkType.Text, parsed.part.text);
+      }
       return null;
 
     case "tool_use":
@@ -125,7 +162,9 @@ export function parseOpenCodeEvent(line: string): Chunk | null {
     case "error":
       return createChunk(
         ChunkType.Error,
-        parsed.message ?? "Unknown opencode error",
+        parsed.message
+          ?? parsed.error?.data?.message
+          ?? "Unknown opencode error",
       );
 
     case "step_finish":

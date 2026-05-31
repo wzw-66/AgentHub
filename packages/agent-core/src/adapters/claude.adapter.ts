@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
+import { existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 import type {
   AgentAdapter,
   AgentContext,
@@ -21,12 +23,49 @@ export interface ClaudeAdapterConfig {
   timeout?: number;
   /** Max agentic turns in non-interactive mode. Default: 25. */
   maxTurns?: number;
+  /** Path to git-bash on Windows (CLAUDE_CODE_GIT_BASH_PATH). Auto-detected if not set. */
+  gitBashPath?: string;
+}
+
+/**
+ * On Windows, Claude Code requires git-bash for subprocess execution.
+ * Try to locate bash.exe from PATH or common Git installation paths.
+ */
+function resolveGitBashPath(): string | undefined {
+  if (process.platform !== "win32") return undefined;
+
+  // Use existing env var if already set
+  if (process.env["CLAUDE_CODE_GIT_BASH_PATH"]) {
+    return process.env["CLAUDE_CODE_GIT_BASH_PATH"];
+  }
+
+  // Search PATH for bash.exe
+  const pathDirs = (process.env["PATH"] || "").split(";");
+  for (const dir of pathDirs) {
+    try {
+      const candidate = resolve(dir.trim(), "bash.exe");
+      if (existsSync(candidate)) return candidate;
+    } catch {
+      // Skip invalid paths
+    }
+  }
+
+  // Search all fixed drives for Git\bin\bash.exe
+  const drives = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (const drive of drives) {
+    const candidate = `${drive}:\\Program Files\\Git\\bin\\bash.exe`;
+    if (existsSync(candidate)) return candidate;
+    const candidateX86 = `${drive}:\\Program Files (x86)\\Git\\bin\\bash.exe`;
+    if (existsSync(candidateX86)) return candidateX86;
+  }
+
+  return undefined;
 }
 
 /**
  * Adapter that executes prompts via the `claude` CLI subprocess.
  *
- * Uses `claude --bare -p --output-format stream-json` for non-interactive
+ * Uses `claude -p --output-format stream-json` for non-interactive
  * streaming execution. The CLI must be installed on the host machine.
  *
  * @example
@@ -49,7 +88,6 @@ export class ClaudeAdapter implements AgentAdapter {
     const prompt = this.buildPrompt(context);
 
     const args: string[] = [
-      "--bare",
       "-p",
       prompt,
       "--output-format",
@@ -63,10 +101,30 @@ export class ClaudeAdapter implements AgentAdapter {
     ];
 
     const resolved = resolveCommand(cliPath);
+
+    // On Windows, Claude Code requires git-bash in the subprocess environment
+    const env: Record<string, string | undefined> = { ...process.env };
+    if (process.platform === "win32") {
+      const bashPath = this.config.gitBashPath ?? resolveGitBashPath();
+      if (bashPath) {
+        env["CLAUDE_CODE_GIT_BASH_PATH"] = bashPath;
+        // Also ensure bash's parent directory is in PATH
+        const bashDir = dirname(bashPath);
+        if (!env["PATH"]?.split(";").some((p) => p.toLowerCase() === bashDir.toLowerCase())) {
+          env["PATH"] = `${bashDir};${env["PATH"] || ""}`;
+        }
+      }
+    }
+
     this.process = spawn(resolved.command, [...resolved.prefixArgs, ...args], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: this.config.cwd,
+      env,
     });
+
+    // Close stdin immediately — the CLI doesn't need input (prompt is in -p flag),
+    // and leaving stdin open can cause the process to hang on Windows.
+    this.process.stdin?.end();
 
     // Register close handler immediately — ensures exitCode promise
     // is available even if the process exits before the readline loop ends.

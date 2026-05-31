@@ -75,9 +75,15 @@ describe("OpenCodeAdapter", () => {
       // drain
     }
 
+    // On Windows, the -m flag is skipped (known OpenCode bug appends "/." to model names)
+    const expectedArgs =
+      process.platform === "win32"
+        ? ["run", "--format", "json"]
+        : ["run", "--format", "json", "-m", "anthropic/claude-sonnet-4-6"];
+
     expect(spawn).toHaveBeenCalledWith(
       expect.any(String),
-      expect.arrayContaining(["run", "--format", "json", "-m", "anthropic/claude-sonnet-4-6"]),
+      expect.arrayContaining(expectedArgs),
       expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
     );
   });
