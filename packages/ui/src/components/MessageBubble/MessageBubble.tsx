@@ -78,7 +78,9 @@ function QuoteBlock({ message }: { message: Message }) {
   return (
     <div style={quoteStyle} data-testid="message-quote-block">
       <div style={labelStyle}>↳ Reply to message</div>
-      <div>{truncate(message.content, QUOTE_MAX_LENGTH)}</div>
+      <div style={{ whiteSpace: "pre-wrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {truncate(message.content, QUOTE_MAX_LENGTH)}
+      </div>
     </div>
   );
 }
