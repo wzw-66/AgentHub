@@ -372,6 +372,27 @@ export default function ChatPanel({
                           🔄
                         </button>
                       )}
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.post(
+                              `/api/conversations/${conversationId}/messages/${msg.id}/pin`
+                            );
+                            setMessages((prev) =>
+                              prev.map((m) =>
+                                m.id === msg.id ? { ...m, isPinned: !(m as any).isPinned } : m
+                              ),
+                            );
+                          } catch { /* silent */ }
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                        style={{ color: (msg as any).isPinned ? "var(--theme-accent)" : "var(--theme-text-muted)" }}
+                        title={(msg as any).isPinned ? "Unpin" : "Pin"}
+                        onMouseEnter={(e) => { if (!(msg as any).isPinned) { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; } }}
+                        onMouseLeave={(e) => { if (!(msg as any).isPinned) { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; } }}
+                      >
+                        📌
+                      </button>
                       {isLastUserMsg && (
                         <>
                           <button

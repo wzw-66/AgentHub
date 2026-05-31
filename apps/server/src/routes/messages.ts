@@ -10,6 +10,7 @@ import {
   deleteMessage as dbDeleteMessage,
   getConversation,
   getContact,
+  listPinnedMessages,
 } from "@agenthub/db";
 import { createAdapter } from "@agenthub/agent-core";
 import type { Chunk, Agent } from "@agenthub/shared";
@@ -615,6 +616,17 @@ async function handleRegenerate(
   // Group conversation regeneration skipped for now (higher complexity)
 }
 
+// ─── List Pinned Messages ────────────────────────────────────────────────────
+
+async function handleListPinned(
+  request: FastifyRequest<{ Params: MessageRouteParams }>,
+  reply: FastifyReply
+): Promise<void> {
+  const { conversationId } = request.params;
+  const messages = await listPinnedMessages(conversationId);
+  return reply.status(200).send(messages);
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
@@ -623,6 +635,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
   app.post("/:messageId/pin", handlePin);
   app.post("/:messageId/execute", handleExecute);
   app.post("/:messageId/regenerate", handleRegenerate);
+  app.get("/pinned/list", handleListPinned);
   app.patch("/:messageId/update", handleUpdateMessage);
   app.delete("/:messageId/delete", handleDeleteMessage);
 }
