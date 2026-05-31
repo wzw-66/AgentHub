@@ -47,4 +47,32 @@ describe("MessageBubble", () => {
     render(<MessageBubble message={baseMessage} variant="user" />);
     expect(screen.getByTestId("message-timestamp")).toHaveTextContent("18:30");
   });
+
+  it("renders quote block when parentMessage is provided", () => {
+    const parentMsg: Message = {
+      id: "msg-0",
+      conversationId: "conv-1",
+      senderType: SenderType.Contact,
+      senderId: "contact-1",
+      type: MessageType.Text,
+      content: "This is the parent message being replied to",
+      createdAt: "2026-05-27T10:29:00Z",
+      updatedAt: "2026-05-27T10:29:00Z",
+    };
+
+    render(
+      <MessageBubble
+        message={baseMessage}
+        variant="contact"
+        parentMessage={parentMsg}
+      />,
+    );
+
+    const quoteBlock = screen.getByTestId("message-quote-block");
+    expect(quoteBlock).toBeInTheDocument();
+    expect(quoteBlock).toHaveTextContent("↳ Reply to message");
+    expect(quoteBlock).toHaveTextContent(
+      "This is the parent message being replied to",
+    );
+  });
 });

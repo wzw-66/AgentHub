@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { MessageBubbleProps } from "../../types.js";
+import type { Message } from "@agenthub/shared";
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
@@ -48,11 +49,47 @@ const variants = {
   },
 } as const;
 
+// ─── QuoteBlock ─────────────────────────────────────────────
+const QUOTE_MAX_LENGTH = 150;
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max) + "...";
+}
+
+function QuoteBlock({ message }: { message: Message }) {
+  const quoteStyle: CSSProperties = {
+    borderLeft: "2px solid var(--ui-color-primary)",
+    padding: "var(--ui-space-2) var(--ui-space-3)",
+    marginBottom: "var(--ui-space-2)",
+    fontSize: "var(--ui-font-sm)",
+    color: "var(--ui-color-text-secondary)",
+    backgroundColor: "var(--ui-color-bg-contact)",
+    borderRadius: "0 var(--ui-radius-sm) var(--ui-radius-sm) 0",
+  };
+
+  const labelStyle: CSSProperties = {
+    fontSize: "var(--ui-font-xs)",
+    fontWeight: 600,
+    marginBottom: "var(--ui-space-1)",
+    opacity: 0.7,
+  };
+
+  return (
+    <div style={quoteStyle} data-testid="message-quote-block">
+      <div style={labelStyle}>↳ Reply to message</div>
+      <div>{truncate(message.content, QUOTE_MAX_LENGTH)}</div>
+    </div>
+  );
+}
+
+// ─── MessageBubble ──────────────────────────────────────────
 export function MessageBubble({
   message,
   variant,
   children,
   className = "",
+  parentMessage,
 }: MessageBubbleProps) {
   const v = variants[variant];
   const vMaxWidth = "maxWidth" in v ? v.maxWidth : "70%";
@@ -91,6 +128,7 @@ export function MessageBubble({
       data-testid={`message-bubble-${variant}`}
     >
       <div style={contentStyle} data-testid="message-content">
+        {parentMessage && <QuoteBlock message={parentMessage} />}
         {children ?? message.content}
       </div>
       <span style={timestampStyle} data-testid="message-timestamp">

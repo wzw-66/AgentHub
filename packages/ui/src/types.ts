@@ -15,6 +15,7 @@ export interface MessageBubbleProps {
   variant: "user" | "contact" | "system";
   children?: ReactNode;
   className?: string;
+  parentMessage?: Message | null;
 }
 
 // ─── CodeBlock ─────────────────────────────────────────────
