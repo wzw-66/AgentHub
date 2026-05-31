@@ -82,6 +82,7 @@ export const zh: Translations = {
     messagePlaceholder: "输入消息...",
     send: "发送",
     you: "你",
+    replyingTo: "回复",
   },
   rightPanel: {
     artifactView: "产物预览",

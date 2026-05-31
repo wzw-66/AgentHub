@@ -53,6 +53,7 @@ export function MessageBubble({
   variant,
   children,
   className = "",
+  parentMessage,
 }: MessageBubbleProps) {
   const v = variants[variant];
   const vMaxWidth = "maxWidth" in v ? v.maxWidth : "70%";
@@ -76,6 +77,19 @@ export function MessageBubble({
     ...v.content,
   };
 
+  const quoteStyle: CSSProperties = {
+    marginBottom: "var(--ui-space-2)",
+    padding: "var(--ui-space-1) var(--ui-space-2)",
+    borderLeft: "2px solid var(--ui-color-primary)",
+    backgroundColor: "var(--ui-color-bg-system)",
+    borderRadius: "var(--ui-radius-sm)",
+    fontSize: "var(--ui-font-sm)",
+    color: "var(--ui-color-text-secondary)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+
   const timestampStyle: CSSProperties = {
     fontSize: "var(--ui-font-xs)",
     color: "var(--ui-color-text-secondary)",
@@ -90,6 +104,11 @@ export function MessageBubble({
       className={className ? `ui-mb-${variant} ${className}` : `ui-mb-${variant}`}
       data-testid={`message-bubble-${variant}`}
     >
+      {parentMessage && (
+        <div style={quoteStyle} data-testid="message-quote">
+          {parentMessage.content}
+        </div>
+      )}
       <div style={contentStyle} data-testid="message-content">
         {children ?? message.content}
       </div>

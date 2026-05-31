@@ -80,6 +80,7 @@ export const en = {
     messagePlaceholder: "TYPE YOUR MESSAGE...",
     send: "SEND",
     you: "YOU",
+    replyingTo: "REPLYING TO",
   },
   rightPanel: {
     artifactView: "ARTIFACT VIEW",
