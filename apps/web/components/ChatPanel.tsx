@@ -338,7 +338,7 @@ export default function ChatPanel({
                     )}
                   </MessageBubble>
 
-                  {/* Reply button on hover for all messages */}
+                  {/* Hover actions: reply on all messages, edit/delete on last user message */}
                   {variant !== "system" && hoveredMsgId === msg.id && !isEditing && (
                     <div
                       className="absolute flex gap-1"
@@ -354,39 +354,34 @@ export default function ChatPanel({
                       >
                         ↩
                       </button>
-                    </div>
-                  )}
-
-                  {/* Hover actions: only on last user message, when not editing */}
-                  {isLastUserMsg && hoveredMsgId === msg.id && !isEditing && (
-                    <div
-                      className="absolute right-0 top-0 flex gap-1"
-                      style={{ transform: "translateX(calc(100% + 8px))" }}
-                    >
-                      <button
-                        onClick={() => startEditing(msg)}
-                        className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
-                        style={{ color: "var(--theme-text-muted)" }}
-                        title={t("common").edit}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
-                      >
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteConfirm(msg.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
-                        style={{ color: "var(--theme-text-muted)" }}
-                        title={t("common").delete}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-danger)"; e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.1)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
-                      >
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      {isLastUserMsg && (
+                        <>
+                          <button
+                            onClick={() => startEditing(msg)}
+                            className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                            style={{ color: "var(--theme-text-muted)" }}
+                            title={t("common").edit}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setShowDeleteConfirm(msg.id)}
+                            className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                            style={{ color: "var(--theme-text-muted)" }}
+                            title={t("common").delete}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-danger)"; e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.1)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
 
