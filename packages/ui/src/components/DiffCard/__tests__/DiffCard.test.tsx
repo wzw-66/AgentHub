@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DiffCard } from "../DiffCard.js";
 
 afterEach(cleanup);
@@ -40,5 +41,23 @@ describe("DiffCard", () => {
   it("handles empty diff with placeholder", () => {
     render(<DiffCard diff="" />);
     expect(screen.getByTestId("diffcard").textContent).toContain("No changes");
+  });
+
+  it("shows apply button when onApply is provided", () => {
+    render(<DiffCard diff={sampleDiff} title="file.ts" onApply={() => {}} />);
+    expect(screen.getByTestId("diff-apply-btn")).toBeInTheDocument();
+  });
+
+  it("calls onApply with diff content when clicked", async () => {
+    const onApply = vi.fn();
+    render(<DiffCard diff={sampleDiff} title="file.ts" onApply={onApply} />);
+    await userEvent.click(screen.getByTestId("diff-apply-btn"));
+    expect(onApply).toHaveBeenCalledTimes(1);
+    expect(onApply).toHaveBeenCalledWith(sampleDiff);
+  });
+
+  it("does not render apply button without onApply", () => {
+    render(<DiffCard diff={sampleDiff} title="file.ts" />);
+    expect(screen.queryByTestId("diff-apply-btn")).not.toBeInTheDocument();
   });
 });

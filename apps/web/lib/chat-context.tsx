@@ -50,6 +50,8 @@ interface ChatContextValue {
   fetchMessages: (conversationId: string, cursor?: string) => Promise<Message[]>;
   sendMessage: (conversationId: string, content: string, parentId?: string) => Promise<Message>;
   replaceMessage: (messageId: string, content: string) => void;
+  togglePinConversation: (conversationId: string, isPinned: boolean) => Promise<void>;
+  toggleArchiveConversation: (conversationId: string, isArchived: boolean) => Promise<void>;
   createConversation: (
     title: string,
     type: "single" | "group",
@@ -227,6 +229,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const togglePinConversation = useCallback(
+    async (conversationId: string, isPinned: boolean) => {
+      await api.patch(`/api/conversations/${conversationId}/update`, {
+        isPinned: !isPinned,
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, isPinned: !isPinned } : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  const toggleArchiveConversation = useCallback(
+    async (conversationId: string, isArchived: boolean) => {
+      await api.patch(`/api/conversations/${conversationId}/update`, {
+        isArchived: !isArchived,
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, isArchived: !isArchived } : c,
+        ),
+      );
+    },
+    [],
+  );
+
   // ─── Load contacts (agents) on mount (only if authenticated) ────
   useEffect(() => {
     async function loadContacts() {
@@ -284,6 +314,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         appendMessageChunk,
         finalizeMessage,
         replaceMessage,
+        togglePinConversation,
+        toggleArchiveConversation,
         setMessages,
       }}
     >

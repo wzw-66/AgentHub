@@ -83,6 +83,7 @@ export const zh: Translations = {
     send: "发送",
     you: "你",
     replyingTo: "回复",
+    regenerate: "重新生成",
   },
   rightPanel: {
     artifactView: "产物预览",

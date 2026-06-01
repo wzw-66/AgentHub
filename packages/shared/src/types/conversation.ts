@@ -6,6 +6,7 @@ export interface Conversation {
   type: ConversationType;
   ownerId: string;
   contactIds: string[];
+  isPinned: boolean;
   isArchived: boolean;
   lastMessageAt?: string;
   createdAt: string;

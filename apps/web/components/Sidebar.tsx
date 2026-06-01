@@ -34,8 +34,9 @@ export default function Sidebar({
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
-  const { conversations, contacts, isLoadingConversations, createConversation, fetchConversations } = useChat();
+  const { conversations, contacts, isLoadingConversations, createConversation, fetchConversations, togglePinConversation, toggleArchiveConversation } = useChat();
   const [searchQuery, setSearchQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatTitle, setNewChatTitle] = useState("");
   const [chatMode, setChatMode] = useState<ChatMode>("single");
@@ -45,9 +46,17 @@ export default function Sidebar({
   const [deleteConfirmConvId, setDeleteConfirmConvId] = useState<string | null>(null);
   const [deletingConv, setDeletingConv] = useState(false);
 
-  const filteredConversations = (conversations || []).filter((c) =>
-    getDisplayName(c).toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredConversations = (conversations || [])
+    .filter((c) => {
+      const matchesSearch = getDisplayName(c).toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesArchive = showArchived || !c.isArchived;
+      return matchesSearch && matchesArchive;
+    })
+    .sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return 0;
+    });
 
   function resetModal() {
     setShowNewChat(false);
@@ -205,6 +214,24 @@ export default function Sidebar({
           placeholder={t("sidebar").search}
           className="input-theme w-full rounded-xl border bg-transparent px-3.5 py-2 font-mono text-xs tracking-wider"
         />
+        <label className="flex items-center gap-2 cursor-pointer px-1" onClick={() => setShowArchived(!showArchived)}>
+          <div
+            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border"
+            style={{
+              borderColor: showArchived ? "var(--theme-accent)" : "var(--theme-border-light)",
+              backgroundColor: showArchived ? "var(--theme-accent)" : "transparent",
+            }}
+          >
+            {showArchived && (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="var(--theme-text-inverse)" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </div>
+          <span className="font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+            Show archived
+          </span>
+        </label>
         <button
           onClick={() => setShowNewChat(true)}
           className="btn-gradient flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 font-mono text-xs tracking-wider"
@@ -285,36 +312,76 @@ export default function Sidebar({
                               {getLastActive(conv)}
                             </span>
                           )}
-                          {/* Delete button on hover */}
+                          {/* Pin indicator when not hovered */}
+                          {conv.isPinned && !isHovered && (
+                            <span className="flex items-center" style={{ color: "var(--theme-accent)" }}>
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v18M5 3h14l-5 7 5 7H5" />
+                              </svg>
+                            </span>
+                          )}
+                          {/* Hover actions */}
                           {isHovered && !isDeleteConfirm && (
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteConfirmConvId(conv.id);
-                              }}
-                              className="rounded p-1 transition-colors cursor-pointer"
-                              style={{ color: "var(--theme-text-muted)" }}
-                              onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLElement).style.color = "var(--theme-danger)";
-                                (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,51,85,0.1)";
-                              }}
-                              onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLElement).style.color = "var(--theme-text-muted)";
-                                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                              }}
-                              title="Delete"
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
+                            <span className="flex items-center gap-0.5">
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePinConversation(conv.id, conv.isPinned);
+                                }}
+                                className="rounded p-1 transition-colors cursor-pointer"
+                                style={{ color: conv.isPinned ? "var(--theme-accent)" : "var(--theme-text-muted)" }}
+                                title={conv.isPinned ? "Unpin" : "Pin to top"}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v18M5 3h14l-5 7 5 7H5" />
+                                </svg>
+                              </span>
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleArchiveConversation(conv.id, conv.isArchived);
+                                }}
+                                className="rounded p-1 transition-colors cursor-pointer"
+                                style={{ color: "var(--theme-text-muted)" }}
+                                title={conv.isArchived ? "Unarchive" : "Archive"}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                </svg>
+                              </span>
+                              <span
+                                onClick={(e) => {
                                   e.stopPropagation();
                                   setDeleteConfirmConvId(conv.id);
-                                }
-                              }}
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
+                                }}
+                                className="rounded p-1 transition-colors cursor-pointer"
+                                style={{ color: "var(--theme-text-muted)" }}
+                                onMouseEnter={(e) => {
+                                  (e.currentTarget as HTMLElement).style.color = "var(--theme-danger)";
+                                  (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,51,85,0.1)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.currentTarget as HTMLElement).style.color = "var(--theme-text-muted)";
+                                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                                }}
+                                title="Delete"
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.stopPropagation();
+                                    setDeleteConfirmConvId(conv.id);
+                                  }
+                                }}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </span>
                             </span>
                           )}
                         </div>

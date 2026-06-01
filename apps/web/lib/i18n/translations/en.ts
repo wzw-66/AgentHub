@@ -81,6 +81,7 @@ export const en = {
     send: "SEND",
     you: "YOU",
     replyingTo: "REPLYING TO",
+    regenerate: "REGENERATE",
   },
   rightPanel: {
     artifactView: "ARTIFACT VIEW",

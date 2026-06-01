@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { ArtifactCardProps } from "../../types.js";
 import type { ArtifactStatus } from "@agenthub/shared";
 
@@ -40,6 +40,17 @@ const spinnerStyle: CSSProperties = {
   flexShrink: 0,
 };
 
+const btnStyle: CSSProperties = {
+  background: "none",
+  border: "1px solid var(--ui-color-border-light)",
+  borderRadius: "var(--ui-radius-sm)",
+  cursor: "pointer",
+  padding: "2px 8px",
+  fontSize: "var(--ui-font-xs)",
+  color: "var(--ui-color-text-secondary)",
+  lineHeight: 1.4,
+};
+
 const STATUS_ICON: Record<ArtifactStatus, { icon: string; color: string }> = {
   building: { icon: "⏳", color: "var(--ui-color-primary)" },
   completed: { icon: "✅", color: "var(--ui-color-success)" },
@@ -55,12 +66,23 @@ const STATUS_TEXT: Record<ArtifactStatus, string> = {
 export function ArtifactCard({
   artifact,
   className = "",
+  onPreview,
+  onFullscreen,
 }: ArtifactCardProps) {
   const status: ArtifactStatus = artifact.status as ArtifactStatus;
   const icon = STATUS_ICON[status];
   const text = STATUS_TEXT[status];
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!icon || !text) return null;
+
+  const handlePreview = () => {
+    if (onPreview) {
+      onPreview(artifact);
+    } else {
+      setShowPreview(!showPreview);
+    }
+  };
 
   return (
     <div style={cardStyle} className={className} data-testid="artifactcard">
@@ -76,10 +98,39 @@ export function ArtifactCard({
         >
           {text}
         </span>
+        {status === "completed" && artifact.content && (
+          <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+            {(onPreview || artifact.type === "web_preview") && (
+              <button style={btnStyle} onClick={handlePreview} data-testid="artifact-preview-btn">
+                Preview
+              </button>
+            )}
+            {onFullscreen && (
+              <button style={btnStyle} onClick={() => onFullscreen(artifact)} data-testid="artifact-fullscreen-btn">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14, display: "block" }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div style={bodyStyle}>
         {status === "building" && "Processing your request..."}
-        {status === "completed" &&
+        {status === "completed" && showPreview && artifact.type === "web_preview" && artifact.content && (
+          <iframe
+            src={artifact.content}
+            title={artifact.title}
+            style={{
+              width: "100%",
+              height: 400,
+              border: "1px solid var(--ui-color-border-light)",
+              borderRadius: "var(--ui-radius-sm)",
+            }}
+            data-testid="artifact-iframe"
+          />
+        )}
+        {status === "completed" && !(showPreview && artifact.type === "web_preview") &&
           (artifact.content
             ? artifact.content.slice(0, 200) + (artifact.content.length > 200 ? "..." : "")
             : "No content")}

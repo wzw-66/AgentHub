@@ -32,6 +32,7 @@ export interface DiffCardProps {
   diff: string;
   title?: string;
   className?: string;
+  onApply?: (diff: string) => void;
 }
 
 // ─── PreviewCard ───────────────────────────────────────────
@@ -45,4 +46,6 @@ export interface PreviewCardProps {
 export interface ArtifactCardProps {
   artifact: Artifact;
   className?: string;
+  onPreview?: (artifact: Artifact) => void;
+  onFullscreen?: (artifact: Artifact) => void;
 }

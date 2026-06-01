@@ -14,6 +14,7 @@ export type CreateConversationInput = {
 
 export type UpdateConversationInput = {
   title?: string;
+  isPinned?: boolean;
   isArchived?: boolean;
   lastActiveAt?: Date;
   workspacePath?: string | null;

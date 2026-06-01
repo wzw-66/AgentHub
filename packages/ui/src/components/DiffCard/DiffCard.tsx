@@ -18,6 +18,21 @@ const titleBarStyle: CSSProperties = {
   fontWeight: 600,
   fontSize: "var(--ui-font-sm)",
   color: "var(--ui-color-text-primary)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+};
+
+const applyBtnStyle: CSSProperties = {
+  background: "var(--ui-color-primary)",
+  border: "none",
+  borderRadius: "var(--ui-radius-sm)",
+  cursor: "pointer",
+  padding: "2px 10px",
+  fontSize: "var(--ui-font-xs)",
+  color: "#fff",
+  lineHeight: 1.5,
+  fontWeight: 500,
 };
 
 const lineStyle: CSSProperties = {
@@ -54,6 +69,7 @@ export function DiffCard({
   diff,
   title,
   className = "",
+  onApply,
 }: DiffCardProps) {
   const lines = diff.split("\n");
 
@@ -67,7 +83,16 @@ export function DiffCard({
 
   return (
     <div style={cardStyle} className={className} data-testid="diffcard">
-      {title && <div style={titleBarStyle}>{title}</div>}
+      {title && (
+        <div style={titleBarStyle}>
+          <span>{title}</span>
+          {onApply && (
+            <button style={applyBtnStyle} onClick={() => onApply(diff)} data-testid="diff-apply-btn">
+              Apply
+            </button>
+          )}
+        </div>
+      )}
       {lines.map((line, i) => {
         let style: CSSProperties = neutralStyle;
         if (line.startsWith("+") && !line.startsWith("+++")) {
