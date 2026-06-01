@@ -31,6 +31,27 @@ export async function findUserById(
   });
 }
 
+/**
+ * Find a user by either email (exact) or name (exact match).
+ * Name is not unique in the schema, so this returns the first match
+ * when searching by name. Email takes priority in the search.
+ */
+export async function findUserByIdentifier(
+  identifier: string,
+  prisma: PrismaClient = defaultPrisma
+): Promise<User | null> {
+  // Try email first (it's unique)
+  const byEmail = await prisma.user.findUnique({
+    where: { email: identifier },
+  });
+  if (byEmail) return byEmail;
+
+  // Fall back to name (first match)
+  return prisma.user.findFirst({
+    where: { name: identifier },
+  });
+}
+
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createUser(
