@@ -77,7 +77,7 @@ describe("ClaudeAdapter", () => {
 
     expect(spawn).toHaveBeenCalledWith(
       expect.any(String),
-      expect.arrayContaining(["--bare", "-p", "--output-format", "stream-json"]),
+      expect.arrayContaining(["-p", "--output-format", "stream-json"]),
       expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
     );
   });

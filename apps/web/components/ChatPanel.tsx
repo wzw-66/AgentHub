@@ -27,7 +27,7 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, setMessages } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, streamError, setStreamError, setMessages } = useChat();
   const { user } = useAuth();
   const { t } = useI18n();
   const [input, setInput] = useState("");
@@ -105,6 +105,7 @@ export default function ChatPanel({
     const trimmed = input.trim();
     if (!trimmed || !conversationId || sending) return;
     setSending(true);
+    setStreamError(null);
     try {
       await sendMessage(conversationId, trimmed, replyTargetId ?? undefined);
       setInput("");
@@ -519,6 +520,23 @@ export default function ChatPanel({
           </div>
         )}
       </div>
+
+      {/* Error banner */}
+      {streamError && (
+        <div
+          className="mx-4 px-3 py-2 rounded-lg flex items-center gap-2 animate-fade-in-up"
+          style={{
+            backgroundColor: "rgba(255,51,85,0.1)",
+            border: "1px solid rgba(255,51,85,0.3)",
+            color: "var(--theme-danger, #ff3355)",
+          }}
+        >
+          <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span className="font-mono text-xs">{streamError}</span>
+        </div>
+      )}
 
       {/* Typing Indicator */}
       <TypingIndicator />

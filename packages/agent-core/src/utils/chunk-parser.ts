@@ -49,6 +49,15 @@ interface ClaudeStreamEvent {
   };
   session_id?: string;
   usage?: Record<string, unknown>;
+  // v2.1+ format: top-level assistant messages with content blocks
+  message?: {
+    content?: Array<{
+      type: string;
+      text?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    }>;
+  };
 }
 
 /**
@@ -72,6 +81,10 @@ export function createClaudeStreamState(): ClaudeStreamState {
  * via `createClaudeStreamState()` and reuse it across all lines of the stream.
  *
  * Returns a Chunk or null if the line is not a content-bearing event.
+ *
+ * Supports two output formats:
+ * - Old format: stream_event with content_block_delta / text_delta
+ * - New format (v2.1+): top-level assistant messages with content blocks
  */
 export function parseClaudeStreamJson(line: string, state?: ClaudeStreamState): Chunk | null {
   if (!line.trim()) return null;
@@ -135,12 +148,22 @@ export function parseClaudeStreamJson(line: string, state?: ClaudeStreamState): 
     return null;
   }
 
-  // ── message_delta (informational, e.g. stop_reason) ───────────────
+  // ── assistant message (v2.1+) ──────────────────────────────────
+  if (parsed.type === "assistant" && parsed.message?.content) {
+    for (const block of parsed.message.content) {
+      if (block.type === "text" && block.text) {
+        return createChunk(ChunkType.Text, block.text);
+      }
+      // Tool calls will be yielded in subsequent assistant messages
+    }
+  }
+
+  // ── message_delta (informational) ───────────────────────────────
   if (parsed.type === "message_delta") {
     return null;
   }
 
-  // ── result event → done chunk with usage metadata ─────────────────
+  // ── result event → done chunk with usage metadata ──────────────
   if (parsed.type === "result") {
     return createChunk(ChunkType.Done, "", {
       usage: parsed.usage,
@@ -166,6 +189,17 @@ interface OpenCodeEvent {
   reason?: string;
   timestamp?: number;
   sessionID?: string;
+  part?: {
+    type?: string;
+    text?: string;
+    id?: string;
+  };
+  error?: {
+    name?: string;
+    data?: {
+      message?: string;
+    };
+  };
 }
 
 /**
@@ -187,6 +221,9 @@ export function parseOpenCodeEvent(line: string): Chunk | null {
       if (parsed.content !== undefined) {
         return createChunk(ChunkType.Text, parsed.content);
       }
+      if (parsed.part?.text !== undefined) {
+        return createChunk(ChunkType.Text, parsed.part.text);
+      }
       return null;
 
     case "tool_use":
@@ -199,7 +236,9 @@ export function parseOpenCodeEvent(line: string): Chunk | null {
     case "error":
       return createChunk(
         ChunkType.Error,
-        parsed.message ?? "Unknown opencode error",
+        parsed.message
+          ?? parsed.error?.data?.message
+          ?? "Unknown opencode error",
       );
 
     case "step_finish":

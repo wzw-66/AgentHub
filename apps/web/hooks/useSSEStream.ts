@@ -11,7 +11,7 @@ export function useSSEStream(conversationId: string | null) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
   const maxRetries = 5;
-  const { setTypingAgent, appendMessageChunk, finalizeMessage, replaceMessage } = useChat();
+  const { setTypingAgent, appendMessageChunk, finalizeMessage, replaceMessage, setStreamError } = useChat();
 
   // ─── Chunk event handler ──────────────────────────────────────────
   const handleChunk = useCallback(
@@ -62,10 +62,11 @@ export function useSSEStream(conversationId: string | null) {
         code?: string;
       };
       console.error("SSE error:", data.message ?? "Unknown error");
+      setStreamError(data.message ?? "Unknown error");
     } catch {
       // Ignore malformed messages
     }
-  }, []);
+  }, [setStreamError]);
 
   // ─── Replace event handler (regeneration) ─────────────────────────
   const handleReplace = useCallback(
@@ -107,6 +108,7 @@ export function useSSEStream(conversationId: string | null) {
       es.onopen = () => {
         setStatus("connected");
         retryCountRef.current = 0;
+        setStreamError(null);
       };
 
       // Register named event listeners matching server-side events

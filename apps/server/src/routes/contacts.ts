@@ -7,10 +7,19 @@ import {
   deleteContact as dbDeleteContact,
   findUserById,
 } from "@agenthub/db";
-import type { AgentProvider } from "@agenthub/shared";
+import type { AgentProvider, HealthStatus } from "@agenthub/shared";
+import { createAdapter } from "@agenthub/agent-core";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { SERVER_ROOT } from "../config/env.js";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Providers that depend on a local CLI binary. */
+const CLI_PROVIDERS = new Set(["Claude", "OpenCode"]);
+
+/** Timeout for CLI health check (ms). */
+const CLI_HEALTH_CHECK_TIMEOUT_MS = 10_000;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +76,42 @@ function validateUpdateContact(body: unknown): body is UpdateContactBody {
   return true; // partial updates handled by Prisma
 }
 
+// ─── CLI Health Check ─────────────────────────────────────────────────────────
+
+/**
+ * Check if the CLI for a given provider is available.
+ * Returns null if the provider doesn't require a CLI (e.g. Custom).
+ */
+async function checkCLIHealth(provider: string): Promise<{
+  available: boolean;
+  status?: string;
+  message?: string;
+} | null> {
+  if (!CLI_PROVIDERS.has(provider)) return null;
+
+  try {
+    const adapter = createAdapter(provider, {});
+    const result = await Promise.race([
+      adapter.healthCheck(),
+      new Promise<HealthStatus>((_, reject) =>
+        setTimeout(() => reject(new Error("Health check timed out")), CLI_HEALTH_CHECK_TIMEOUT_MS),
+      ),
+    ]);
+
+    return {
+      available: result.status === "healthy",
+      status: result.status,
+      message: result.message,
+    };
+  } catch (err) {
+    return {
+      available: false,
+      status: "unhealthy",
+      message: err instanceof Error ? err.message : "Health check failed",
+    };
+  }
+}
+
 // ─── Route handlers ─────────────────────────────────────────────────────────
 
 async function handleList(
@@ -99,6 +144,15 @@ async function handleCreate(
   const safeName = body.name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
   const workspacePath = `agent-workspace/${safeEmail}/${safeName}`;
 
+  // Check CLI availability for Claude/OpenCode providers
+  const cliHealth = await checkCLIHealth(body.provider);
+  if (cliHealth && !cliHealth.available) {
+    request.server.log.warn(
+      { provider: body.provider, name: body.name, message: cliHealth.message },
+      "CLI not available for agent",
+    );
+  }
+
   // Create workspace directory
   try {
     await mkdir(resolve(SERVER_ROOT, workspacePath), { recursive: true });
@@ -121,7 +175,10 @@ async function handleCreate(
     config: (body.config ?? undefined) as any,
   });
 
-  return reply.status(201).send(contact);
+  return reply.status(201).send({
+    ...contact,
+    ...(cliHealth ? { cliCheck: cliHealth } : {}),
+  });
 }
 
 async function handleDetail(

@@ -391,6 +391,9 @@ async function runOrchestration(
 
 // ─── Agent execution ─────────────────────────────────────────────────────────
 
+/** Default timeout for agent execution: 5 minutes */
+const AGENT_EXECUTION_TIMEOUT_MS = 300_000;
+
 async function runAgentExecution(
   conversationId: string,
   content: string,
@@ -421,7 +424,15 @@ async function runAgentExecution(
         : undefined;
 
     try {
-      const adapter = createAdapter(agent.provider, { cwd });
+      const adapter = createAdapter(agent.provider, {
+        cwd,
+        timeout: AGENT_EXECUTION_TIMEOUT_MS,
+        ...(agent.model ? { model: agent.model } : {}),
+      });
+
+      // Register so the adapter can be aborted if SSE disconnects
+      cm.registerAdapter(conversationId, adapter);
+
       const context = {
         conversationId,
         message: content,
@@ -469,6 +480,8 @@ async function runAgentExecution(
         message: err instanceof Error ? err.message : "Agent execution failed",
         code: "ADAPTER_ERROR",
       });
+    } finally {
+      cm.removeAdapter(conversationId);
     }
   }
   // Group-type conversations use the orchestrator path (handled in handleCreate)
