@@ -102,3 +102,13 @@ export async function deleteMessage(
 ): Promise<Message> {
   return prisma.message.delete({ where: { id } });
 }
+
+export async function listPinnedMessages(
+  conversationId: string,
+  prisma: PrismaClient = defaultPrisma
+): Promise<Message[]> {
+  return prisma.message.findMany({
+    where: { conversationId, isPinned: true },
+    orderBy: { createdAt: "desc" },
+  });
+}

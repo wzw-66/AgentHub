@@ -1,12 +1,13 @@
 import type { Conversation, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "../client";
 import type { PrismaClient } from "@prisma/client";
+import { ConversationType } from "@agenthub/shared";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type CreateConversationInput = {
   title: string;
-  type: "single" | "group";
+  type: ConversationType;
   ownerId: string;
   contactIds?: string[];
   workspacePath?: string | null;
@@ -14,6 +15,7 @@ export type CreateConversationInput = {
 
 export type UpdateConversationInput = {
   title?: string;
+  isPinned?: boolean;
   isArchived?: boolean;
   lastActiveAt?: Date;
   workspacePath?: string | null;
@@ -83,7 +85,7 @@ export async function findSingleConversationByAgentId(
   const conversations = await prisma.conversation.findMany({
     where: {
       ownerId: userId,
-      type: "single",
+      type: ConversationType.Single,
       contactIds: { has: agentId },
       isArchived: false,
     },

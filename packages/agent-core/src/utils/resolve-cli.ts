@@ -35,7 +35,14 @@ export function resolveCommand(name: string): ResolvedCommand {
   }
 
   if (entry.endsWith(".js")) {
-    return { command: process.execPath, prefixArgs: [entry] };
+    // Use process.execPath if it exists, otherwise resolve "node" from PATH
+    try {
+      accessSync(process.execPath);
+      return { command: process.execPath, prefixArgs: [entry] };
+    } catch {
+      const nodeEntry = resolveNodeFromPath();
+      return { command: nodeEntry.command, prefixArgs: [...nodeEntry.prefixArgs, entry] };
+    }
   }
 
   return { command: entry, prefixArgs: [] };
@@ -96,4 +103,46 @@ function parseEntryPoint(cmdPath: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Resolve the `node` executable from PATH on Windows.
+ * Tries node.exe directly, then falls back to parsing node.cmd.
+ */
+function resolveNodeFromPath(): ResolvedCommand {
+  // Try node.exe directly
+  const pathDirs = (process.env.PATH || "").split(";");
+  for (const dir of pathDirs) {
+    const exePath = join(dir, "node.exe");
+    try {
+      accessSync(exePath);
+      return { command: exePath, prefixArgs: [] };
+    } catch {
+      // continue
+    }
+  }
+  // Fall back to node.cmd parsing
+  for (const dir of pathDirs) {
+    const cmdPath = join(dir, "node.cmd");
+    try {
+      accessSync(cmdPath);
+      const entry = parseEntryPoint(cmdPath);
+      if (entry) {
+        if (entry.endsWith(".js")) {
+          // Recursive case: node.cmd wraps a .js shim — use process.execPath
+          try {
+            accessSync(process.execPath);
+          } catch {
+            // Last resort: hardcoded fallback won't help here
+          }
+          return { command: process.execPath, prefixArgs: [entry] };
+        }
+        return { command: entry, prefixArgs: [] };
+      }
+    } catch {
+      // continue
+    }
+  }
+  // Last resort
+  return { command: "node", prefixArgs: [] };
 }

@@ -104,6 +104,7 @@ model Conversation {
   ownerId      String
   contactIds   String[]
   workspacePath String?
+  isPinned     Boolean          @default(false)
   isArchived   Boolean          @default(false)
   lastActiveAt DateTime         @default(now())
   createdAt    DateTime         @default(now())

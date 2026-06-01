@@ -46,7 +46,15 @@ export class OpenCodeAdapter implements AgentAdapter {
     const args: string[] = ["run", "--format", "json"];
 
     if (model) {
-      args.push("-m", model);
+      // Windows workaround: OpenCode has a bug where -m appends "/." to model names
+      if (process.platform === "win32") {
+        console.warn(
+          `[OpenCodeAdapter] Skipping model flag on Windows (known bug: -m appends "/."). ` +
+            `Falling back to default model. Configured model: ${model}`,
+        );
+      } else {
+        args.push("-m", model);
+      }
     }
 
     args.push(prompt);
@@ -60,6 +68,10 @@ export class OpenCodeAdapter implements AgentAdapter {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: this.config.cwd,
     });
+
+    // Close stdin immediately — the prompt is passed as an argument, not via stdin.
+    // Leaving stdin open can cause the process to hang on Windows.
+    this.process.stdin?.end();
 
     // Register close handler immediately
     const exitCodePromise = new Promise<number>((resolve) => {

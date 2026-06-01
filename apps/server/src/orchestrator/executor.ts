@@ -1,7 +1,7 @@
 import type { Agent, AgentContext, Chunk } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createAdapter } from "@agenthub/agent-core";
-import { getConversation } from "@agenthub/db";
+import { getConversation, listPinnedMessages } from "@agenthub/db";
 import type { SubTask, SubTaskResult } from "./types.js";
 import { resolve } from "node:path";
 import { WORKSPACE_ROOT } from "../config/env.js";
@@ -36,7 +36,7 @@ export class SubTaskExecutor {
 
       try {
         adapter = this.createAdapterForAgent(agent, cwd);
-        const context = this.buildContext(subtask);
+        const context = await this.buildContext(subtask);
 
         let fullContent = "";
         let tokenUsage: { input: number; output: number } | undefined;
@@ -101,7 +101,19 @@ export class SubTaskExecutor {
   /**
    * Build an AgentContext from the sub-task for adapter execution.
    */
-  private buildContext(subtask: SubTask): AgentContext {
+  private async buildContext(subtask: SubTask): Promise<AgentContext> {
+    // Inject pinned messages as system context
+    let pinnedContext: string | undefined;
+    try {
+      const pinnedMessages = await listPinnedMessages(subtask.conversationId);
+      if (pinnedMessages.length > 0) {
+        pinnedContext = pinnedMessages
+          .map((m: { content: string }) => `[Pinned Context]: ${m.content}`)
+          .join("\n");
+      }
+    } catch {
+      // Ignore errors loading pinned messages
+    }
     return {
       conversationId: subtask.conversationId,
       message: subtask.instruction,
@@ -116,6 +128,7 @@ export class SubTaskExecutor {
         updatedAt: new Date().toISOString(),
       })) as AgentContext["history"],
       agents: [],
+      ...(pinnedContext ? { systemPrompt: pinnedContext } : {}),
     };
   }
 

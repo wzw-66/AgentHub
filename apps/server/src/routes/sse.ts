@@ -52,6 +52,7 @@ async function handleSSEStream(
 
   request.raw.on("close", () => {
     cm.removeSSEConnection(conversationId, reply);
+    cm.abortAdapters(conversationId);
   });
 }
 

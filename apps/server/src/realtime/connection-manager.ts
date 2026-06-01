@@ -1,5 +1,6 @@
 import type { FastifyReply } from "fastify";
 import type { WebSocket } from "@fastify/websocket";
+import type { AgentAdapter } from "@agenthub/shared";
 import { formatWSMessage } from "./types";
 
 /**
@@ -101,5 +102,32 @@ export class ConnectionManager {
   hasSSEConnections(conversationId: string): boolean {
     const connections = this.sseConnections.get(conversationId);
     return connections !== undefined && connections.size > 0;
+  }
+
+  // ─── Active adapter tracking ─────────────────────────────────────────
+
+  private activeAdapters = new Map<string, AgentAdapter>();
+
+  /** Register an active adapter for abort-on-disconnect. */
+  registerAdapter(conversationId: string, adapter: AgentAdapter): void {
+    this.activeAdapters.set(conversationId, adapter);
+  }
+
+  /** Abort and clean up all adapters for a conversation. */
+  abortAdapters(conversationId: string): void {
+    const adapter = this.activeAdapters.get(conversationId);
+    if (adapter) {
+      try {
+        adapter.abort();
+      } catch {
+        // Adapter may already be done
+      }
+      this.activeAdapters.delete(conversationId);
+    }
+  }
+
+  /** Remove an adapter when it completes normally. */
+  removeAdapter(conversationId: string): void {
+    this.activeAdapters.delete(conversationId);
   }
 }

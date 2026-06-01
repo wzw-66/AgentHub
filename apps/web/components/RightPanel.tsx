@@ -5,6 +5,7 @@ import AgentDetailContent from "./AgentDetailContent";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRipple } from "@/hooks/useRipple";
+import type { Artifact } from "@agenthub/shared";
 
 interface RightPanelProps {
   content: { type: "artifact" | "agent"; id: string } | null;
@@ -45,6 +46,7 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
   const { t } = useI18n();
   const { addRipple, renderRipples } = useRipple();
   const [agent, setAgent] = useState<AgentData | null>(null);
+  const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [isContact, setIsContact] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -59,8 +61,15 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
         })
         .catch(() => setAgent(null))
         .finally(() => setIsLoading(false));
+    } else if (content?.type === "artifact") {
+      setIsLoading(true);
+      api.get<Artifact>(`/api/artifacts/${content.id}/detail`)
+        .then((data) => setArtifact(data))
+        .catch(() => setArtifact(null))
+        .finally(() => setIsLoading(false));
     } else {
       setAgent(null);
+      setArtifact(null);
     }
   }, [content]);
 
@@ -85,11 +94,93 @@ export default function RightPanel({ content, onClose }: RightPanelProps) {
 
       {/* Content */}
       {content.type === "artifact" ? (
-        <div className="flex flex-1 items-center justify-center p-4">
-          <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-            {t("rightPanel").selectArtifact}
-          </p>
-        </div>
+        isLoading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              {t("common").loading}
+            </span>
+          </div>
+        ) : !artifact ? (
+          <div className="flex flex-1 items-center justify-center p-4">
+            <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              {t("rightPanel").selectArtifact}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col overflow-y-auto">
+            {/* Artifact header */}
+            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--theme-border)" }}>
+              <div className="font-mono text-xs font-bold tracking-wider" style={{ color: "var(--theme-text-primary)" }}>
+                {artifact.title}
+              </div>
+              <div className="mt-1 font-mono text-[10px] tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                {artifact.type}
+              </div>
+            </div>
+            {/* Artifact body */}
+            <div className="flex-1 p-4">
+              {artifact.type === "web_preview" && artifact.content && (
+                <iframe
+                  src={artifact.content}
+                  title={artifact.title}
+                  className="w-full rounded"
+                  style={{ height: "calc(100vh - 200px)", border: "1px solid var(--theme-border)" }}
+                />
+              )}
+              {artifact.type === "code" && artifact.content && (
+                <pre
+                  className="overflow-auto rounded p-4"
+                  style={{
+                    backgroundColor: "var(--theme-bg-code)",
+                    border: "1px solid var(--theme-border)",
+                    fontSize: "var(--ui-font-sm)",
+                    lineHeight: 1.6,
+                    maxHeight: "calc(100vh - 200px)",
+                  }}
+                >
+                  <code>{artifact.content}</code>
+                </pre>
+              )}
+              {artifact.type === "diff" && artifact.content && (
+                <pre
+                  className="overflow-auto rounded p-4"
+                  style={{
+                    backgroundColor: "var(--theme-bg-code)",
+                    border: "1px solid var(--theme-border)",
+                    fontSize: "var(--ui-font-sm)",
+                    lineHeight: 1.6,
+                    maxHeight: "calc(100vh - 200px)",
+                  }}
+                >
+                  <code>{artifact.content}</code>
+                </pre>
+              )}
+              {artifact.type === "document" && artifact.content && (
+                <div
+                  className="rounded p-4"
+                  style={{
+                    backgroundColor: "var(--theme-bg-card)",
+                    border: "1px solid var(--theme-border)",
+                    fontSize: "var(--ui-font-sm)",
+                    lineHeight: 1.8,
+                    whiteSpace: "pre-wrap",
+                    maxHeight: "calc(100vh - 200px)",
+                    overflowY: "auto",
+                  }}
+                >
+                  {artifact.content}
+                </div>
+              )}
+              {!artifact.content && (
+                <div className="flex items-center justify-center h-full">
+                  <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                    {t("rightPanel").selectArtifact}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )
       ) : isLoading ? (
         <div className="flex flex-1 items-center justify-center">
           <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>

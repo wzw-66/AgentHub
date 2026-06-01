@@ -11,7 +11,7 @@ export function useSSEStream(conversationId: string | null) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
   const maxRetries = 5;
-  const { setTypingAgent, appendMessageChunk, finalizeMessage } = useChat();
+  const { setTypingAgent, appendMessageChunk, finalizeMessage, replaceMessage, setStreamError } = useChat();
 
   // ─── Chunk event handler ──────────────────────────────────────────
   const handleChunk = useCallback(
@@ -62,10 +62,32 @@ export function useSSEStream(conversationId: string | null) {
         code?: string;
       };
       console.error("SSE error:", data.message ?? "Unknown error");
+      setStreamError(data.message ?? "Unknown error");
     } catch {
       // Ignore malformed messages
     }
-  }, []);
+  }, [setStreamError]);
+
+  // ─── Replace event handler (regeneration) ─────────────────────────
+  const handleReplace = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data) as {
+          messageId: string;
+          content: string;
+          agentId?: string;
+        };
+        replaceMessage(data.messageId, data.content);
+        if (data.agentId) {
+          setTypingAgent(data.agentId, false);
+        }
+        finalizeMessage(undefined, undefined);
+      } catch {
+        // Ignore malformed messages
+      }
+    },
+    [replaceMessage, setTypingAgent, finalizeMessage],
+  );
 
   // ─── Connect ────────────────────────────────────────────────────
   const connect = useCallback(
@@ -86,11 +108,13 @@ export function useSSEStream(conversationId: string | null) {
       es.onopen = () => {
         setStatus("connected");
         retryCountRef.current = 0;
+        setStreamError(null);
       };
 
       // Register named event listeners matching server-side events
       es.addEventListener("chunk", handleChunk as EventListener);
       es.addEventListener("done", handleDone as EventListener);
+      es.addEventListener("replace", handleReplace as EventListener);
       es.addEventListener("error", handleErrorEvent as EventListener);
 
       es.onerror = () => {

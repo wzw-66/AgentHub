@@ -40,6 +40,7 @@ interface ChatContextValue {
   activeConversationId: string | null;
   messages: Message[];
   streamingMessage: StreamingMessage | null;
+  streamError: string | null;
   contacts: ContactInfo[];
   typingAgents: Map<string, boolean>;
   isLoadingConversations: boolean;
@@ -49,6 +50,9 @@ interface ChatContextValue {
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: string, cursor?: string) => Promise<Message[]>;
   sendMessage: (conversationId: string, content: string, parentId?: string) => Promise<Message>;
+  replaceMessage: (messageId: string, content: string) => void;
+  togglePinConversation: (conversationId: string, isPinned: boolean) => Promise<void>;
+  toggleArchiveConversation: (conversationId: string, isArchived: boolean) => Promise<void>;
   createConversation: (
     title: string,
     type: "single" | "group",
@@ -57,6 +61,7 @@ interface ChatContextValue {
   setTypingAgent: (agentId: string, isTyping: boolean) => void;
   appendMessageChunk: (chunkText: string, agentId?: string) => void;
   finalizeMessage: (messageId?: string, agentId?: string) => void;
+  setStreamError: (error: string | null) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
 }
 
@@ -83,6 +88,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ─── Streaming message state ─────────────────────────────────────
   const [streamingMessage, setStreamingMessage] =
     useState<StreamingMessage | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const streamIdRef = useRef(0);
 
   const fetchConversations = useCallback(async () => {
@@ -118,13 +124,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback(
     async (conversationId: string, content: string, parentId?: string): Promise<Message> => {
-      const body: Record<string, unknown> = { content };
-      if (parentId) {
-        body.parentId = parentId;
-      }
       const message = await api.post<Message>(
         `/api/conversations/${conversationId}/messages/create`,
-        body,
+        { content, parentId },
       );
       setMessages((prev) => [...prev, message]);
       return message;
@@ -221,6 +223,43 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setTypingAgents(new Map());
   }, []);
 
+  const replaceMessage = useCallback(
+    (messageId: string, content: string) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, content } : m)),
+      );
+    },
+    [],
+  );
+
+  const togglePinConversation = useCallback(
+    async (conversationId: string, isPinned: boolean) => {
+      await api.patch(`/api/conversations/${conversationId}/update`, {
+        isPinned: !isPinned,
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, isPinned: !isPinned } : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  const toggleArchiveConversation = useCallback(
+    async (conversationId: string, isArchived: boolean) => {
+      await api.patch(`/api/conversations/${conversationId}/update`, {
+        isArchived: !isArchived,
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, isArchived: !isArchived } : c,
+        ),
+      );
+    },
+    [],
+  );
+
   // ─── Load contacts (agents) on mount (only if authenticated) ────
   useEffect(() => {
     async function loadContacts() {
@@ -264,6 +303,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeConversationId,
         messages,
         streamingMessage,
+        streamError,
         contacts,
         typingAgents,
         isLoadingConversations,
@@ -277,6 +317,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setTypingAgent,
         appendMessageChunk,
         finalizeMessage,
+        replaceMessage,        togglePinConversation,        toggleArchiveConversation,        setStreamError,
         setMessages,
       }}
     >

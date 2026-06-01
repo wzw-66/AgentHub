@@ -27,7 +27,7 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, setMessages } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, streamError, setStreamError, setMessages } = useChat();
   const { user } = useAuth();
   const { t } = useI18n();
   const [input, setInput] = useState("");
@@ -40,17 +40,17 @@ export default function ChatPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const { addRipple, renderRipples } = useRipple();
 
-  // ─── Message reply state ────────────────────────────────────────
-  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
-  const replyTargetMessage = replyTargetId
-    ? messages.find((m) => m.id === replyTargetId) ?? null
-    : null;
-
   // ─── Message edit / delete state ─────────────────────────────────
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+
+  // ─── Reply state ────────────────────────────────────────────────
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const replyTargetMessage = replyTargetId
+    ? messages.find((m) => m.id === replyTargetId) ?? null
+    : null;
 
   const activeConversation = (conversations || []).find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
@@ -105,6 +105,7 @@ export default function ChatPanel({
     const trimmed = input.trim();
     if (!trimmed || !conversationId || sending) return;
     setSending(true);
+    setStreamError(null);
     try {
       await sendMessage(conversationId, trimmed, replyTargetId ?? undefined);
       setInput("");
@@ -282,108 +283,179 @@ export default function ChatPanel({
               return (
                 <div
                   key={msg.id}
-                  className="relative animate-fade-in-up message-bubble group"
+                  className="animate-fade-in-up"
                   style={{
                     alignSelf: variant === "user" ? "flex-end" : variant === "system" ? "center" : "flex-start",
                     animationDelay: `${Math.min(idx * 15, 200)}ms`,
                   }}
-                  onMouseEnter={() => setHoveredMsgId(msg.id)}
-                  onMouseLeave={() => setHoveredMsgId(null)}
                 >
-                  <MessageBubble message={msg} variant={variant} parentMessage={parentMessage}>
+                  {/* Flex row: message + side buttons */}
+                  <div
+                    className="flex items-start"
+                    style={{
+                      flexDirection: variant === "user" ? "row-reverse" : "row",
+                    }}
+                    onMouseEnter={() => setHoveredMsgId(msg.id)}
+                    onMouseLeave={() => setHoveredMsgId(null)}
+                  >
+                    {/* Message bubble */}
+                    <div className="min-w-0 message-bubble group">
+                      <MessageBubble message={msg} variant={variant} parentMessage={parentMessage}>
+                        {variant !== "system" && (
+                          <div
+                            className="font-mono text-xs mb-1"
+                            style={{ color: "var(--theme-text-muted)", opacity: 0.8 }}
+                          >
+                            {variant === "user"
+                              ? user?.username ?? t("chat").you
+                              : contacts?.find((c) => c.id === msg.senderId)?.name ?? msg.senderId
+                            }
+                          </div>
+                        )}
+                        {isEditing ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              ref={editTextareaRef}
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value)}
+                              className="w-full resize-none rounded border bg-transparent px-2 py-1 font-mono text-sm outline-none"
+                              style={{ borderColor: "var(--theme-accent)", color: "var(--theme-text-primary)" }}
+                              rows={3}
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={handleCancelEdit}
+                                className="rounded px-2 py-1 font-mono text-xs"
+                                style={{ color: "var(--theme-text-muted)" }}
+                              >
+                                {t("common").cancel}
+                              </button>
+                              <button
+                                onClick={handleSaveEdit}
+                                disabled={!editContent.trim()}
+                                className="rounded px-2 py-1 font-mono text-xs font-bold disabled:opacity-50"
+                                style={{
+                                  color: "var(--theme-accent)",
+                                  backgroundColor: "var(--theme-accent-dim)",
+                                }}
+                              >
+                                {t("common").save}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <MessageContent message={msg} />
+                        )}
+                      </MessageBubble>
+                    </div>
+
+                    {/* Side buttons — 3px hover bridge when hidden */}
                     {variant !== "system" && (
                       <div
-                        className="font-mono text-xs mb-1"
-                        style={{ color: "var(--theme-text-muted)", opacity: 0.8 }}
+                        style={{
+                          width: hoveredMsgId === msg.id && !isEditing ? "auto" : "0px",
+                          minWidth: "3px",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                          opacity: hoveredMsgId === msg.id && !isEditing ? 1 : 0,
+                          pointerEvents: hoveredMsgId === msg.id && !isEditing ? "auto" : "none",
+                          transition: "opacity 0.15s",
+                          ...(hoveredMsgId === msg.id && !isEditing
+                            ? variant === "user"
+                              ? { paddingRight: "8px" }
+                              : { marginLeft: "-12px" }
+                            : {}
+                          ),
+                        }}
                       >
-                        {variant === "user"
-                          ? user?.username ?? t("chat").you
-                          : contacts?.find((c) => c.id === msg.senderId)?.name ?? msg.senderId
-                        }
-                      </div>
-                    )}
-                    {isEditing ? (
-                      <div className="flex flex-col gap-2">
-                        <textarea
-                          ref={editTextareaRef}
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="w-full resize-none rounded border bg-transparent px-2 py-1 font-mono text-sm outline-none"
-                          style={{ borderColor: "var(--theme-accent)", color: "var(--theme-text-primary)" }}
-                          rows={3}
-                        />
-                        <div className="flex gap-2 justify-end">
+                        <div className="flex gap-1" style={{ paddingTop: "2px" }}>
                           <button
-                            onClick={handleCancelEdit}
-                            className="rounded px-2 py-1 font-mono text-xs"
+                            onClick={() => setReplyTargetId(msg.id)}
+                            className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
                             style={{ color: "var(--theme-text-muted)" }}
+                            title="Reply"
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
                           >
-                            {t("common").cancel}
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
                           </button>
                           <button
-                            onClick={handleSaveEdit}
-                            disabled={!editContent.trim()}
-                            className="rounded px-2 py-1 font-mono text-xs font-bold disabled:opacity-50"
-                            style={{
-                              color: "var(--theme-accent)",
-                              backgroundColor: "var(--theme-accent-dim)",
+                            onClick={async () => {
+                              try {
+                                await api.post(`/api/conversations/${conversationId}/messages/${msg.id}/pin`);
+                                setMessages((prev) =>
+                                  prev.map((m) =>
+                                    m.id === msg.id ? { ...m, isPinned: !(m as any).isPinned } : m
+                                  ),
+                                );
+                              } catch { /* silent */ }
                             }}
+                            className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                            style={{ color: (msg as any).isPinned ? "var(--theme-accent)" : "var(--theme-text-muted)" }}
+                            title={(msg as any).isPinned ? "Unpin" : "Pin"}
+                            onMouseEnter={(e) => { if (!(msg as any).isPinned) { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; } }}
+                            onMouseLeave={(e) => { if (!(msg as any).isPinned) { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; } }}
                           >
-                            {t("common").save}
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v18M5 3h14l-5 7 5 7H5" />
+                            </svg>
                           </button>
+                          {isLastUserMsg && (
+                            <>
+                              <button
+                                onClick={() => startEditing(msg)}
+                                className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                                style={{ color: "var(--theme-text-muted)" }}
+                                title={t("common").edit}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => setShowDeleteConfirm(msg.id)}
+                                className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
+                                style={{ color: "var(--theme-text-muted)" }}
+                                title={t("common").delete}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-danger)"; e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.1)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
-                    ) : (
-                      <MessageContent message={msg} />
                     )}
-                  </MessageBubble>
+                  </div>
 
-                  {/* Hover actions: reply on all messages, edit/delete on last user message */}
-                  {hoveredMsgId === msg.id && !isEditing && (
-                    <div
-                      className="absolute right-0 top-0 flex gap-1"
-                      style={{ transform: "translateX(calc(100% + 8px))" }}
-                    >
-                      {variant !== "system" && (
-                        <button
-                          onClick={() => setReplyTargetId(msg.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
-                          style={{ color: "var(--theme-text-muted)" }}
-                          title="Reply"
-                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
-                        >
-                          ↩
-                        </button>
-                      )}
-                      {isLastUserMsg && (
-                        <button
-                          onClick={() => startEditing(msg)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
-                          style={{ color: "var(--theme-text-muted)" }}
-                          title={t("common").edit}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      )}
-                      {isLastUserMsg && (
-                        <button
-                          onClick={() => setShowDeleteConfirm(msg.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-xs transition-colors"
-                          style={{ color: "var(--theme-text-muted)" }}
-                          title={t("common").delete}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-danger)"; e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.1)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
+                  {/* Regenerate button below AI messages */}
+                  {variant === "contact" && !streamingMessage && (
+                    <div className="flex items-center gap-2 mt-1" style={{ marginLeft: 4 }}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.post(
+                              `/api/conversations/${conversationId}/messages/${msg.id}/regenerate`
+                            );
+                          } catch { /* silent */ }
+                        }}
+                        className="flex items-center gap-1 rounded px-2 py-1 font-mono text-xs transition-colors"
+                        style={{ color: "var(--theme-text-muted)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {t("chat").regenerate ?? "Regenerate"}
+                      </button>
                     </div>
                   )}
 
@@ -449,6 +521,23 @@ export default function ChatPanel({
         )}
       </div>
 
+      {/* Error banner */}
+      {streamError && (
+        <div
+          className="mx-4 px-3 py-2 rounded-lg flex items-center gap-2 animate-fade-in-up"
+          style={{
+            backgroundColor: "rgba(255,51,85,0.1)",
+            border: "1px solid rgba(255,51,85,0.3)",
+            color: "var(--theme-danger, #ff3355)",
+          }}
+        >
+          <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span className="font-mono text-xs">{streamError}</span>
+        </div>
+      )}
+
       {/* Typing Indicator */}
       <TypingIndicator />
 
@@ -457,37 +546,36 @@ export default function ChatPanel({
         className="px-4 py-3"
         style={{ borderTop: "1px solid var(--theme-border)" }}
       >
-        {/* Quote bar: shown when replying to a message */}
+        {/* Reply quote bar */}
         {replyTargetMessage && (
           <div
-            className="mb-2 flex items-start gap-2 rounded px-3 py-2"
+            className="flex items-center gap-2 px-3 py-2 mb-2"
             style={{
               borderLeft: "3px solid var(--theme-accent)",
               backgroundColor: "var(--theme-accent-dim)",
+              borderRadius: "0 8px 8px 0",
             }}
           >
-            <div className="min-w-0 flex-1">
-              <span className="font-mono text-xs font-semibold" style={{ color: "var(--theme-accent)" }}>
-                {t("chat").replyingTo} {contacts?.find((c) => c.id === replyTargetMessage.senderId)?.name ?? replyTargetMessage.senderId}
-              </span>
-              <p
-                className="mt-0.5 truncate font-mono text-xs"
-                style={{ color: "var(--theme-text-muted)" }}
-              >
-                {replyTargetMessage.content}
-              </p>
+            <div className="flex-1 min-w-0">
+              <div className="font-mono text-xs font-bold" style={{ color: "var(--theme-accent)" }}>
+                {t("chat").replyingTo} {replyTargetMessage.senderId}
+              </div>
+              <div className="font-mono text-xs truncate" style={{ color: "var(--theme-text-muted)" }}>
+                {replyTargetMessage.content.slice(0, 120)}
+              </div>
             </div>
             <button
               onClick={() => setReplyTargetId(null)}
-              className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-xs transition-colors"
+              className="flex-shrink-0 rounded p-1"
               style={{ color: "var(--theme-text-muted)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; }}
             >
-              ✕
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         )}
+
         <div className="relative flex items-end gap-2">
           <div
             className="flex items-center font-mono text-sm font-bold tracking-wider flex-shrink-0 mb-2"
