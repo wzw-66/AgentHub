@@ -15,6 +15,7 @@ interface AgentData {
   model?: string | null;
   avatarUrl?: string;
   systemPrompt?: string | null;
+  config?: Record<string, unknown> | null;
 }
 
 async function checkIsContact(contactId: string): Promise<boolean> {

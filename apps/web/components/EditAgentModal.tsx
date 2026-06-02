@@ -12,6 +12,7 @@ interface EditAgentModalProps {
     provider: string;
     model?: string | null;
     systemPrompt?: string | null;
+    config?: Record<string, unknown> | null;
   };
   onClose: () => void;
   onSaved: () => void;
@@ -21,10 +22,24 @@ export default function EditAgentModal({ agent, onClose, onSaved }: EditAgentMod
   const { t } = useI18n();
   const [name, setName] = useState(agent.name);
   const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt ?? "");
+  const [model, setModel] = useState(agent.model ?? "");
+  const [apiUrl, setApiUrl] = useState(
+    typeof agent.config?.apiUrl === "string" ? agent.config.apiUrl
+    : typeof agent.config?.apiEndpoint === "string" ? agent.config.apiEndpoint
+    : ""
+  );
+  const [apiKey, setApiKey] = useState(
+    typeof agent.config?.apiKey === "string" ? agent.config.apiKey : ""
+  );
+  const [customProviderName, setCustomProviderName] = useState(
+    typeof agent.config?.providerName === "string" ? agent.config.providerName : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const { addRipple, renderRipples } = useRipple();
+
+  const isCustom = agent.provider === "Custom";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,10 +53,21 @@ export default function EditAgentModal({ agent, onClose, onSaved }: EditAgentMod
 
     setIsSubmitting(true);
     try {
-      await api.patch(`/api/contacts/${agent.id}/update`, {
+      const body: Record<string, unknown> = {
         name: name.trim(),
         systemPrompt: systemPrompt.trim() || null,
-      });
+      };
+
+      if (isCustom) {
+        body.model = model.trim() || null;
+        body.config = {
+          providerName: customProviderName.trim() || undefined,
+          apiUrl: apiUrl.trim() || undefined,
+          apiKey: apiKey.trim() || undefined,
+        };
+      }
+
+      await api.patch(`/api/contacts/${agent.id}/update`, body);
       onSaved();
     } catch {
       setError(t("agentDetail").editModal.saveFailed);
@@ -119,6 +145,63 @@ export default function EditAgentModal({ agent, onClose, onSaved }: EditAgentMod
               onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
             />
           </div>
+
+          {/* Custom provider config fields */}
+          {isCustom && (
+            <>
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").customProviderName}
+                </label>
+                <input type="text" value={customProviderName} onChange={(e) => setCustomProviderName(e.target.value)}
+                  placeholder={t("createAgent").customProviderNamePlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").apiUrl}
+                </label>
+                <input type="text" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)}
+                  placeholder={t("createAgent").apiUrlPlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").apiKey}
+                </label>
+                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={t("createAgent").apiKeyPlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+
+              <div>
+                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+                  {t("createAgent").model}
+                </label>
+                <input type="text" value={model} onChange={(e) => setModel(e.target.value)}
+                  placeholder={t("createAgent").modelPlaceholder}
+                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
+                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+                />
+              </div>
+            </>
+          )}
 
           {/* Validation Error */}
           {validationError && (

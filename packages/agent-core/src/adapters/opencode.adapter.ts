@@ -162,6 +162,11 @@ export class OpenCodeAdapter implements AgentAdapter {
   private buildPrompt(context: AgentContext): string {
     const parts: string[] = [];
 
+    // Inject system prompt if provided
+    if (context.systemPrompt) {
+      parts.push(`<system>${context.systemPrompt}</system>`);
+    }
+
     for (const msg of context.history) {
       parts.push(`${msg.senderType}: ${msg.content}`);
     }

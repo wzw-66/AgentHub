@@ -218,6 +218,11 @@ export class ClaudeAdapter implements AgentAdapter {
   private buildPrompt(context: AgentContext): string {
     const parts: string[] = [];
 
+    // Inject system prompt if provided
+    if (context.systemPrompt) {
+      parts.push(`<system>${context.systemPrompt}</system>`);
+    }
+
     // Append conversation history
     for (const msg of context.history) {
       parts.push(`${msg.senderType}: ${msg.content}`);

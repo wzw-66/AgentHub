@@ -11,9 +11,10 @@ import {
   getConversation,
   getContact,
   listPinnedMessages,
+  listCredentials,
 } from "@agenthub/db";
-import { createAdapter } from "@agenthub/agent-core";
-import type { Chunk, Agent } from "@agenthub/shared";
+import { createAdapter, AgentHarness, ToolRegistry, LocalSandbox, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
+import type { Chunk, Agent, Message as SharedMessage, ToolDefinition } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
 import { TaskDispatcher } from "../orchestrator/dispatcher.js";
@@ -394,6 +395,31 @@ async function runOrchestration(
 /** Default timeout for agent execution: 5 minutes */
 const AGENT_EXECUTION_TIMEOUT_MS = 300_000;
 
+/**
+ * Map Prisma Message types to shared Message types.
+ * Prisma uses PascalCase enums (User/Contact/System, Text/Code/etc.)
+ * while the shared package uses lowercase enums (user/contact/system, text/code/etc.).
+ */
+function mapPrismaMessage(msg: { id: string; conversationId: string; senderType: string; senderId: string; type: string; content: string; parentId?: string | null; createdAt: Date | string; updatedAt: Date | string; artifacts?: unknown[] }): SharedMessage {
+  return {
+    id: msg.id,
+    conversationId: msg.conversationId,
+    senderType: msg.senderType.toLowerCase() as SharedMessage["senderType"],
+    senderId: msg.senderId,
+    type: msg.type.toLowerCase() as SharedMessage["type"],
+    content: msg.content,
+    parentId: msg.parentId ?? undefined,
+    createdAt: typeof msg.createdAt === "string" ? msg.createdAt : msg.createdAt.toISOString(),
+    updatedAt: typeof msg.updatedAt === "string" ? msg.updatedAt : msg.updatedAt.toISOString(),
+  };
+}
+
+function mapPrismaMessages(
+  msgs: Array<{ id: string; conversationId: string; senderType: string; senderId: string; type: string; content: string; parentId?: string | null; createdAt: Date | string; updatedAt: Date | string; artifacts?: unknown[] }>,
+): SharedMessage[] {
+  return msgs.map(mapPrismaMessage);
+}
+
 async function runAgentExecution(
   conversationId: string,
   content: string,
@@ -424,29 +450,122 @@ async function runAgentExecution(
         : undefined;
 
     try {
-      const adapter = createAdapter(agent.provider, {
+      const adapterConfig: Record<string, unknown> = {
         cwd,
         timeout: AGENT_EXECUTION_TIMEOUT_MS,
         ...(agent.model ? { model: agent.model } : {}),
-      });
+      };
+
+      // For Custom provider, resolve endpoint and API key from config/credentials
+      if (agent.provider === "Custom") {
+        const contactConfig = agent.config as Record<string, unknown> | null;
+        // Support both apiEndpoint and apiUrl for backward compatibility
+        let endpoint = (contactConfig?.apiEndpoint ?? contactConfig?.apiUrl) as string | undefined;
+        // Auto-append /chat/completions if endpoint is a base URL (e.g. https://api.deepseek.com)
+        if (endpoint && !endpoint.endsWith("/chat/completions") && !endpoint.includes("/v1/")) {
+          endpoint = endpoint.replace(/\/+$/, "") + "/chat/completions";
+        }
+        if (endpoint) {
+          adapterConfig.endpoint = endpoint;
+        }
+        // Look up API key from user credentials, fall back to contact config
+        const credentials = await listCredentials(conv.ownerId);
+        const customCred = credentials.find((c) => c.provider === "Custom");
+        adapterConfig.apiKey = customCred?.encryptedKey ?? contactConfig?.apiKey;
+      }
+
+      const adapter = createAdapter(agent.provider, adapterConfig);
 
       // Register so the adapter can be aborted if SSE disconnects
       cm.registerAdapter(conversationId, adapter);
 
+      // Load recent history (last 50 messages) for context
+      const historyResult = await listMessages(conversationId, { limit: 50 });
+      const historyMessages = mapPrismaMessages(historyResult.data);
+
+      // ── Build AgentHarness with middleware and tools ─────────────
+      const harness = new AgentHarness(adapter, {
+        maxTurns: 10,
+      });
+
+      // Sandbox + ToolRegistry for file/command tools
+      let harnessSandbox: LocalSandbox | undefined;
+      if (cwd) {
+        harnessSandbox = new LocalSandbox(cwd);
+        const toolRegistry = new ToolRegistry(harnessSandbox);
+        harness.setToolRegistry(toolRegistry);
+        harness.setSandbox(harnessSandbox);
+      }
+
+      // Middleware: blackboard for shared state, micro-compact for context
+      harness.use(new BlackboardMiddleware());
+      harness.use(new MicroCompactMiddleware());
+
+      // Build tool definitions from the registry for the model to see
+      const toolDefinitions: ToolDefinition[] = [
+        {
+          name: "execute_command",
+          description: "Execute a shell command in the workspace",
+          inputSchema: {
+            type: "object",
+            properties: {
+              command: { type: "string", description: "The shell command to execute" },
+            },
+            required: ["command"],
+          },
+        },
+        {
+          name: "read_file",
+          description: "Read a file from the workspace",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Path to the file relative to workspace" },
+            },
+            required: ["path"],
+          },
+        },
+        {
+          name: "write_file",
+          description: "Write content to a file in the workspace",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Path to the file relative to workspace" },
+              content: { type: "string", description: "Content to write" },
+            },
+            required: ["path", "content"],
+          },
+        },
+        {
+          name: "list_dir",
+          description: "List files in a directory",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Directory path relative to workspace" },
+            },
+            required: ["path"],
+          },
+        },
+      ];
+
       const context = {
         conversationId,
         message: content,
-        history: [],
+        history: historyMessages,
         agents: [],
+        systemPrompt: agent.systemPrompt ?? undefined,
+        tools: toolDefinitions,
       };
 
       let fullResponse = "";
 
-      for await (const chunk of adapter.execute(context)) {
+      for await (const chunk of harness.execute(context)) {
+        // Only accumulate text/code for the persisted message — skip tool calls
         if (
           chunk.type === ChunkType.Text ||
-          chunk.type === ChunkType.Code ||
-          chunk.type === ChunkType.ToolCall
+          chunk.type === ChunkType.Code
         ) {
           fullResponse += chunk.content;
         }
@@ -587,20 +706,68 @@ async function handleRegenerate(
         : undefined;
 
     try {
-      const adapter = createAdapter(agent.provider, { cwd });
+      const adapterConfig: Record<string, unknown> = { cwd };
+
+      // For Custom provider, resolve endpoint and API key from config/credentials
+      if (agent.provider === "Custom") {
+        const contactConfig = agent.config as Record<string, unknown> | null;
+        // Support both apiEndpoint and apiUrl for backward compatibility
+        let endpoint = (contactConfig?.apiEndpoint ?? contactConfig?.apiUrl) as string | undefined;
+        // Auto-append /chat/completions if endpoint is a base URL (e.g. https://api.deepseek.com)
+        if (endpoint && !endpoint.endsWith("/chat/completions") && !endpoint.includes("/v1/")) {
+          endpoint = endpoint.replace(/\/+$/, "") + "/chat/completions";
+        }
+        if (endpoint) {
+          adapterConfig.endpoint = endpoint;
+        }
+        const credentials = await listCredentials(conv.ownerId);
+        const customCred = credentials.find((c) => c.provider === "Custom");
+        adapterConfig.apiKey = customCred?.encryptedKey ?? contactConfig?.apiKey;
+      }
+
+      const adapter = createAdapter(agent.provider, adapterConfig);
+
+      // ── Build AgentHarness with middleware and tools ─────────────
+      const harness = new AgentHarness(adapter, {
+        maxTurns: 10,
+      });
+
+      let harnessSandbox: LocalSandbox | undefined;
+      if (cwd) {
+        harnessSandbox = new LocalSandbox(cwd);
+        const toolRegistry = new ToolRegistry(harnessSandbox);
+        harness.setToolRegistry(toolRegistry);
+        harness.setSandbox(harnessSandbox);
+      }
+      harness.use(new BlackboardMiddleware());
+      harness.use(new MicroCompactMiddleware());
+
+      const toolDefinitions: ToolDefinition[] = [
+        { name: "execute_command", description: "Execute a shell command in the workspace", inputSchema: { type: "object", properties: { command: { type: "string", description: "The shell command to execute" } }, required: ["command"] } },
+        { name: "read_file", description: "Read a file from the workspace", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path to the file relative to workspace" } }, required: ["path"] } },
+        { name: "write_file", description: "Write content to a file in the workspace", inputSchema: { type: "object", properties: { path: { type: "string", description: "Path to the file relative to workspace" }, content: { type: "string", description: "Content to write" } }, required: ["path", "content"] } },
+        { name: "list_dir", description: "List files in a directory", inputSchema: { type: "object", properties: { path: { type: "string", description: "Directory path relative to workspace" } }, required: ["path"] } },
+      ];
+
+      // Load history for context
+      const historyResult = await listMessages(conversationId, { limit: 50 });
+      const historyMessages = mapPrismaMessages(historyResult.data);
+
       const context = {
         conversationId,
         message: userMessage.content,
-        history: [],
+        history: historyMessages,
         agents: [],
+        systemPrompt: agent.systemPrompt ?? undefined,
+        tools: toolDefinitions,
       };
 
       let fullResponse = "";
-      for await (const chunk of adapter.execute(context)) {
+      for await (const chunk of harness.execute(context)) {
+        // Only accumulate text/code for the persisted message — skip tool calls
         if (
           chunk.type === ChunkType.Text ||
-          chunk.type === ChunkType.Code ||
-          chunk.type === ChunkType.ToolCall
+          chunk.type === ChunkType.Code
         ) {
           fullResponse += chunk.content;
         }

@@ -256,14 +256,32 @@ export function parseOpenCodeEvent(line: string): Chunk | null {
 // ─── OpenAI SSE parser ─────────────────────────────────────────────────
 
 /**
+ * State tracker for OpenAI stream parsing.
+ * Required to handle multi-event tool call deltas.
+ */
+export interface OpenAIStreamState {
+  /** Accumulated tool call info across streaming deltas */
+  pendingToolCalls: Map<number, { id: string; name: string; arguments: string }>;
+}
+
+export function createOpenAIStreamState(): OpenAIStreamState {
+  return { pendingToolCalls: new Map() };
+}
+
+/**
  * Parse a single SSE `data:` line from an OpenAI-compatible streaming endpoint.
  * Returns a Chunk or null if the line is not a content-bearing data event.
  *
  * Handles:
  *   data: {"choices":[{"delta":{"content":"..."}}]}
+ *   data: {"choices":[{"delta":{"tool_calls":[{"id":"call_xxx","function":{"name":"xxx","arguments":"..."}}]}}]}
  *   data: [DONE]
+ *
+ * For proper tool call accumulation across multiple SSE events, pass a
+ * `OpenAIStreamState` created via `createOpenAIStreamState()` and reuse it
+ * across all lines of the stream.
  */
-export function parseOpenAIStreamEvent(line: string): Chunk | null {
+export function parseOpenAIStreamEvent(line: string, state?: OpenAIStreamState): Chunk | null {
   if (!line.startsWith("data: ")) return null;
 
   const payload = line.slice(6).trim();
@@ -283,10 +301,35 @@ export function parseOpenAIStreamEvent(line: string): Chunk | null {
     }
 
     if (delta.tool_calls) {
-      return createChunk(
-        ChunkType.ToolCall,
-        JSON.stringify(delta.tool_calls),
-      );
+      // Process each tool call delta — accumulate across streaming events using state
+      for (const tc of delta.tool_calls) {
+        const index = tc.index ?? 0;
+        const fn = tc.function ?? {};
+        if (state) {
+          if (!state.pendingToolCalls.has(index)) {
+            // First delta for this tool call — has id and name
+            state.pendingToolCalls.set(index, {
+              id: tc.id ?? "",
+              name: fn.name ?? "",
+              arguments: fn.arguments ?? "",
+            });
+          } else {
+            // Subsequent delta — accumulate arguments
+            const existing = state.pendingToolCalls.get(index)!;
+            existing.arguments += fn.arguments ?? "";
+          }
+        } else {
+          // No state: emit raw tool call, best-effort for simple cases
+          return createChunk(
+            ChunkType.ToolCall,
+            JSON.stringify({
+              name: fn.name ?? "unknown",
+              input: fn.arguments ?? "",
+            }),
+          );
+        }
+      }
+      return null; // Don't emit until tool call is complete
     }
 
     return null;

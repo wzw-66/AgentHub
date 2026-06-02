@@ -34,7 +34,7 @@ type CreateContactBody = {
   isPinned?: boolean;
   config?: {
     providerName?: string;
-    apiUrl?: string;
+    apiEndpoint?: string;
     apiKey?: string;
   };
 };
@@ -46,6 +46,7 @@ type UpdateContactBody = {
   isPinned?: boolean;
   systemPrompt?: string;
   model?: string;
+  config?: Record<string, unknown>;
 };
 
 type ListContactsQuery = {
@@ -213,7 +214,12 @@ async function handleUpdate(
   }
 
   const body = request.body as UpdateContactBody;
-  const contact = await dbUpdateContact(request.params.id, body);
+  const updateData: Record<string, unknown> = { ...body };
+  // Prisma InputJsonValue type requires casting for plain objects
+  if (updateData.config) {
+    updateData.config = JSON.parse(JSON.stringify(updateData.config));
+  }
+  const contact = await dbUpdateContact(request.params.id, updateData as Parameters<typeof dbUpdateContact>[1]);
   return reply.status(200).send(contact);
 }
 
