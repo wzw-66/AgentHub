@@ -9,9 +9,6 @@ import {
 } from "@agenthub/db";
 import type { AgentProvider, HealthStatus } from "@agenthub/shared";
 import { createAdapter } from "@agenthub/agent-core";
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
-import { SERVER_ROOT } from "../config/env.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -140,11 +137,6 @@ async function handleCreate(
     return reply.status(404).send({ error: "User not found" });
   }
 
-  // Build workspace path
-  const safeEmail = user.email.replace(/[^a-zA-Z0-9@._-]/g, "_");
-  const safeName = body.name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
-  const workspacePath = `agent-workspace/${safeEmail}/${safeName}`;
-
   // Check CLI availability for Claude/OpenCode providers
   const cliHealth = await checkCLIHealth(body.provider);
   if (cliHealth && !cliHealth.available) {
@@ -154,14 +146,6 @@ async function handleCreate(
     );
   }
 
-  // Create workspace directory
-  try {
-    await mkdir(resolve(SERVER_ROOT, workspacePath), { recursive: true });
-  } catch (err) {
-    request.server.log.error({ err }, "Failed to create workspace directory");
-    return reply.status(500).send({ error: "Failed to create workspace directory" });
-  }
-
   const contact = await dbCreateContact({
     userId,
     name: body.name,
@@ -169,7 +153,6 @@ async function handleCreate(
     avatarUrl: body.avatarUrl ?? null,
     systemPrompt: body.systemPrompt ?? null,
     model: body.model ?? null,
-    workspacePath,
     displayName: body.displayName ?? body.name,
     tags: body.tags ?? [],
     isPinned: body.isPinned ?? false,

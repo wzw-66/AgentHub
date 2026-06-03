@@ -8,7 +8,7 @@ import {
   findSingleConversationByAgentId,
   findUserById,
 } from "@agenthub/db";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { WORKSPACE_ROOT } from "../config/env.js";
 
@@ -157,6 +157,13 @@ async function handleDelete(
 
   if (!existing) {
     return reply.status(404).send({ error: "Conversation not found" });
+  }
+
+  // Clean up workspace directory if it exists
+  if (existing.workspacePath) {
+    rm(resolve(WORKSPACE_ROOT, existing.workspacePath), { recursive: true, force: true }).catch(
+      (err) => request.server.log.error({ err }, "Failed to remove conversation workspace"),
+    );
   }
 
   await dbDeleteConversation(request.params.id);

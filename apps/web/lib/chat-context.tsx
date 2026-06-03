@@ -39,7 +39,7 @@ interface ChatContextValue {
   conversations: Conversation[];
   activeConversationId: string | null;
   messages: Message[];
-  streamingMessage: StreamingMessage | null;
+  streamingMessages: Map<string, StreamingMessage>;
   streamError: string | null;
   contacts: ContactInfo[];
   typingAgents: Map<string, boolean>;
@@ -86,8 +86,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
   // ─── Streaming message state ─────────────────────────────────────
-  const [streamingMessage, setStreamingMessage] =
-    useState<StreamingMessage | null>(null);
+  const [streamingMessages, setStreamingMessages] =
+    useState<Map<string, StreamingMessage>>(new Map());
   const [streamError, setStreamError] = useState<string | null>(null);
   const streamIdRef = useRef(0);
 
@@ -171,42 +171,49 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const appendMessageChunk = useCallback(
     (chunkText: string, agentId?: string) => {
-      setStreamingMessage((prev) => {
-        if (prev) {
-          return { ...prev, content: prev.content + chunkText };
+      const key = agentId ?? "default";
+      setStreamingMessages((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(key);
+        if (existing) {
+          next.set(key, { ...existing, content: existing.content + chunkText });
+        } else {
+          const id = `streaming-${++streamIdRef.current}`;
+          next.set(key, {
+            id,
+            conversationId: activeConversationId || "",
+            content: chunkText,
+            senderType: SenderType.Contact,
+            senderId: agentId ?? "agent",
+            type: MessageType.Text,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            isStreaming: true,
+          });
         }
-        // Create new streaming message
-        const id = `streaming-${++streamIdRef.current}`;
-        return {
-          id,
-          conversationId: activeConversationId || "",
-          content: chunkText,
-          senderType: SenderType.Contact,
-          senderId: agentId ?? "agent",
-          type: MessageType.Text,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isStreaming: true,
-        };
+        return next;
       });
     },
     [activeConversationId],
   );
 
   const finalizeMessage = useCallback((messageId?: string, agentId?: string) => {
-    setStreamingMessage((prev) => {
-      if (prev) {
+    const key = agentId ?? "default";
+    setStreamingMessages((prev) => {
+      const next = new Map(prev);
+      const msg = next.get(key);
+      if (msg) {
         // Convert streaming message to a permanent message
         // Use the real DB messageId if available, otherwise keep the streaming id
-        const id = messageId || prev.id;
+        const id = messageId || msg.id;
         const permanent: Message = {
           id,
-          conversationId: prev.conversationId,
-          content: prev.content,
+          conversationId: msg.conversationId,
+          content: msg.content,
           senderType: SenderType.Contact,
-          senderId: agentId ?? prev.senderId,
+          senderId: agentId ?? msg.senderId,
           type: MessageType.Text,
-          createdAt: prev.createdAt,
+          createdAt: msg.createdAt,
           updatedAt: new Date().toISOString(),
         };
         setMessages((msgs) => {
@@ -217,8 +224,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
           return [...msgs, permanent];
         });
+        next.delete(key);
       }
-      return null;
+      return next;
     });
     setTypingAgents(new Map());
   }, []);
@@ -302,7 +310,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversations,
         activeConversationId,
         messages,
-        streamingMessage,
+        streamingMessages,
         streamError,
         contacts,
         typingAgents,

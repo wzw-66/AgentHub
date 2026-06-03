@@ -9,6 +9,7 @@ import { conversationRoutes } from "./routes/conversations";
 import { messageRoutes } from "./routes/messages";
 import { artifactRoutes } from "./routes/artifacts";
 import { credentialRoutes } from "./routes/credentials";
+import { marketRoutes } from "./routes/market";
 import { sseRoutes } from "./routes/sse";
 import { wsRoutes } from "./routes/ws";
 import { authenticate } from "./middleware/jwt";
@@ -70,6 +71,7 @@ export async function buildApp(connectionManager?: ConnectionManager): Promise<F
     await protectedApp.register(messageRoutes, { prefix: "/api/conversations/:conversationId/messages" });
     await protectedApp.register(artifactRoutes, { prefix: "/api/artifacts" });
     await protectedApp.register(credentialRoutes, { prefix: "/api/credentials" });
+    await protectedApp.register(marketRoutes, { prefix: "/api/market" });
   });
 
   // ─── Health check ──────────────────────────────────────────────────────────

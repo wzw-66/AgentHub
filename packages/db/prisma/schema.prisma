@@ -58,10 +58,11 @@ model User {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  contacts      Contact[]
-  conversations Conversation[]
-  credentials   UserCredential[]
-  refreshTokens RefreshToken[]
+  contacts        Contact[]
+  conversations   Conversation[]
+  credentials     UserCredential[]
+  refreshTokens   RefreshToken[]
+  publishedAgents PublishedAgent[]
 }
 
 model RefreshToken {
@@ -95,6 +96,30 @@ model Contact {
   updatedAt     DateTime      @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PublishedAgent {
+  id           String        @id @default(cuid())
+  name         String
+  description  String?
+  avatarUrl    String?
+  provider     AgentProvider
+  systemPrompt String?
+  model        String?
+  config       Json?
+  tags         String[]      @default([])
+  importCount  Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  sourceContactId String?
+  creatorId       String
+  creator         User   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([sourceContactId])
+  @@index([creatorId])
+  @@index([name])
+  @@index([provider])
 }
 
 model Conversation {

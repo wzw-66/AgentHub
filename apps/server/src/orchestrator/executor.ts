@@ -3,6 +3,7 @@ import { ChunkType } from "@agenthub/shared";
 import { createAdapter } from "@agenthub/agent-core";
 import { getConversation, listPinnedMessages } from "@agenthub/db";
 import type { SubTask, SubTaskResult } from "./types.js";
+import { processChunk } from "./artifact-detector.js";
 import { resolve } from "node:path";
 import { WORKSPACE_ROOT } from "../config/env.js";
 
@@ -29,7 +30,7 @@ export class SubTaskExecutor {
     let lastError: Error | undefined;
 
     // Resolve workspace path from conversation or agent
-    const cwd = await this.resolveWorkspace(subtask, agent);
+    const cwd = await this.resolveWorkspace(subtask);
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       let adapter = null as ReturnType<typeof createAdapter> | null;
@@ -42,20 +43,22 @@ export class SubTaskExecutor {
         let tokenUsage: { input: number; output: number } | undefined;
 
         for await (const chunk of adapter.execute(context)) {
-          onChunk(chunk);
+          const processed = processChunk(chunk);
 
-          if (chunk.type === ChunkType.Done) {
-            tokenUsage = chunk.metadata?.tokenUsage as
+          onChunk(processed);
+
+          if (processed.type === ChunkType.Done) {
+            tokenUsage = processed.metadata?.tokenUsage as
               | { input: number; output: number }
               | undefined;
           }
 
           if (
-            chunk.type === ChunkType.Text ||
-            chunk.type === ChunkType.Code ||
-            chunk.type === ChunkType.ToolCall
+            processed.type === ChunkType.Text ||
+            processed.type === ChunkType.Code ||
+            processed.type === ChunkType.ToolCall
           ) {
-            fullContent += chunk.content;
+            fullContent += processed.content;
           }
         }
 
@@ -136,7 +139,7 @@ export class SubTaskExecutor {
    * Resolve the workspace directory for a subtask's conversation.
    * Falls back to agent's workspace path if conversation doesn't have one.
    */
-  private async resolveWorkspace(subtask: SubTask, agent: Agent): Promise<string | undefined> {
+  private async resolveWorkspace(subtask: SubTask): Promise<string | undefined> {
     try {
       const conv = await getConversation(subtask.conversationId);
       if (conv?.workspacePath) {
@@ -144,10 +147,6 @@ export class SubTaskExecutor {
       }
     } catch {
       // Conversation may have been deleted — proceed without workspace
-    }
-    // Fallback to agent's workspace path (same behavior as single-chat)
-    if (agent.workspacePath) {
-      return resolve(WORKSPACE_ROOT, agent.workspacePath);
     }
     return undefined;
   }

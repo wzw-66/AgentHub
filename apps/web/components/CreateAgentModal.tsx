@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api, getStoredUser } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRipple } from "@/hooks/useRipple";
 
@@ -25,12 +25,6 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const { addRipple, renderRipples } = useRipple();
-
-  // Build workspace preview from stored user email + agent name
-  const user = typeof window !== "undefined" ? getStoredUser() : null;
-  const safeEmail = user?.email?.replace(/[^a-zA-Z0-9@._-]/g, "_") ?? "{email}";
-  const safeName = name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_") || "{name}";
-  const workspacePreview = `agent-workspace/${safeEmail}/${safeName}/`;
 
   const isCustom = provider === "Custom";
 
@@ -122,19 +116,6 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
               onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
               onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
             />
-          </div>
-
-          {/* Workspace path preview */}
-          <div>
-            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-              {t("createAgent").workspacePath}
-            </label>
-            <div
-              className="mt-1.5 w-full rounded-lg border px-3 py-2 font-mono text-xs truncate"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-muted)", backgroundColor: "var(--theme-bg-primary)" }}
-            >
-              {workspacePreview}
-            </div>
           </div>
 
           {/* System Prompt */}

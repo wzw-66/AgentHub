@@ -40,7 +40,7 @@ export class TaskDispatcher {
     agents: Map<string, Agent>,
     pushSSE: PushSSEFn,
     onAgentChunk?: (subtaskId: string, chunk: Chunk) => void,
-    onTaskCompleted?: (subtask: SubTask, result: SubTaskResult) => void,
+    onTaskCompleted?: (subtask: SubTask, result: SubTaskResult) => Promise<string | undefined>,
   ): Promise<AggregatedResult> {
     const { subtasks, layers } = decomposition;
 
@@ -103,10 +103,10 @@ export class TaskDispatcher {
           this.results.set(sub.id, settled.value);
           if (settled.value.success) {
             this.pushTaskStatus(sub, "completed", layerIdx, pushSSE);
-            onTaskCompleted?.(sub, settled.value);
+            const savedMessageId = await onTaskCompleted?.(sub, settled.value);
             // Push done event after task completion + message persistence
             pushSSE("done", {
-              messageId: "",
+              messageId: savedMessageId ?? "",
               tokenUsage: settled.value.tokenUsage,
               agentId: sub.agentId,
             });

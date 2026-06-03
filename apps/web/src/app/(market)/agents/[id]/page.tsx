@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AgentDetailContent from "@/components/AgentDetailContent";
 import EditAgentModal from "@/components/EditAgentModal";
+import PublishAgentModal from "@/components/PublishAgentModal";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRipple } from "@/hooks/useRipple";
@@ -37,7 +38,11 @@ export default function AgentDetailPage() {
   const [isContact, setIsContact] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [publishedAgentId, setPublishedAgentId] = useState<string | null>(null);
+  const [unpublishConfirm, setUnpublishConfirm] = useState(false);
+  const [unpublishing, setUnpublishing] = useState(false);
   const { addRipple: addRippleChat, renderRipples: renderRipplesChat } = useRipple();
 
   const fetchAgent = useCallback(async () => {
@@ -52,6 +57,16 @@ export default function AgentDetailPage() {
       setError(t("agentDetail").notFound);
     } finally {
       setIsLoading(false);
+    }
+
+    // Check if this agent is published to market
+    try {
+      const publishedData = await api.get<{ id: string } | null>(
+        `/api/market/find-by-contact/${id}`
+      );
+      setPublishedAgentId(publishedData?.id ?? null);
+    } catch {
+      /* ignore publish check failures */
     }
   }, [id, t]);
 
@@ -94,6 +109,20 @@ export default function AgentDetailPage() {
       router.push("/agents");
     } catch { /* silent */ }
     finally { setActionLoading(null); setDeleteConfirm(false); }
+  }
+
+  async function handleUnpublish() {
+    if (!publishedAgentId) return;
+    setUnpublishing(true);
+    try {
+      await api.delete(`/api/market/${publishedAgentId}/unpublish`);
+      setPublishedAgentId(null);
+    } catch {
+      /* silent */
+    } finally {
+      setUnpublishing(false);
+      setUnpublishConfirm(false);
+    }
   }
 
   if (isLoading) {
@@ -234,6 +263,65 @@ export default function AgentDetailPage() {
             {actionLoading === "contact" ? t("agentDetail").adding : isContact ? t("agentDetail").inContacts : t("agentDetail").addContact}
           </button>
 
+          {/* Publish / Unpublish toggle */}
+          {publishedAgentId ? (
+            unpublishConfirm ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleUnpublish}
+                  disabled={unpublishing}
+                  className="rounded-lg px-3 py-2.5 font-mono text-xs font-bold disabled:opacity-50"
+                  style={{ backgroundColor: "var(--theme-danger)", color: "#ffffff" }}
+                >
+                  {unpublishing ? "..." : t("agentMarket").confirmUnpublish}
+                </button>
+                <button
+                  onClick={() => setUnpublishConfirm(false)}
+                  className="rounded-lg px-3 py-2.5 font-mono text-xs"
+                  style={{ color: "var(--theme-text-muted)" }}
+                >
+                  {t("common").cancel}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setUnpublishConfirm(true)}
+                disabled={actionLoading !== null}
+                className="flex-1 rounded-lg border py-2.5 font-mono text-xs tracking-wider transition-all disabled:opacity-40"
+                style={{
+                  borderColor: "var(--theme-danger)",
+                  color: "var(--theme-danger)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!actionLoading) e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                {t("agentMarket").unpublish}
+              </button>
+            )
+          ) : (
+            <button
+              onClick={() => setShowPublishModal(true)}
+              disabled={actionLoading !== null}
+              className="flex-1 rounded-lg border py-2.5 font-mono text-xs tracking-wider transition-all disabled:opacity-40"
+              style={{
+                borderColor: "var(--theme-border-light)",
+                color: "var(--theme-text-secondary)",
+              }}
+              onMouseEnter={(e) => {
+                if (!actionLoading) e.currentTarget.style.borderColor = "var(--theme-accent)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--theme-border-light)";
+              }}
+            >
+              {t("agentDetail").publishToMarket}
+            </button>
+          )}
+
           {/* Delete button */}
           {deleteConfirm ? (
             <div className="flex items-center gap-2">
@@ -285,6 +373,26 @@ export default function AgentDetailPage() {
           onSaved={() => {
             setShowEditModal(false);
             fetchAgent();
+          }}
+        />
+      )}
+
+      {/* Publish to Market Modal */}
+      {showPublishModal && agent && (
+        <PublishAgentModal
+          agent={agent}
+          onClose={() => setShowPublishModal(false)}
+          onPublished={async () => {
+            setShowPublishModal(false);
+            // Refresh publish status
+            try {
+              const publishedData = await api.get<{ id: string } | null>(
+                `/api/market/find-by-contact/${id}`
+              );
+              setPublishedAgentId(publishedData?.id ?? null);
+            } catch {
+              /* ignore */
+            }
           }}
         />
       )}

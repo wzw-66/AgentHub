@@ -11,10 +11,14 @@ import MentionPopup from "./MentionPopup";
 import TypingIndicator from "./TypingIndicator";
 import { useRipple } from "@/hooks/useRipple";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { ArtifactContent, hasArtifactMarkers } from "./ArtifactContent";
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 function MessageContent({ message }: { message: Message }) {
+  if (hasArtifactMarkers(message.content)) {
+    return <ArtifactContent content={message.content} />;
+  }
   return <MarkdownRenderer content={message.content} />;
 }
 
@@ -27,7 +31,7 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessage, streamError, setStreamError, setMessages } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages } = useChat();
   const { user } = useAuth();
   const { t } = useI18n();
   const [input, setInput] = useState("");
@@ -260,7 +264,7 @@ export default function ChatPanel({
               {t("chat").loadingMessages}
             </span>
           </div>
-        ) : messages.length === 0 && !streamingMessage ? (
+        ) : messages.length === 0 && streamingMessages.size === 0 ? (
           <div className="flex h-full items-center justify-center">
             <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
               {t("chat").noMessages}
@@ -436,7 +440,7 @@ export default function ChatPanel({
                   </div>
 
                   {/* Regenerate button below AI messages */}
-                  {variant === "contact" && !streamingMessage && (
+                  {variant === "contact" && streamingMessages.size === 0 && (
                     <div className="flex items-center gap-2 mt-1" style={{ marginLeft: 4 }}>
                       <button
                         onClick={async () => {
@@ -492,30 +496,36 @@ export default function ChatPanel({
               );
             })}
             {/* Streaming message */}
-            {streamingMessage && (
-              <div className="animate-fade-in-up message-bubble" style={{ alignSelf: "flex-start" }}>
-                <MessageBubble message={streamingMessage} variant="contact">
-                  <div>
-                    <div
-                      className="font-mono text-xs mb-1"
-                      style={{ color: "var(--theme-text-muted)", opacity: 0.8 }}
-                    >
-                      {contacts?.find((c) => c.id === streamingMessage.senderId)?.name ?? streamingMessage.senderId}
+            {Array.from(streamingMessages.entries()).map(([agentId, msg]) => (
+              <div key={agentId} className="animate-fade-in-up" style={{ alignSelf: "flex-start" }}>
+                <div className="message-bubble">
+                  <MessageBubble message={msg} variant="contact">
+                    <div>
+                      <div
+                        className="font-mono text-xs mb-1"
+                        style={{ color: "var(--theme-text-muted)", opacity: 0.8 }}
+                      >
+                        {contacts?.find((c) => c.id === agentId)?.name ?? msg.senderId}
+                      </div>
+                      {hasArtifactMarkers(msg.content) ? (
+                        <ArtifactContent content={msg.content} />
+                      ) : (
+                        <span>
+                          {msg.content}
+                          <span
+                            className="ml-0.5 inline-block h-4 w-2 align-text-bottom"
+                            style={{
+                              backgroundColor: "var(--theme-accent)",
+                              animation: "cursor-blink 1s step-end infinite",
+                            }}
+                          />
+                        </span>
+                      )}
                     </div>
-                    <span>
-                      {streamingMessage.content}
-                      <span
-                        className="ml-0.5 inline-block h-4 w-2 align-text-bottom"
-                        style={{
-                          backgroundColor: "var(--theme-accent)",
-                          animation: "cursor-blink 1s step-end infinite",
-                        }}
-                      />
-                    </span>
-                  </div>
-                </MessageBubble>
+                  </MessageBubble>
+                </div>
               </div>
-            )}
+            ))}
             <div ref={messagesEndRef} />
           </div>
         )}

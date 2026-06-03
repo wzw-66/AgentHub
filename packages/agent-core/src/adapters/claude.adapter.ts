@@ -120,6 +120,7 @@ export class ClaudeAdapter implements AgentAdapter {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: this.config.cwd,
       env,
+      windowsHide: true,
     });
 
     // Close stdin immediately — the CLI doesn't need input (prompt is in -p flag),

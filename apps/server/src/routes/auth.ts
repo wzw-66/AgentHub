@@ -1,5 +1,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createUser, findUserByEmail, findUserById } from "@agenthub/db";
+import {
+  createUser,
+  findUserByEmail,
+  findUserById,
+  findUserByIdentifier,
+} from "@agenthub/db";
 import {
   signAccessToken,
   signRefreshToken,

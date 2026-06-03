@@ -67,6 +67,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     this.process = spawn(resolved.command, [...resolved.prefixArgs, ...args], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: this.config.cwd,
+      windowsHide: true,
     });
 
     // Close stdin immediately — the prompt is passed as an argument, not via stdin.
