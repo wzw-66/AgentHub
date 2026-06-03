@@ -28,6 +28,10 @@ AgentHub is a multi-Agent collaboration platform using IM chat as the core inter
 - `pnpm test` — run all tests
 - `pnpm db:up` — `docker compose up -d`
 - `pnpm db:down` — `docker compose down`
+- `pnpm db:generate` — generate Prisma client
+- `pnpm db:push` — push schema to dev DB
+- `pnpm db:seed` — seed demo data
+- `pnpm db:studio` — open Prisma Studio
 
 ### Per-Package
 
@@ -139,10 +143,12 @@ AgentHub/
 
 ### Database Layer (packages/db)
 
+**Important concept: Agent = Contact** — There is no standalone `Agent` table/model. Agents are represented entirely by the `Contact` model, differentiated by `contactType` (`User`, `Agent`, `System`). When the code references an "agent", it's working with a `Contact` record where `contactType === "Agent"`.
+
 **Prisma (7 models, 6 enums):**
 
 ```
-User ──→ Contact ←── Agent
+User ──→ Contact ──→ Agent (no table — Agent IS a Contact)
   │
   ├──→ Conversation ──→ Message ──→ Artifact
   │                        │
@@ -200,10 +206,47 @@ Fastify v5 REST API with module-based route registration:
 - `src/app.ts` — builds Fastify instance with CORS, global error handler, route registration
 - `src/index.ts` — entry point, loads .env from root, starts server with graceful shutdown
 - `src/config/env.ts` — typed config from env vars (port, JWT secrets, expiration)
-- `src/routes/auth.ts` — `/auth/register`, `/auth/login`, `/auth/refresh` endpoints
 - `src/middleware/jwt.ts` — `authenticate` hook for Bearer token, `verifyQueryToken` for SSE/WS
 - `src/utils/jwt.ts` — sign/verify access+refresh tokens, jti generation
 - `src/utils/password.ts` — bcrypt hash/compare with 10 salt rounds
+
+**Route modules** (in `src/routes/`):
+
+| Module | Key Endpoints |
+|--------|--------------|
+| `auth.ts` | `/auth/register`, `/auth/login`, `/auth/refresh` |
+| `messages.ts` | `/messages/create`, `/messages/list`, `/messages/detail` |
+| `conversations.ts` | `/conversations/create`, `/conversations/list`, `/conversations/detail` |
+| `contacts.ts` | `/contacts/create`, `/contacts/list` (Agent = Contact) |
+| `agents.ts` | `/agents/create`, `/agents/list`, `/agents/detail` |
+| `artifacts.ts` | `/artifacts/create`, `/artifacts/detail`, `/artifacts/list` |
+| `credentials.ts` | `/credentials/create`, `/credentials/list` |
+| `sse.ts` | `/sse` — SSE stream connection |
+| `ws.ts` | WebSocket endpoint for presence/status |
+
+**API naming convention:** All URLs use verb-path suffixes (e.g., `/messages/create`, `/messages/list`, `/messages/detail`). HTTP methods (POST for create, GET for list/detail) are secondary — the path always explicitly states the action. Do NOT use RESTful resource-only paths like `POST /messages` or `GET /messages/:id`.
+
+### Orchestrator (apps/server/src/orchestrator/)
+
+The orchestrator is the core agent task scheduler. It processes user messages and coordinates multi-agent execution:
+
+| Module | Role |
+|--------|------|
+| `types.ts` | Data types: `SubTask`, `TaskGraph`, `Intent`, `ExecutionPlan` |
+| `intent-analyzer.ts` | Analyzes user input, decomposes into sub-tasks with dependencies |
+| `task-graph.ts` | Builds a DAG of sub-tasks, detects circular dependencies, topological sort |
+| `dispatcher.ts` | Routes each sub-task to the appropriate AgentAdapter based on task type |
+| `executor.ts` | Orchestrates execution — walks the task graph, handles parallel/serial execution |
+| `aggregator.ts` | Merges multi-agent outputs into a coherent final response |
+
+Flow: `Intent Analysis → Task Graph → Dispatch → Execute → Aggregate`
+
+### Realtime (apps/server/src/realtime/)
+
+Two complementary realtime channels:
+
+- **SSE** (`routes/sse.ts`): Server-Sent Events for streaming agent output (typing effect). Uses `verifyQueryToken` middleware for auth.
+- **WebSocket** (`routes/ws.ts`, `realtime/connection-manager.ts`): Handles presence, typing indicators, and async event notifications. Managed by `ConnectionManager` singleton.
 
 ### Web App (apps/web)
 
@@ -266,3 +309,22 @@ Zero-dependency package with enums and TypeScript interfaces shared across all p
 - All packages use `import type` for type-only imports.
 - Default exports avoided; prefer named exports throughout.
 - All packages are `"type": "module"` (ESM).
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
+- Author a backlog-ready spec/issue → invoke /spec
