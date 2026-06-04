@@ -1,0 +1,83 @@
+<h2>消息回复功能 — 三步流程</h2>
+<p class="subtitle">从悬停到发送的完整交互</p>
+
+<div style="max-width: 700px; margin: 0 auto;">
+
+  <!-- Step 1 -->
+  <div class="section">
+    <h3>Step 1: 悬停消息 → 出现回复按钮</h3>
+    <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; padding: 20px; margin-top: 8px;">
+
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+        <div style="background: var(--mock-accent); color: white; padding: 10px 14px; border-radius: 12px 4px 12px 12px; max-width: 65%; font-size: 13px; position: relative;">
+          帮我写一个倒计时组件
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-start; margin-bottom: 8px; position: relative;">
+        <div style="background: var(--mock-bg); border: 1px solid var(--mock-border); padding: 10px 14px; border-radius: 4px 12px 12px 12px; max-width: 65%;">
+          <div style="font-size: 11px; color: var(--mock-muted); margin-bottom: 4px;">Claude Code</div>
+          <div style="font-size: 13px; color: var(--mock-text);">用 useState + useEffect，设置初始秒数然后每秒减 1...</div>
+        </div>
+        <!-- Reply button appears on hover -->
+        <div style="position: absolute; left: -40px; top: 4px; width: 28px; height: 28px; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer;">↩</div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: var(--mock-muted); margin-top: 4px;">← 鼠标移到 AI 回复上，左侧出现回复按钮</p>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="section">
+    <h3>Step 2: 点击回复 → 引用条出现在输入框上方</h3>
+    <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; padding: 20px; margin-top: 8px;">
+
+      <div style="font-size: 12px; color: var(--mock-muted); margin-bottom: 8px;">↑ 前面的消息列表 ↑</div>
+
+      <!-- Quote bar -->
+      <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; background: var(--mock-bg); border-left: 3px solid var(--mock-accent); border-radius: 0 8px 8px 0; margin-bottom: 8px;">
+        <div style="flex: 1;">
+          <div style="font-size: 11px; color: var(--mock-accent); font-weight: bold;">回复 @Claude Code</div>
+          <div style="font-size: 12px; color: var(--mock-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">用 useState + useEffect，设置初始秒数然后每秒减 1...</div>
+        </div>
+        <span style="color: var(--mock-muted); cursor: pointer; font-size: 14px;">✕</span>
+      </div>
+
+      <!-- Input -->
+      <div style="display: flex; gap: 8px;">
+        <div style="border: 1px solid var(--mock-border); border-radius: 10px; padding: 10px 14px; flex: 1; font-size: 13px; color: var(--mock-muted);">把默认时间改成 5 分钟</div>
+        <div style="width: 36px; height: 36px; background: var(--mock-accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">→</div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: var(--mock-muted); margin-top: 4px;">← 引用条显示被回复的消息内容，可点击 ✕ 取消</p>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="section">
+    <h3>Step 3: 发送后 → 消息中显示引用块</h3>
+    <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; padding: 20px; margin-top: 8px;">
+
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+        <div style="background: var(--mock-accent); color: white; padding: 10px 14px; border-radius: 12px 4px 12px 12px; max-width: 65%;">
+          <!-- Reply block inside message -->
+          <div style="background: rgba(255,255,255,0.15); border-left: 2px solid rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px; margin-bottom: 6px; font-size: 11px;">
+            <div style="opacity: 0.8;">回复 Claude Code:</div>
+            <div style="opacity: 0.6;">用 useState + useEffect，设置初始秒数然后每秒减 1...</div>
+          </div>
+          <div style="font-size: 13px;">把默认时间改成 5 分钟</div>
+        </div>
+      </div>
+
+    </div>
+    <p style="font-size: 13px; color: var(--mock-muted); margin-top: 4px;">← 消息上方灰色的是被引用的内容，下面是用户新说的话</p>
+  </div>
+
+  <!-- Backend data model -->
+  <div class="section" style="margin-top: 20px; padding: 12px; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 8px;">
+    <div style="font-size: 12px; font-weight: bold; margin-bottom: 4px;">后端模型：</div>
+    <div style="font-size: 12px; color: var(--mock-muted);">
+      Message 已经有 parentId 字段（self-ref），回复/引用就是设置 parentId。
+      <br>前端在渲染时，检测到 parentId 就在消息顶部渲染一个引用块。
+    </div>
+  </div>
+
+</div>

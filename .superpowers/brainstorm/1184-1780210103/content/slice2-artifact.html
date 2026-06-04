@@ -1,0 +1,135 @@
+<h2>Slice 2: 产物展示 — 布局方案</h2>
+<p class="subtitle">内联预览 / 全屏展开 / Diff 应用</p>
+
+<div style="max-width: 800px; margin: 0 auto;">
+
+  <!-- 1. Inline Preview -->
+  <div class="section">
+    <h3>1. 内联预览 — ArtifactCard 增强</h3>
+    <p style="font-size: 13px; color: var(--mock-muted);">当前 ArtifactCard 只有状态展示，增强为可交互预览</p>
+
+    <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; padding: 16px; margin-top: 8px;">
+
+      <!-- Artifact card in chat -->
+      <div style="border: 1px solid var(--mock-border); border-radius: 10px; overflow: hidden; max-width: 480px;">
+        <!-- Header -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--mock-bg); border-bottom: 1px solid var(--mock-border);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 14px;">📄</span>
+            <span style="font-size: 13px; font-weight: 600;">index.html</span>
+            <span style="font-size: 11px; color: var(--mock-muted);">642 bytes</span>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <!-- Preview button -->
+            <span style="font-size: 12px; padding: 4px 10px; background: var(--mock-accent); color: white; border-radius: 6px; cursor: pointer;">👁 预览</span>
+            <!-- Fullscreen button -->
+            <span style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--mock-border); border-radius: 6px; cursor: pointer;">⛶</span>
+          </div>
+        </div>
+        <!-- Code preview -->
+        <div style="padding: 12px 14px; font-size: 12px; font-family: monospace; line-height: 1.6; color: var(--mock-text); background: #1a1a2e;">
+          <span style="color: #7ec8e3;">&lt;!DOCTYPE html&gt;</span>
+          <br>&lt;html&gt;
+          <br>&nbsp;&nbsp;&lt;head&gt;
+          <br>&nbsp;&nbsp;&nbsp;&nbsp;&lt;title&gt;倒计时&lt;/title&gt;
+          <br>&nbsp;&nbsp;&lt;/head&gt;
+          <br>&nbsp;&nbsp;&lt;body&gt;
+          <br>&nbsp;&nbsp;&nbsp;&nbsp;&lt;div id="countdown"&gt;05:00&lt;/div&gt;
+          <br>&nbsp;&nbsp;&lt;/body&gt;
+          <br>&lt;/html&gt;
+        </div>
+      </div>
+
+      <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <span style="font-size: 12px; background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 4px 10px; border-radius: 6px;">预览模式：在卡片内嵌 iframe 渲染 HTML</span>
+        <span style="font-size: 12px; background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 4px 10px; border-radius: 6px;">点击 ⛶ 展开到右侧面板全屏预览</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Fullscreen Preview (Right Panel) -->
+  <div class="section">
+    <h3>2. 全屏展开 — RightPanel 增强</h3>
+    <p style="font-size: 13px; color: var(--mock-muted);">当前 RightPanel 只有 agent 信息，增加 artifact 全屏预览</p>
+
+    <div style="display: flex; gap: 16px; margin-top: 8px;">
+      <!-- Chat area (缩略) -->
+      <div style="flex: 1; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; padding: 12px; min-height: 200px;">
+        <div style="font-size: 11px; color: var(--mock-muted); margin-bottom: 8px;">聊天区 (Chat Panel)</div>
+        <div style="font-size: 12px; padding: 6px 0;">消息 1</div>
+        <div style="font-size: 12px; padding: 6px 0;">消息 2</div>
+        <div style="border: 1px solid var(--mock-border); border-radius: 8px; padding: 8px; margin-top: 4px;">
+          <div style="font-size: 11px;">📄 index.html</div>
+          <div style="display: flex; gap: 4px; margin-top: 4px;">
+            <span style="font-size: 10px; padding: 2px 6px; background: var(--mock-accent); color: white; border-radius: 4px; cursor: pointer;">在右侧打开</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right panel - full artifact preview -->
+      <div style="width: 280px; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--mock-border); font-size: 12px;">
+          <span style="font-weight: 600;">📄 index.html 预览</span>
+          <span style="cursor: pointer; font-size: 14px; color: var(--mock-muted);">✕</span>
+        </div>
+        <div style="padding: 12px; font-size: 12px; min-height: 200px;">
+          <!-- Iframe placeholder -->
+          <div style="border: 1px dashed var(--mock-border); border-radius: 6px; padding: 20px; text-align: center; color: var(--mock-muted); background: var(--mock-bg);">
+            <div style="font-size: 24px; margin-bottom: 8px;">🌐</div>
+            <div style="font-size: 11px;">iframe 预览区域</div>
+            <div style="font-size: 10px;">Agent 生成的 HTML 在这里实时渲染</div>
+          </div>
+        </div>
+        <!-- Action bar -->
+        <div style="padding: 8px 12px; border-top: 1px solid var(--mock-border); display: flex; gap: 6px;">
+          <span style="font-size: 11px; padding: 4px 10px; background: var(--mock-accent); color: white; border-radius: 6px; cursor: pointer;">复制代码</span>
+          <span style="font-size: 11px; padding: 4px 10px; border: 1px solid var(--mock-border); border-radius: 6px; cursor: pointer;">下载</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Diff View & Apply -->
+  <div class="section">
+    <h3>3. Diff 视图 + 一键应用</h3>
+
+    <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 12px; padding: 16px; margin-top: 8px;">
+
+      <!-- Diff card in chat -->
+      <div style="border: 1px solid var(--mock-border); border-radius: 10px; overflow: hidden; max-width: 560px;">
+        <!-- Header -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--mock-bg); border-bottom: 1px solid var(--mock-border);">
+          <div style="font-size: 12px; font-weight: 600;">Diff: src/components/Timer.tsx</div>
+          <div style="display: flex; gap: 4px;">
+            <span style="font-size: 11px; padding: 3px 10px; background: #22c55e; color: white; border-radius: 6px; cursor: pointer;">✓ 应用</span>
+            <span style="font-size: 11px; padding: 3px 8px; border: 1px solid var(--mock-border); border-radius: 6px; cursor: pointer;">⛶</span>
+          </div>
+        </div>
+        <!-- Diff content (simplified) -->
+        <div style="padding: 8px 12px; font-size: 12px; font-family: monospace; line-height: 1.8; background: #1a1a2e;">
+          <div style="color: #7ec8e3;">--- a/src/components/Timer.tsx</div>
+          <div style="color: #7ec8e3;">+++ b/src/components/Timer.tsx</div>
+          <div style="color: #f87171;">-const duration = 60; // hardcoded</div>
+          <div style="color: #4ade80;">+const duration = props.initialSeconds ?? 60;</div>
+          <div style="color: #4ade80;">+const [time, setTime] = useState(duration);</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <span style="font-size: 12px; background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 4px 10px; border-radius: 6px;">点击 "应用" → 写入文件系统，显示 "已应用" 状态</span>
+        <span style="font-size: 12px; background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 4px 10px; border-radius: 6px;">应用前自动备份原文件</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture note -->
+  <div class="section" style="margin-top: 20px; padding: 12px; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 8px;">
+    <div style="font-size: 12px; font-weight: bold; margin-bottom: 4px;">实现要点：</div>
+    <div style="font-size: 12px; color: var(--mock-muted); line-height: 1.8;">
+      • ArtifactCard 增加 "预览" 按钮 → 卡片内嵌 iframe 渲染 HTML<br>
+      • RightPanel 重作为全屏预览容器，支持 iframe / 代码编辑器<br>
+      • DiffCard 增加 "应用" 按钮 → 后端写入文件 → 返回结果
+    </div>
+  </div>
+
+</div>

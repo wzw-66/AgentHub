@@ -1,0 +1,734 @@
+ ▐▛███▜▌   Claude Code v2.1.87
+▝▜█████▛▘  deepseek-v4-flash · API Usage Billing
+  ▘▘ ▝▝    D:\code\github\AgentHub
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+
+❯ 继续任务                                                                      
+
+  Searched for 1 pattern, read 4 files (ctrl+o to expand)
+
+● Good, I have all files in context. Let me now:
+
+  1. Update claude.adapter.ts to use stateful parser
+  2. Update executor.ts to accumulate ToolCall chunks
+  3. Add tests for tool call parsing
+
+  Let me also quickly verify the current chunk-parser.ts to confirm the stateful
+   parsing code is in place.
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I'll make all three fixes in parallel.
+
+● Update(packages\agent-core\src\adapters\claude.adapter.ts)
+  ⎿  Added 1 line, removed 1 line
+       7    HealthStatus,
+       8  } from "@agenthub/shared";
+       9  import { ChunkType } from "@agenthub/shared";
+      10 -import { createChunk, parseClaudeStreamJson } from "../utils/ch
+         -unk-parser.js";                                                
+      10 +import { createChunk, parseClaudeStreamJson, createClaudeStream
+         +State } from "../utils/chunk-parser.js";                       
+      11  import { resolveCommand } from "../utils/resolve-cli.js";
+      12  
+      13  export interface ClaudeAdapterConfig {
+
+● Update(packages\agent-core\src\adapters\claude.adapter.ts)
+  ⎿  Added 2 lines, removed 1 line
+      82      }
+      83  
+      84      const rl = createInterface({ input: this.process.stdout! })
+          ;
+      85 +    const parseState = createClaudeStreamState();              
+      86  
+      87      for await (const line of rl) {
+      88        if (!line.trim()) continue;
+      89  
+      89 -      const chunk = parseClaudeStreamJson(line);               
+      90 +      const chunk = parseClaudeStreamJson(line, parseState);   
+      91        if (chunk) {
+      92          yield chunk;
+      93          if (chunk.type === ChunkType.Done) break;
+
+● Update(apps\server\src\orchestrator\executor.ts)
+  ⎿  Added 2 lines, removed 1 line
+      52  
+      53            if (
+      54              chunk.type === ChunkType.Text ||
+      55 -            chunk.type === ChunkType.Code                      
+      55 +            chunk.type === ChunkType.Code ||                   
+      56 +            chunk.type === ChunkType.ToolCall                  
+      57            ) {
+      58              fullContent += chunk.content;
+      59            }
+
+● Update(packages\agent-core\src\__tests__\chunk-parser.test.ts)
+  ⎿  Added 1 line
+       4    createChunk,
+       5    isDoneChunk,
+       6    parseClaudeStreamJson,
+       7 +  createClaudeStreamState,                                     
+       8    parseOpenCodeEvent,
+       9    parseOpenAIStreamEvent,
+      10    parseEventLine,
+
+● Now add the tool call parsing tests to chunk-parser.test.ts.
+
+● Update(packages\agent-core\src\__tests__\chunk-parser.test.ts)
+  ⎿  Added 148 lines
+       91      expect(parseClaudeStreamJson("")).toBeNull();
+       92      expect(parseClaudeStreamJson("  ")).toBeNull();
+       93    });
+       94 +                                                              
+       95 +  describe("tool call parsing (stateful)", () => {            
+       96 +    it("should track tool_use content_block_start and finalize
+          + on content_block_stop", () => {                              
+       97 +      const state = createClaudeStreamState();                
+       98 +                                                              
+       99 +      // content_block_start with tool_use                    
+      100 +      const startLine = JSON.stringify({                      
+      101 +        type: "stream_event",                                 
+      102 +        event: {                                              
+      103 +          type: "content_block_start",                        
+      104 +          index: 0,                                           
+      105 +          content_block: {                                    
+      106 +            type: "tool_use",                                 
+      107 +            id: "toolu_123",                                  
+      108 +            name: "bash",                                     
+      109 +            input: {},                                        
+      110 +          },                                                  
+      111 +        },                                                    
+      112 +      });                                                     
+      113 +      expect(parseClaudeStreamJson(startLine, state)).toBeNull
+          +();                                                           
+      114 +      expect(state.pendingToolCall).toEqual({                 
+      115 +        id: "toolu_123",                                      
+      116 +        name: "bash",                                         
+      117 +        input: "{}",                                          
+      118 +      });                                                     
+      119 +                                                              
+      120 +      // content_block_stop → finalizes tool call             
+      121 +      const stopLine = JSON.stringify({                       
+      122 +        type: "stream_event",                                 
+      123 +        event: { type: "content_block_stop", index: 0 },      
+      124 +      });                                                     
+      125 +      const chunk = parseClaudeStreamJson(stopLine, state);   
+      126 +      expect(chunk).not.toBeNull();                           
+      127 +      expect(chunk!.type).toBe(ChunkType.ToolCall);           
+      128 +      const parsed = JSON.parse(chunk!.content);              
+      129 +      expect(parsed.id).toBe("toolu_123");                    
+      130 +      expect(parsed.name).toBe("bash");                       
+      131 +      expect(parsed.input).toBe("{}");                        
+      132 +      expect(state.pendingToolCall).toBeNull();               
+      133 +    });                                                       
+      134 +                                                              
+      135 +    it("should accumulate input_json_delta between start and s
+          +top", () => {                                                 
+      136 +      const state = createClaudeStreamState();                
+      137 +                                                              
+      138 +      // Start tool_use with empty input                      
+      139 +      const startLine = JSON.stringify({                      
+      140 +        type: "stream_event",                                 
+      141 +        event: {                                              
+      142 +          type: "content_block_start",                        
+      143 +          index: 1,                                           
+      144 +          content_block: {                                    
+      145 +            type: "tool_use",                                 
+      146 +            id: "toolu_456",                                  
+      147 +            name: "edit",                                     
+      148 +            input: {},                                        
+      149 +          },                                                  
+      150 +        },                                                    
+      151 +      });                                                     
+      152 +      parseClaudeStreamJson(startLine, state);                
+      153 +      expect(state.pendingToolCall).not.toBeNull();           
+      154 +                                                              
+      155 +      // Stream partial JSON deltas                           
+      156 +      const delta1 = JSON.stringify({                         
+      157 +        type: "stream_event",                                 
+      158 +        event: {                                              
+      159 +          type: "content_block_delta",                        
+      160 +          index: 1,                                           
+      161 +          delta: { type: "input_json_delta", partial_json: '{"
+          +file":' },                                                    
+      162 +        },                                                    
+      163 +      });                                                     
+      164 +      expect(parseClaudeStreamJson(delta1, state)).toBeNull();
+      165 +                                                              
+      166 +      const delta2 = JSON.stringify({                         
+      167 +        type: "stream_event",                                 
+      168 +        event: {                                              
+      169 +          type: "content_block_delta",                        
+      170 +          index: 1,                                           
+      171 +          delta: { type: "input_json_delta", partial_json: '"s
+          +rc/main.ts",' },                                              
+      172 +        },                                                    
+      173 +      });                                                     
+      174 +      expect(parseClaudeStreamJson(delta2, state)).toBeNull();
+      175 +                                                              
+      176 +      const delta3 = JSON.stringify({                         
+      177 +        type: "stream_event",                                 
+      178 +        event: {                                              
+      179 +          type: "content_block_delta",                        
+      180 +          index: 1,                                           
+      181 +          delta: { type: "input_json_delta", partial_json: '"c
+          +ontent":"edited"}' },                                         
+      182 +        },                                                    
+      183 +      });                                                     
+      184 +      expect(parseClaudeStreamJson(delta3, state)).toBeNull();
+      185 +                                                              
+      186 +      // Stop → finalize with accumulated input               
+      187 +      const stopLine = JSON.stringify({                       
+      188 +        type: "stream_event",                                 
+      189 +        event: { type: "content_block_stop", index: 1 },      
+      190 +      });                                                     
+      191 +      const chunk = parseClaudeStreamJson(stopLine, state);   
+      192 +      expect(chunk).not.toBeNull();                           
+      193 +      expect(chunk!.type).toBe(ChunkType.ToolCall);           
+      194 +      const parsed = JSON.parse(chunk!.content);              
+      195 +      expect(parsed.id).toBe("toolu_456");                    
+      196 +      expect(parsed.name).toBe("edit");                       
+      197 +      expect(parsed.input).toBe('{"file":"src/main.ts","conten
+          +t":"edited"}');                                               
+      198 +      expect(state.pendingToolCall).toBeNull();               
+      199 +    });                                                       
+      200 +                                                              
+      201 +    it("should not emit tool call without state", () => {     
+      202 +      // Without state, content_block_start/stop are ignored  
+      203 +      const startLine = JSON.stringify({                      
+      204 +        type: "stream_event",                                 
+      205 +        event: {                                              
+      206 +          type: "content_block_start",                        
+      207 +          index: 0,                                           
+      208 +          content_block: { type: "tool_use", id: "toolu_1", na
+          +me: "Read", input: {} },                                      
+      209 +        },                                                    
+      210 +      });                                                     
+      211 +      expect(parseClaudeStreamJson(startLine)).toBeNull();    
+      212 +                                                              
+      213 +      const stopLine = JSON.stringify({                       
+      214 +        type: "stream_event",                                 
+      215 +        event: { type: "content_block_stop", index: 0 },      
+      216 +      });                                                     
+      217 +      expect(parseClaudeStreamJson(stopLine)).toBeNull();     
+      218 +    });                                                       
+      219 +                                                              
+      220 +    it("should handle multiple tool calls sequentially", () =>
+          + {                                                            
+      221 +      const state = createClaudeStreamState();                
+      222 +                                                              
+      223 +      // First tool call                                      
+      224 +      const s1 = JSON.stringify({ type: "stream_event", event:
+          + { type: "content_block_start", index: 0, content_block: { typ
+          +e: "tool_use", id: "toolu_1", name: "bash", input: {} } } }); 
+      225 +      parseClaudeStreamJson(s1, state);                       
+      226 +      const stop1 = JSON.stringify({ type: "stream_event", eve
+          +nt: { type: "content_block_stop", index: 0 } });              
+      227 +      const c1 = parseClaudeStreamJson(stop1, state);         
+      228 +      expect(c1).not.toBeNull();                              
+      229 +      expect(JSON.parse(c1!.content).id).toBe("toolu_1");     
+      230 +      expect(state.pendingToolCall).toBeNull();               
+      231 +                                                              
+      232 +      // Second tool call                                     
+      233 +      const s2 = JSON.stringify({ type: "stream_event", event:
+          + { type: "content_block_start", index: 1, content_block: { typ
+          +e: "tool_use", id: "toolu_2", name: "Read", input: {} } } }); 
+      234 +      parseClaudeStreamJson(s2, state);                       
+      235 +      const stop2 = JSON.stringify({ type: "stream_event", eve
+          +nt: { type: "content_block_stop", index: 1 } });              
+      236 +      const c2 = parseClaudeStreamJson(stop2, state);         
+      237 +      expect(c2).not.toBeNull();                              
+      238 +      expect(JSON.parse(c2!.content).id).toBe("toolu_2");     
+      239 +      expect(state.pendingToolCall).toBeNull();               
+      240 +    });                                                       
+      241 +  });                                                         
+      242  });
+      243  
+      244  describe("parseOpenCodeEvent", () => {
+
+● Now let's build and run the tests to verify everything compiles and passes.
+
+● Bash(pnpm --filter @agenthub/agent-core test 2>&1)
+  ⎿  Error: Exit code 1
+
+     > @agenthub/agent-core@0.1.0 test 
+     D:\code\github\AgentHub\packages\agent-core
+     > vitest run
+
+
+      RUN  v3.2.4 D:/code/github/AgentHub/packages/agent-core
+
+      ❯ src/__tests__/chunk-parser.test.ts (27 tests | 1 failed) 16ms
+        ✓ createChunk > should create a chunk with the given type and content 
+     2ms
+     … +63 lines (ctrl+o to see all)
+
+● Bash(pnpm --filter @agenthub/agent-core build 2>&1)
+  ⎿  > @agenthub/agent-core@0.1.0 build D:\code\github\AgentHub\packages\ag
+     ent-core
+     > tsup
+     … +19 lines (ctrl+o to expand)
+
+● Build succeeded. One test failed — the content_block_start has input: {} which
+   gets stringified and prepended to the accumulated deltas. Let me fix the
+  parser to handle this edge case.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(packages\agent-core\src\utils\chunk-parser.ts)
+  ⎿  Added 1 line, removed 1 line
+      114          state.pendingToolCall = {
+      115            id: block.id ?? "",
+      116            name: block.name ?? "",
+      117 -          input: block.input ? JSON.stringify(block.input) : "
+          -",                                                            
+      117 +          input: block.input && Object.keys(block.input).lengt
+          +h > 0 ? JSON.stringify(block.input) : "",                     
+      118          };
+      119          return null;
+      120        }
+
+● Bash(pnpm --filter @agenthub/agent-core test 2>&1)
+  ⎿  Error: Exit code 1
+
+     > @agenthub/agent-core@0.1.0 test 
+     D:\code\github\AgentHub\packages\agent-core
+     > vitest run
+
+
+      RUN  v3.2.4 D:/code/github/AgentHub/packages/agent-core
+
+      ✓ src/__tests__/factory.test.ts (4 tests) 3ms
+      ❯ src/__tests__/chunk-parser.test.ts (27 tests | 1 failed) 20ms
+     … +70 lines (ctrl+o to see all)
+● The test expectation needs updating — empty input: {} now correctly produces
+  "". Let me fix the test.
+
+● Update(packages\agent-core\src\__tests__\chunk-parser.test.ts)
+  ⎿  Added 1 line, removed 1 line
+      114        expect(state.pendingToolCall).toEqual({
+      115          id: "toolu_123",
+      116          name: "bash",
+      117 -        input: "{}",                                          
+      117 +        input: "",                                            
+      118        });
+      119  
+      120        // content_block_stop → finalizes tool call
+
+● Update(packages\agent-core\src\__tests__\chunk-parser.test.ts)
+  ⎿  Added 1 line, removed 1 line
+      128        const parsed = JSON.parse(chunk!.content);
+      129        expect(parsed.id).toBe("toolu_123");
+      130        expect(parsed.name).toBe("bash");
+      131 -      expect(parsed.input).toBe("{}");                        
+      131 +      expect(parsed.input).toBe("");                          
+      132        expect(state.pendingToolCall).toBeNull();
+      133      });
+      134  
+
+● Bash(pnpm --filter @agenthub/agent-core test 2>&1)
+  ⎿  > @agenthub/agent-core@0.1.0 test D:\code\github\AgentHub\packages\age
+     nt-core
+     > vitest run
+     … +16 lines (ctrl+o to expand)
+
+● All 47 tests pass. Now let me run the lint check and rebuild the server.
+
+● Bash(pnpm --filter @agenthub/agent-core lint 2>&1)
+  ⎿  Error: Exit code 2
+
+     > @agenthub/agent-core@0.1.0 lint 
+     D:\code\github\AgentHub\packages\agent-core
+     > tsc --noEmit
+
+     src/__tests__/chunk-parser.test.ts(2,41): error TS6133: 'Chunk' is declared
+      but its value is never read.
+     src/__tests__/claude.adapter.test.ts(10,1): error TS6133: 'execSync' is 
+     declared but its value is never read.
+     src/__tests__/claude.adapter.test.ts(167,11): error TS6133: 'firstResult' 
+     is declared but its value is never read.
+     src/__tests__/claude.adapter.test.ts(167,40): error TS2339: Property 'next'
+      does not exist on type 'AsyncIterable<Chunk>'.
+     src/__tests__/custom.adapter.test.ts(156,12): error TS2532: Object is 
+     possibly 'undefined'.
+     … +4 lines (ctrl+o to see all)
+
+● Bash(pnpm --filter @agenthub/server build 2>&1)
+  ⎿  > @agenthub/server@0.1.0 build D:\code\github\AgentHub\apps\server
+     > tsup
+     … +14 lines (ctrl+o to expand)
+
+● Server builds fine. The lint errors are mostly pre-existing, but I introduced
+  one — unused Chunk type import. Let me fix that.
+
+● Update(packages\agent-core\src\__tests__\chunk-parser.test.ts)
+  ⎿  Added 1 line, removed 1 line
+      1  import { describe, it, expect } from "vitest";
+      2 -import { ChunkType, AgentProvider, type Chunk } from "@agenthub/
+        -shared";                                                        
+      2 +import { ChunkType, AgentProvider } from "@agenthub/shared";    
+      3  import {
+      4    createChunk,
+      5    isDoneChunk,
+
+● Now let me clean up the debug console.error logs from intent-analyzer.ts that
+  were added for debugging.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Update(apps\server\src\orchestrator\intent-analyzer.ts)
+  ⎿  Removed 5 lines
+      64        try {
+      65          const result = await this.callLLM(prompt, timeout);
+      66          if (result && result.assignedAgents.length > 0) {
+      67 -          console.error("[LLM ANALYZE] success with", result.as
+         -signedAgents.length, "agents");                                
+      67            return result;
+      68          }
+      69          // LLM returned no agents — message doesn't need orches
+          tration
+      70          if (result && result.assignedAgents.length === 0) {
+      72 -          console.error("[LLM ANALYZE] returned empty agents");
+      71            return null;
+      72          }
+      75 -        console.error("[LLM ANALYZE] result is null, retrying..
+         -.");                                                           
+      73        } catch (err) {
+      77 -        console.error("[LLM ANALYZE] error:", err);            
+      74          if (attempt < maxRetries) continue;
+      75          // Fallback: assign all agents
+      80 -        console.error("[LLM ANALYZE] fallback to all agents"); 
+      76          return this.fallbackResult(content, agents);
+      77        }
+      78      }
+
+● Update(apps\server\src\orchestrator\intent-analyzer.ts)
+  ⎿  Removed 6 lines
+      170          throw new Error("Empty LLM response");
+      171        }
+      172  
+      173 -      // Debug: log raw LLM response                          
+      174 -      console.error("[LLM RAW]", raw);                        
+      175 -                                                              
+      173        const parsed = this.parseResponse(raw);
+      174  
+      178 -      // Debug: log parsed result                             
+      179 -      console.error("[LLM PARSED]", JSON.stringify(parsed));  
+      180 -                                                              
+      175        return parsed;
+      176      } finally {
+      177        clearTimeout(timeoutId);
+
+● Now let me do a final lint check and tests.
+
+● Bash(pnpm --filter @agenthub/agent-core test 2>&1 && echo "---TESTS DONE---"
+      && pnpm --filter @agenthub/agent-core lint 2>&1)
+  ⎿  Error: Exit code 2
+
+     > @agenthub/agent-core@0.1.0 test 
+     D:\code\github\AgentHub\packages\agent-core
+     > vitest run
+
+
+      RUN  v3.2.4 D:/code/github/AgentHub/packages/agent-core
+
+      ✓ src/__tests__/chunk-parser.test.ts (27 tests) 9ms
+      ✓ src/__tests__/factory.test.ts (4 tests) 3ms
+     … +26 lines (ctrl+o to see all)
+
+● Bash(pnpm --filter @agenthub/server lint 2>&1)
+  ⎿  Error: Exit code 2
+
+     > @agenthub/server@0.1.0 lint D:\code\github\AgentHub\apps\server
+     > tsc --noEmit
+
+     src/app.ts(46,24): error TS18046: 'error' is of type 'unknown'.
+     src/app.ts(47,68): error TS18046: 'error' is of type 'unknown'.
+     src/middleware/jwt.ts(39,39): error TS2345: Argument of type 'string | 
+     undefined' is not assignable to parameter of type 'string'.
+       Type 'undefined' is not assignable to type 'string'.
+     src/orchestrator/executor.ts(108,16): error TS2352: Conversion of type '{ 
+     id: string; conversationId: string; senderType: "user" | "contact"; 
+     senderId: string; type: "text"; content: string; createdAt: string; 
+     updatedAt: string; }[]' to type 'Message[]' may be a mistake because 
+     neither type sufficiently overlaps with the other. If this was intentional,
+      convert the expression to 'unknown' first.
+     … +24 lines (ctrl+o to see all)
+
+● All 47 tests pass. The lint errors are all pre-existing (none introduced by my
+   changes). Here's a summary of what was done:
+
+  Changes Summary
+
+  1. packages/agent-core/src/adapters/claude.adapter.ts
+
+  - Import createClaudeStreamState from chunk-parser
+  - Create parseState before the readline loop
+  - Pass parseState to parseClaudeStreamJson(line, parseState)
+
+  2. packages/agent-core/src/utils/chunk-parser.ts
+
+  - Fixed content_block_start for tool_use to only stringify non-empty input
+  objects (avoids "{}" prefix in accumulated JSON)
+
+  3. apps/server/src/orchestrator/executor.ts
+
+  - Added chunk.type === ChunkType.ToolCall to the fullContent accumulation
+  condition
+
+  4. packages/agent-core/src/__tests__/chunk-parser.test.ts
+
+  - Added 4 test cases for tool call stateful parsing:
+    - content_block_start → content_block_stop (basic tool call)
+    - input_json_delta accumulation between start and stop
+    - Backward compatibility (no state → ignored)
+    - Multiple sequential tool calls
+
+  5. apps/server/src/orchestrator/intent-analyzer.ts
+
+  - Removed 7 debug console.error logs that were added temporarily
+● 任务完成。以下是本次会话的修改摘要：
+
+  修复：Claude 流解析器忽略工具调用事件
+
+  问题：parseClaudeStreamJson 仅解析 text_delta → Text 和 result → Done，所有
+  content_block_start/tool_use、input_json_delta、content_block_stop
+  事件均被静默丢弃，导致前端在工具执行期间不显示任何内容。
+
+  修改内容：
+
+  文件: packages/agent-core/src/utils/chunk-parser.ts
+  变更: 添加了 ClaudeStreamState + 状态化解析：content_block_start/tool_use
+    开始跟踪 → input_json_delta 累积部分 JSON → content_block_stop 发出 ToolCall
+
+    chunk
+  ────────────────────────────────────────
+  文件: packages/agent-core/src/adapters/claude.adapter.ts
+  变更: 创建 parseState 并传递给 parseClaudeStreamJson
+  ────────────────────────────────────────
+  文件: apps/server/src/orchestrator/executor.ts
+  变更: 添加了 ChunkType.ToolCall 到 fullContent 累积逻辑中（以便 Agent
+    输出能持续到数据库）
+  ────────────────────────────────────────
+  文件: packages/agent-core/src/__tests__/chunk-parser.test.ts
+  变更: 新增 4 个测试用例，覆盖工具调用状态解析
+  ────────────────────────────────────────
+  文件: apps/server/src/orchestrator/intent-analyzer.ts
+  变更: 移除 7 条调试 console.error 日志
+
+  测试结果：全部通过 — 47/47 测试通过，构建成功。
+
+✻ Cooked for 1m 52s
+
+❯ 好的，你检查一下单聊和群聊的chunk都同步上了吗？                               
+
+  Searched for 1 pattern, read 5 files (ctrl+o to expand)
+
+● 好，我把两个路径完整对比了一下：
+
+  单聊流程 (runAgentExecution)
+
+  adapter.execute() → chunks
+    ├─ Text    → fullResponse += content  → SSE "chunk"
+    ├─ Code    → SSE "chunk"
+    ├─ ToolCall → SSE "chunk"
+    ├─ Artifact → SSE "artifact_status"
+    ├─ Error   → SSE "error"
+    └─ Done    → 跳过
+  → 存 fullResponse → SSE "done" 完成
+
+  群聊流程 (dispatcher → executor)
+
+  adapter.execute() → chunks
+    ├─ Text    → fullContent += content  → SSE "chunk"
+    ├─ Code    → fullContent += content  → SSE "chunk"
+    ├─ ToolCall → fullContent += content  → SSE "chunk"
+    ├─ Artifact → SSE "artifact_status"
+    ├─ Error   → SSE "error"
+    └─ Done    → 跳过
+  → onTaskCompleted 存 fullContent → SSE "done" 完成
+
+  发现了两个不同步的问题
+
+  🔴 问题1：单聊 fullResponse 只累加了 Text，漏了 Code 和 ToolCall
+
+  messages.ts:434:
+  if (chunk.type === ChunkType.Text) {        // ← 只有 Text!
+    fullResponse += chunk.content;
+  }
+
+  群聊 executor.ts（刚修复后）：
+  if (chunk.type === ChunkType.Text ||
+      chunk.type === ChunkType.Code ||
+      chunk.type === ChunkType.ToolCall) {    // ← Text + Code + ToolCall
+    fullContent += chunk.content;
+  }
+
+  后果：单聊中 Agent 输出的 Code 和 ToolCall
+  内容，前端能看到流式输出，但不会存到数据库，刷新页面就没了。
+
+  🔴 问题2：单聊 pushChunk 的 artifact_status 和 error 事件缺了 agentId
+
+  dispatcher.ts 群聊的 Artifact 事件有 agentId，但 messages.ts
+  单聊的没有。不过单聊只有一个 Agent，这个影响不大。
+
+❯ 同步，因为单聊也要看toolcall和code                                            
+
+● Update(apps\server\src\routes\messages.ts)
+  ⎿  Added 5 lines, removed 1 line
+      431        let fullResponse = "";
+      432  
+      433        for await (const chunk of adapter.execute(context)) {
+      434 -        if (chunk.type === ChunkType.Text) {                  
+      434 +        if (                                                  
+      435 +          chunk.type === ChunkType.Text ||                    
+      436 +          chunk.type === ChunkType.Code ||                    
+      437 +          chunk.type === ChunkType.ToolCall                   
+      438 +        ) {                                                   
+      439            fullResponse += chunk.content;
+      440          }
+      441          // Don't forward Done chunk — we persist first, then p
+           ush done event
+
+● Update(apps\server\src\routes\messages.ts)
+  ⎿  Added 1 line
+      496          id: chunk.metadata?.id ?? "",
+      497          status: chunk.metadata?.status ?? "building",
+      498          title: chunk.metadata?.title,
+      499 +        agentId,                                              
+      500        });
+      501        break;
+      502  
+
+● Update(apps\server\src\routes\messages.ts)
+  ⎿  Added 1 line
+      504        cm.pushToConversation(conversationId, "error", {
+      505          message: chunk.content,
+      506          code: "ADAPTER_ERROR",
+      507 +        agentId,                                              
+      508        });
+      509        break;
+      510  
+
+● Bash(pnpm --filter @agenthub/server build 2>&1 && echo "---BUILD OK---")
+  ⎿  > @agenthub/server@0.1.0 build D:\code\github\AgentHub\apps\server
+     > tsup
+     … +15 lines (ctrl+o to expand)
+
+● 构建通过。现在两个路径的事件处理已经完全同步：
+
+  ┌──────────┬───────────────────────────┬────────┬───────────────┬───────┐
+  │  Chunk   │        单聊 (SSE)         │ 群聊   │   单聊 (DB)   │ 群聊  │
+  │   类型   │                           │ (SSE)  │               │ (DB)  │
+  ├──────────┼───────────────────────────┼────────┼───────────────┼───────┤
+  │ Text     │ "chunk" { content,        │ 同左   │ ✅ 已存       │ ✅    │
+  │          │ agentId }                 │        │               │ 已存  │
+  ├──────────┼───────────────────────────┼────────┼───────────────┼───────┤
+  │ Code     │ "chunk" { content,        │ 同左   │ ✅            │ ✅    │
+  │          │ agentId }                 │        │ 已存（修复）  │ 已存  │
+  ├──────────┼───────────────────────────┼────────┼───────────────┼───────┤
+  │ ToolCall │ "chunk" { content,        │ 同左   │ ✅            │ ✅    │
+  │          │ agentId }                 │        │ 已存（修复）  │ 已存  │
+  ├──────────┼───────────────────────────┼────────┼───────────────┼───────┤
+  │ Artifact │ "artifact_status" { id,   │ 同左   │ —             │ —     │
+  │          │ title, agentId }          │        │               │       │
+  ├──────────┼───────────────────────────┼────────┼───────────────┼───────┤
+  │ Error    │ "error" { message, code,  │ 同左   │ —             │ —     │
+  │          │ agentId }                 │        │               │       │
+  ├──────────┼───────────────────────────┼────────┼───────────────┼───────┤
+  │ Done     │ → 持久化后发 "done"       │ 同左   │ —             │ —     │
+  └──────────┴───────────────────────────┴────────┴───────────────┴───────┘
+
+  修复了 3 处不一致：
+  1. runAgentExecution 的 fullResponse 加了 Code + ToolCall 累加
+  2. pushChunk 的 artifact_status 事件加了 agentId
+  3. pushChunk 的 error 事件加了 agentId
+
+❯ 除了这三个chunk，ai有可能还会输出什么chunk？                                  
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+● 完整看了一遍所有 Adapter 和 ChunkType 枚举，结果如下：
+
+  ChunkType 共 6 种，但实际只用了 4 种
+
+  ┌───────────┬──────┬───────────────────┬──────────────┬───────────────────┐
+  │ ChunkType │ 定义 │      Claude       │   OpenCode   │      Custom       │
+  ├───────────┼──────┼───────────────────┼──────────────┼───────────────────┤
+  │ Text      │ ✅   │ ✅ text_delta     │ ✅ text      │ ✅ delta.content  │
+  ├───────────┼──────┼───────────────────┼──────────────┼───────────────────┤
+  │ Code      │ ✅   │ ❌ 没有适配器产出 │ 同左         │ 同左              │
+  ├───────────┼──────┼───────────────────┼──────────────┼───────────────────┤
+  │ ToolCall  │ ✅   │ ✅ tool_use       │ ✅ tool_use  │ ✅                │
+  │           │      │ (刚修复)          │              │ delta.tool_calls  │
+  ├───────────┼──────┼───────────────────┼──────────────┼───────────────────┤
+  │ Artifact  │ ✅   │ ❌ 没有适配器产出 │ 同左         │ 同左              │
+  ├───────────┼──────┼───────────────────┼──────────────┼───────────────────┤
+  │ Error     │ ✅   │ ✅ exit code      │ ✅ error     │ ✅ HTTP/abort     │
+  ├───────────┼──────┼───────────────────┼──────────────┼───────────────────┤
+  │ Done      │ ✅   │ ✅ result         │ ✅           │ ✅ [DONE]         │
+  │           │      │                   │ step_finish  │                   │
+  └───────────┴──────┴───────────────────┴──────────────┴───────────────────┘
+
+  Code 和 Artifact 被定义了，但没有任何 Adapter 产出它们。 它们是预留类型。
+
+  目前 Claude 输出的代码块是以 markdown ``` 的形式作为 Text chunk
+  流出的，前端渲染时由 MessageBubble 组件中的 CodeBlock 负责高亮显示。
+
+  所以当前 fullResponse 累加 Text + ToolCall + Code 已经覆盖了全部实际会输出的
+  chunk 类型，没有遗漏了。Artifact 和 Error 不需要累加到 fullContent（Artifact
+  不走内容累加，Error 表示执行失败）。
+
+  要不要加个 fullResponse 也累加 Code 类型——虽然现在没有 Adapter
+  产出它，但预留了总比漏掉好？你已经加上了，没问题。
+
+❯ /opsx:explore 你那给我全都适配上啊，然后前端sse也适配上                       
+
+● Skill(opsx:explore)
+  ⎿  Successfully loaded skill
+
+● 好，我先完整调研一遍现状，把整个链路摸清楚。
+
+  Searched for 1 pattern, read 4 files (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ 不对啊，ai可以输出 Code和Artifact的chunk字段吗，还是你自己定义的啊这些        
+● 你说得对，Code 和 Artifact 不是 AI 输出的，是我自己定义的。
+
+  看实际各个 AI 的输出格式：
+
+  Claude CLI stream-json 只输出这些事件类型：
+  - text_delta → 纯文本（代码块也在里面，以 ``` 形式）
+  - input_json_delta → 工具调用的 JSON 参数
+  - content_block_start/stop → 标记块开始/结束
+  - result → 流结束
+  - init, ping, message_delta → 连接管理/信息
+
+  没有 code 事件，也没有 artifact 事件。
+
+  ChunkType.Code 和 ChunkType.Artifact 是我在 packages/shared/src/enums/chunk.ts
+   里提前定义的预留类型，想着以后可能服务端检测到 markdown 代码块 ``` 时拆成
+  Code chunk，或者工具返回文件时产出 Artifact
+  chunk。但从来没有适配器真正产出过它们，它们就是死代码。
+
+  所以不需要"全都适配"——实际 AI 只会输出 4 种 chunk，我们已经全处理好了：
+
+  ┌──────────────────┬────────────────────────────┬───────────┐
+  │ 实际产出的 Chunk │           适配器           │   已做    │
+  ├──────────────────┼────────────────────────────┼───────────┤
+  │ Text             │ Claude / OpenCode / Custom │ ✅        │
+  ├──────────────────┼────────────────────────────┼───────────┤
+  │ ToolCall         │ Claude / OpenCode / Custom │ ✅ 刚修复 │
+  ├──────────────────┼────────────────────────────┼───────────┤
+  │ Error            │ Claude / OpenCode / Custom │ ✅        │
+  ├──────────────────┼────────────────────────────┼───────────┤
+  │ Done             │ Claude / OpenCode / Custom │ ✅        │
+  └──────────────────┴────────────────────────────┴───────────┘
+
+  至于前端，流式渲染用的是纯文本而不是
+  MarkdownRenderer，所以代码块在流式输出时是裸 ``` 文本。要不要把这个改一下？

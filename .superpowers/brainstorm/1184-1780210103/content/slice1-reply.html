@@ -1,0 +1,131 @@
+<h2>Slice 1: 消息交互增强 — 交互方案</h2>
+<p class="subtitle">消息回复 / 重新生成 / Pin 消息的 UI 布局方案</p>
+
+<div style="max-width: 900px; margin: 0 auto;">
+
+  <!-- Reply Feature -->
+  <div class="section">
+    <h3>1. 消息回复 (Reply/Quote)</h3>
+    <div class="mockup" style="margin-top: 8px;">
+      <div class="mockup-body" style="padding: 16px; min-height: 240px;">
+
+        <!-- Existing messages -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+          <div style="background: var(--mock-accent); color: white; padding: 10px 14px; border-radius: 12px 4px 12px 12px; max-width: 60%; font-size: 13px;">
+            帮我写一个 React 的倒计时组件
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-start; margin-bottom: 16px;">
+          <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 10px 14px; border-radius: 4px 12px 12px 12px; max-width: 70%;">
+            <div style="font-size: 11px; color: var(--mock-muted); margin-bottom: 4px;">Claude Code</div>
+            <div style="font-size: 13px;">好的，这是一个使用 useState + useEffect 的倒计时组件...</div>
+          </div>
+        </div>
+
+        <!-- Hover action: reply button -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; position: relative;">
+          <div style="background: var(--mock-accent); color: white; padding: 10px 14px; border-radius: 12px 4px 12px 12px; max-width: 60%; font-size: 13px;">
+            把默认时间改成 5 分钟
+          </div>
+          <!-- Floating action bar on hover -->
+          <div style="position: absolute; right: -44px; top: 4px; display: flex; gap: 2px; flex-direction: column; opacity: 0.8;">
+            <div style="width: 28px; height: 28px; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer;">↩</div>
+            <div style="width: 28px; height: 28px; background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer;">📌</div>
+          </div>
+        </div>
+
+        <!-- Reply preview above input -->
+        <div style="border-left: 3px solid var(--mock-accent); padding: 8px 12px; margin-bottom: 8px; background: var(--mock-surface); border-radius: 0 8px 8px 0; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <span style="font-size: 11px; color: var(--mock-muted);">回复 @Claude Code</span>
+            <div style="font-size: 12px; color: var(--mock-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px;">好的，这是一个使用 useState + useEffect 的倒计时组件...</div>
+          </div>
+          <span style="color: var(--mock-muted); cursor: pointer; font-size: 16px;">✕</span>
+        </div>
+
+        <!-- Input area -->
+        <div style="display: flex; gap: 8px;">
+          <div style="border: 1px solid var(--mock-border); border-radius: 10px; padding: 10px 14px; flex: 1; font-size: 13px; color: var(--mock-muted);">输入消息...</div>
+          <div style="width: 36px; height: 36px; background: var(--mock-accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">→</div>
+        </div>
+
+      </div>
+    </div>
+    <ul style="margin-top: 8px; font-size: 13px;">
+      <li>悬停消息时，右侧浮现操作按钮（回复/Pin）</li>
+      <li>点击回复后，输入框上方出现引用块，显示正在回复的消息预览</li>
+      <li>发送后，引用的消息以 QuoteBlock 形式嵌入在消息中</li>
+    </ul>
+  </div>
+
+  <!-- Regenerate Feature -->
+  <div class="section">
+    <h3>2. 重新生成 (Regenerate)</h3>
+    <div class="mockup" style="margin-top: 8px;">
+      <div class="mockup-body" style="padding: 16px; min-height: 140px;">
+        <div style="display: flex; justify-content: flex-start; margin-bottom: 8px;">
+          <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 10px 14px; border-radius: 4px 12px 12px 12px; max-width: 70%;">
+            <div style="font-size: 11px; color: var(--mock-muted); margin-bottom: 4px;">Claude Code</div>
+            <div style="font-size: 13px;">这是生成的倒计时组件代码...</div>
+          </div>
+        </div>
+        <!-- Regenerate button bar -->
+        <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 4px 0 0 8px;">
+          <button style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            🔄 重新生成
+          </button>
+          <span style="font-size: 11px; color: var(--mock-muted);">Agent 会重新回答当前问题</span>
+        </div>
+      </div>
+    </div>
+    <ul style="margin-top: 8px; font-size: 13px;">
+      <li>每条 AI 回复底部显示 "重新生成" 按钮</li>
+      <li>点击后重新执行 Agent，替换当前 AI 回复内容</li>
+      <li>如果是群聊中某个 Agent 的回复，只重新生成该 Agent 的部分</li>
+    </ul>
+  </div>
+
+  <!-- Pin Feature -->
+  <div class="section">
+    <h3>3. Pin 消息</h3>
+    <div class="mockup" style="margin-top: 8px;">
+      <div class="mockup-body" style="padding: 16px; min-height: 140px; display: flex; gap: 20px;">
+
+        <!-- Message with Pin indicator -->
+        <div style="flex: 1;">
+          <div style="font-size: 11px; color: var(--mock-muted); margin-bottom: 8px;">消息上的 Pin 按钮</div>
+          <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); padding: 10px 14px; border-radius: 4px 12px 12px 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <span style="font-size: 11px; color: var(--mock-muted);">规则确认</span>
+                <div style="font-size: 13px; margin-top: 2px;">数据库用 PostgreSQL，端口 5432</div>
+              </div>
+              <span style="font-size: 14px; cursor: pointer; color: var(--mock-accent);">📌</span>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: var(--mock-accent); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+            <span>●</span> 已 Pin — 将作为长期上下文
+          </div>
+        </div>
+
+        <!-- Pinned messages panel (right side / collapsed) -->
+        <div style="flex: 1;">
+          <div style="font-size: 11px; color: var(--mock-muted); margin-bottom: 8px;">Pin 列表（侧边栏面板）</div>
+          <div style="background: var(--mock-surface); border: 1px solid var(--mock-border); border-radius: 10px; padding: 12px;">
+            <div style="font-size: 12px; font-weight: bold; margin-bottom: 8px;">📌 Pinned (2)</div>
+            <div style="font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--mock-border);">数据库用 PostgreSQL，端口 5432</div>
+            <div style="font-size: 12px; padding: 6px 0;">项目结构：apps/web, packages/shared</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <ul style="margin-top: 8px; font-size: 13px;">
+      <li>消息右侧 Pin 按钮 → 点击后标记为 Pin，显示 Pin 状态</li>
+      <li>被 Pin 的消息在传给 Agent 时，会被追加到系统上下文中</li>
+      <li>侧边栏或右侧面板显示当前 Pin 列表，方便管理</li>
+    </ul>
+  </div>
+
+</div>

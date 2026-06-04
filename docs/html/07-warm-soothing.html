@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentHub — 温暖友好风格</title>
+<style>
+  /* ============================================================
+     温暖友好风格 — Soothing / Calm / Brand-forward
+     ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #faf8f5;
+    --bg-secondary: #f5f1ec;
+    --bg-tertiary: #ece6dd;
+    --surface: #ffffff;
+    --brand: #d47b5a;
+    --brand-light: #e8a88a;
+    --brand-dark: #b55d3e;
+    --brand-subtle: #fdf0ea;
+    --accent: #5a9e8f;
+    --accent-light: #8dc4b8;
+    --text-primary: #3d3732;
+    --text-secondary: #7a7068;
+    --text-tertiary: #b0a69c;
+    --text-muted: #d4cec6;
+    --border: #e5ddd5;
+    --border-light: #f0eae4;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.07);
+    --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: linear-gradient(135deg, #faf8f5 0%, #f5f1ec 50%, #f0ece5 100%);
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    padding: 20px;
+  }
+
+  /* ——— 柔和径向渐变 ——— */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 600px 400px at 20% 30%, rgba(212,123,90,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 500px 500px at 80% 70%, rgba(90,158,143,0.05) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 960px;
+    height: 700px;
+    background: var(--surface);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ——— 顶栏 ——— */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.6);
+  }
+  .header-left { display: flex; align-items: center; gap: 20px; }
+  .logo {
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--brand);
+    letter-spacing: -0.02em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .logo-mark {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--brand), var(--brand-light));
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 14px;
+  }
+  .nav { display: flex; gap: 2px; }
+  .nav-item {
+    padding: 6px 14px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .nav-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+  .nav-item.active { background: var(--brand-subtle); color: var(--brand); }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .notif-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+  .notif-btn:hover { background: var(--bg-tertiary); }
+  .user-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand), var(--brand-light));
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* ——— 主体 ——— */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ——— 侧栏 ——— */
+  .sidebar {
+    width: 240px;
+    border-right: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    background: rgba(250,248,245,0.5);
+    flex-shrink: 0;
+  }
+  .sidebar-title {
+    padding: 18px 20px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    font-weight: 600;
+  }
+  .sidebar-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .s-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 2px;
+  }
+  .s-item:hover { background: var(--bg-secondary); }
+  .s-item.active { background: var(--brand-subtle); }
+  .s-item .av {
+    width: 36px; height: 36px;
+    border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
+  }
+  .s-item.active .av { background: var(--brand); color: white; }
+  .s-item .info { flex: 1; min-width: 0; }
+  .s-item .name {
+    font-size: 14px; font-weight: 600; color: var(--text-primary);
+  }
+  .s-item .preview {
+    font-size: 13px; color: var(--text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .s-item .time {
+    font-size: 11px; color: var(--text-tertiary); flex-shrink: 0;
+  }
+
+  .sidebar-bottom {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-light);
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    font-size: 13px; color: var(--text-secondary);
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .sidebar-bottom:hover { background: var(--bg-secondary); }
+  .sidebar-bottom .plus {
+    width: 28px; height: 28px;
+    border-radius: var(--radius-sm);
+    border: 2px dashed var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  /* ——— 聊天 ——— */
+  .chat { flex: 1; display: flex; flex-direction: column; }
+  .chat-top {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .ct-left { display: flex; align-items: center; gap: 12px; }
+  .ct-avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 16px;
+  }
+  .ct-info .ct-name { font-weight: 600; font-size: 16px; }
+  .ct-info .ct-status {
+    font-size: 13px; color: var(--accent);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .ct-info .ct-status::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+  }
+  .ct-actions { display: flex; gap: 8px; }
+  .cta-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+  .cta-btn:hover { background: var(--bg-tertiary); color: var(--brand); }
+
+  /* ——— 消息 ——— */
+  .messages {
+    flex: 1; overflow-y: auto; padding: 24px;
+    display: flex; flex-direction: column; gap: 16px;
+    background: rgba(250,248,245,0.3);
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 99px; }
+
+  .date-divider {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin: 8px 0;
+    position: relative;
+  }
+  .date-divider::before,
+  .date-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%; width: 30%; height: 1px;
+    background: var(--border-light);
+  }
+  .date-divider::before { left: 0; }
+  .date-divider::after { right: 0; }
+  .date-divider span {
+    background: var(--surface);
+    padding: 0 12px;
+  }
+
+  .msg {
+    display: flex; gap: 12px;
+    animation: gentleIn 0.35s ease-out;
+  }
+  @keyframes gentleIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg.user { flex-direction: row-reverse; }
+
+  .msg-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 14px;
+    flex-shrink: 0;
+  }
+  .msg-avatar.c1 { background: var(--brand); color: white; }
+  .msg-avatar.c2 { background: var(--accent); color: white; }
+
+  .msg-bubble {
+    max-width: 70%;
+    padding: 12px 18px;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .msg.user .msg-bubble {
+    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+    color: white;
+    border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+    box-shadow: 0 2px 8px rgba(212,123,90,0.2);
+  }
+  .msg.agent .msg-bubble {
+    background: var(--surface);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-light);
+  }
+  .msg-bubble .name {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .msg.user .msg-bubble .name { color: rgba(255,255,255,0.8); }
+  .msg.agent .msg-bubble .name { color: var(--brand); }
+  .msg-bubble .text { line-height: 1.7; }
+  .msg.user .msg-bubble .text { color: rgba(255,255,255,0.92); }
+  .msg-bubble .time {
+    font-size: 11px;
+    margin-top: 6px;
+  }
+  .msg.user .msg-bubble .time { color: rgba(255,255,255,0.6); }
+  .msg.agent .msg-bubble .time { color: var(--text-tertiary); }
+
+  .msg-bubble code {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: rgba(0,0,0,0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .msg.user .msg-bubble code { background: rgba(255,255,255,0.15); }
+
+  .msg-code {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: #f5f3f0;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin: 8px 0;
+    overflow-x: auto;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+  .msg.user .msg-bubble .msg-code {
+    background: rgba(0,0,0,0.15);
+    border-color: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.9);
+  }
+  .msg-code .kw { color: #c06b4a; }
+  .msg.user .msg-bubble .msg-code .kw { color: #ffd9c2; }
+  .msg-code .cm { color: var(--text-tertiary); font-style: italic; }
+  .msg-code .str { color: var(--accent); }
+  .msg.user .msg-bubble .msg-code .str { color: #a8e6d8; }
+
+  /* ——— 输入区 ——— */
+  .input-area {
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border-light);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  .input-box {
+    display: flex; align-items: flex-end; gap: 10px;
+    background: var(--bg-secondary);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius-lg);
+    padding: 8px 8px 8px 18px;
+    transition: all 0.2s;
+  }
+  .input-box:focus-within {
+    border-color: var(--brand-light);
+    background: var(--surface);
+    box-shadow: 0 0 0 4px rgba(212,123,90,0.06);
+  }
+  .input-box textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    outline: none;
+    resize: none;
+    min-height: 24px;
+    max-height: 120px;
+    padding: 4px 0;
+  }
+  .input-box textarea::placeholder { color: var(--text-tertiary); }
+  .input-actions {
+    display: flex; gap: 2px;
+    flex-shrink: 0;
+  }
+  .ibtn {
+    width: 34px; height: 34px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+  .ibtn:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
+
+  .send-btn {
+    width: 38px; height: 38px;
+    border-radius: var(--radius-md);
+    border: none;
+    background: linear-gradient(135deg, var(--brand), var(--brand-light));
+    color: white;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(212,123,90,0.25);
+  }
+  .send-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(212,123,90,0.3);
+  }
+
+  .input-tools {
+    display: flex; gap: 6px; margin-top: 8px; padding-left: 4px;
+  }
+  .input-tool {
+    font-size: 12px; color: var(--text-tertiary);
+    padding: 2px 10px; border-radius: 99px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .input-tool:hover { background: var(--brand-subtle); color: var(--brand); }
+
+  /* ——— 底部安全提示 ——— */
+  .safety-notice {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 0 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 顶栏 -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-mark">✦</span> AgentHub
+      </div>
+      <div class="nav">
+        <div class="nav-item active">Chat</div>
+        <div class="nav-item">Agents</div>
+        <div class="nav-item">Explore</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="notif-btn">🔔</button>
+      <div class="user-avatar">J</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- 侧栏 -->
+    <div class="sidebar">
+      <div class="sidebar-title">Conversations</div>
+      <div class="sidebar-list">
+        <div class="s-item active">
+          <div class="av">💬</div>
+          <div class="info">
+            <div class="name">代码优化讨论</div>
+            <div class="preview">性能瓶颈分析进行中...</div>
+          </div>
+          <div class="time">刚刚</div>
+        </div>
+        <div class="s-item">
+          <div class="av">📐</div>
+          <div class="info">
+            <div class="name">架构设计评审</div>
+            <div class="preview">微服务拆分方案讨论</div>
+          </div>
+          <div class="time">2h</div>
+        </div>
+        <div class="s-item">
+          <div class="av">🐛</div>
+          <div class="info">
+            <div class="name">Bug 排查</div>
+            <div class="preview">内存泄漏根因分析</div>
+          </div>
+          <div class="time">昨天</div>
+        </div>
+        <div class="s-item">
+          <div class="av">📖</div>
+          <div class="info">
+            <div class="name">Rust 学习笔记</div>
+            <div class="preview">生命周期与所有权</div>
+          </div>
+          <div class="time">3d</div>
+        </div>
+      </div>
+      <div class="sidebar-bottom">
+        <span class="plus">+</span>
+        <span>New conversation</span>
+      </div>
+    </div>
+
+    <!-- 聊天 -->
+    <div class="chat">
+      <div class="chat-top">
+        <div class="ct-left">
+          <div class="ct-avatar">C</div>
+          <div class="ct-info">
+            <div class="ct-name">Claude</div>
+            <div class="ct-status">Online now</div>
+          </div>
+        </div>
+        <div class="ct-actions">
+          <button class="cta-btn">🔍</button>
+          <button class="cta-btn">⋯</button>
+        </div>
+      </div>
+
+      <div class="messages">
+        <div class="date-divider"><span>Today</span></div>
+
+        <div class="msg agent">
+          <div class="msg-avatar c1">C</div>
+          <div class="msg-bubble">
+            <div class="name">Claude</div>
+            <div class="text">你好！我是 Claude，你的 AI 编程助手。很高兴见到你！</div>
+            <div class="time">14:22</div>
+          </div>
+        </div>
+
+        <div class="msg user">
+          <div class="msg-avatar c2">J</div>
+          <div class="msg-bubble">
+            <div class="name">John</div>
+            <div class="text">帮我分析这段代码的性能瓶颈：</div>
+            <div class="msg-code">
+              <span class="kw">function</span> processItems(items) {<br>
+              &nbsp;&nbsp;<span class="kw">for</span> (let i = <span class="str">0</span>; i &lt; items.length; i++) {<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">// 嵌套循环 O(n²)</span><br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">for</span> (let j = <span class="str">0</span>; j &lt; items.length; j++) {<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;items[i].value += items[j].value;<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+              &nbsp;&nbsp;}<br>
+              }
+            </div>
+            <div class="time">14:23</div>
+          </div>
+        </div>
+
+        <div class="msg agent">
+          <div class="msg-avatar c1">C</div>
+          <div class="msg-bubble">
+            <div class="name">Claude</div>
+            <div class="text">
+              <strong>好的，我来分析一下这段代码 👀</strong><br><br>
+              <strong>发现了一个性能瓶颈：</strong>嵌套循环导致复杂度为 <code>O(n²)</code>。<br><br>
+              当数据量达到 10,000 时，需要大约 <strong>1 亿次迭代</strong>，耗时约 2.3 秒。<br><br>
+              <strong>我建议的优化方案：</strong>使用前缀和模式，将复杂度降到 <code>O(n)</code>
+            </div>
+            <div class="msg-code">
+              <span class="kw">function</span> processOptimized(items) {<br>
+              &nbsp;&nbsp;<span class="kw">const</span> total = items.reduce(<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;(sum, item) => sum + item.value, <span class="str">0</span><br>
+              &nbsp;&nbsp;);<br>
+              &nbsp;&nbsp;items.forEach(item => { item.value = total; });<br>
+              }
+            </div>
+            <div class="text">
+              优化后运行时间从 <strong>2.3 秒降至 12 毫秒</strong>，提升了约 99.5% 🚀
+            </div>
+            <div class="time">14:23</div>
+          </div>
+        </div>
+
+        <div class="msg user">
+          <div class="msg-avatar c2">J</div>
+          <div class="msg-bubble">
+            <div class="name">John</div>
+            <div class="text">能不能再解释一下前缀和的具体原理？</div>
+            <div class="time">14:24</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入 -->
+      <div class="input-area">
+        <div class="input-box">
+          <textarea placeholder="Type your message..." rows="1"></textarea>
+          <div class="input-actions">
+            <button class="ibtn">📎</button>
+            <button class="ibtn">😊</button>
+          </div>
+          <button class="send-btn">➤</button>
+        </div>
+        <div class="input-tools">
+          <span class="input-tool">@Claude</span>
+          <span class="input-tool">/review</span>
+          <span class="input-tool">/explain</span>
+          <span class="input-tool">/debug</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

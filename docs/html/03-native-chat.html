@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentHub — 原生聊天风格</title>
+<style>
+  /* ============================================================
+     Discord / Telegram / Slack 风格 — 原生 IM
+     ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #313338;
+    --bg-secondary: #2b2d31;
+    --bg-tertiary: #1e1f22;
+    --sidebar: #2b2d31;
+    --sidebar-hover: #35373c;
+    --sidebar-active: #404249;
+    --surface: #2b2d31;
+    --channel: #313338;
+    --text-primary: #dbdee1;
+    --text-secondary: #b5bac1;
+    --text-muted: #80848e;
+    --brand: #5865f2;
+    --brand-hover: #4752c4;
+    --green: #23a55a;
+    --red: #f23f43;
+    --border: #3f4147;
+    --radius: 8px;
+    --radius-full: 999px;
+    --msg-radius: 18px;
+    --shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  body {
+    font-family: 'gg sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1e1f22;
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .container {
+    width: 960px;
+    height: 700px;
+    background: var(--bg);
+    box-shadow: var(--shadow);
+    display: flex;
+    overflow: hidden;
+    border-radius: var(--radius);
+  }
+
+  /* ——— 服务器栏 ——— */
+  .server-bar {
+    width: 60px;
+    background: var(--bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .server-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 18px;
+    cursor: pointer;
+    transition: border-radius 0.15s;
+    position: relative;
+  }
+  .server-icon:hover { border-radius: var(--radius); }
+  .server-icon.home {
+    background: var(--brand);
+    color: white;
+  }
+  .server-icon.other {
+    background: var(--sidebar);
+    color: var(--text-secondary);
+    border: 2px solid transparent;
+  }
+  .server-icon.other:hover { border-color: var(--brand); color: var(--brand); }
+  .server-divider {
+    width: 28px; height: 2px; background: var(--border); border-radius: 1px;
+  }
+
+  /* ——— 频道侧栏 ——— */
+  .channel-bar {
+    width: 220px;
+    background: var(--sidebar);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .channel-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .channel-header:hover { background: var(--sidebar-hover); }
+
+  .channel-search {
+    padding: 8px 12px;
+    flex-shrink: 0;
+  }
+  .channel-search input {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-primary);
+    outline: none;
+  }
+  .channel-search input::placeholder { color: var(--text-muted); }
+
+  .channel-list {
+    flex: 1; overflow-y: auto; padding: 8px;
+  }
+  .channel-category {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 16px 8px 4px 8px;
+    font-weight: 600;
+  }
+  .channel-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 15px;
+    color: var(--text-secondary);
+    transition: all 0.1s;
+    font-weight: 500;
+  }
+  .channel-item:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .channel-item.active { background: var(--sidebar-active); color: var(--text-primary); }
+  .channel-item .hash {
+    font-size: 18px;
+    color: var(--text-muted);
+    font-weight: 400;
+    width: 20px;
+    text-align: center;
+  }
+  .channel-item.active .hash { color: var(--text-primary); }
+
+  .channel-footer {
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+  }
+  .user-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--brand); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .user-status {
+    position: absolute; bottom: -2px; right: -2px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--green);
+    border: 2px solid var(--sidebar);
+  }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name { font-size: 13px; font-weight: 600; }
+  .user-desc { font-size: 11px; color: var(--text-muted); }
+  .user-buttons { display: flex; gap: 4px; }
+  .user-btn {
+    width: 28px; height: 28px; border-radius: var(--radius);
+    border: none; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+  .user-btn:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+
+  /* ——— 聊天区 ——— */
+  .chat { flex: 1; display: flex; flex-direction: column; background: var(--channel); }
+
+  .chat-title-bar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .chat-title-bar .hash {
+    color: var(--text-muted);
+    font-size: 20px;
+  }
+  .chat-title-bar .topic {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+
+  .messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  .msg-group { margin-bottom: 16px; }
+  .msg {
+    display: flex; gap: 12px;
+    padding: 2px 0;
+    animation: fadeIn 0.2s ease-out;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .msg:not(:first-child) { margin-left: 52px; }
+  .msg:not(:first-child) .msg-avatar { visibility: hidden; }
+
+  .msg-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg-avatar.c1 { background: #5865f2; color: white; }
+  .msg-avatar.c2 { background: #ed4245; color: white; }
+
+  .msg-content { flex: 1; min-width: 0; }
+  .msg-meta {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 2px;
+  }
+  .msg-author {
+    font-weight: 600; font-size: 15px; color: var(--text-primary);
+  }
+  .msg-time {
+    font-size: 11px; color: var(--text-muted);
+  }
+  .msg-text {
+    font-size: 15px; line-height: 1.5;
+    color: var(--text-primary);
+  }
+  .msg-text code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    background: var(--bg-tertiary);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  .msg-attachment {
+    margin-top: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+  }
+  .msg-attachment .kw { color: #7dd3fc; }
+  .msg-attachment .cm { color: #6b7280; }
+  .msg-attachment .str { color: #86efac; }
+
+  .msg-reaction {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .msg-reaction:hover { border-color: var(--brand); }
+
+  .chat-divider {
+    display: flex; align-items: center;
+    margin: 20px 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .chat-divider::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--border); margin-left: 8px;
+  }
+
+  /* ——— 输入区 ——— */
+  .input-area {
+    padding: 0 16px 20px;
+    flex-shrink: 0;
+  }
+  .input-box {
+    display: flex; align-items: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0 8px;
+    transition: all 0.15s;
+  }
+  .input-box:focus-within { border-color: var(--brand); }
+  .input-box textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.4;
+    padding: 10px 4px;
+    color: var(--text-primary);
+    outline: none;
+    resize: none;
+    max-height: 120px;
+  }
+  .input-box textarea::placeholder { color: var(--text-muted); }
+  .input-box-actions {
+    display: flex; gap: 2px;
+  }
+  .ibtn {
+    width: 32px; height: 32px;
+    border: none; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    transition: all 0.15s;
+  }
+  .ibtn:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 服务器栏 -->
+  <div class="server-bar">
+    <div class="server-icon home">AH</div>
+    <div class="server-divider"></div>
+    <div class="server-icon other">🤖</div>
+    <div class="server-icon other">📁</div>
+    <div class="server-icon other">🧪</div>
+    <div class="server-icon other">⚙️</div>
+  </div>
+
+  <!-- 频道侧栏 -->
+  <div class="channel-bar">
+    <div class="channel-header">
+      <span>AgentHub</span>
+      <span style="font-size:18px;color:var(--text-muted);">▼</span>
+    </div>
+    <div class="channel-search">
+      <input type="text" placeholder="Find or start a conversation">
+    </div>
+    <div class="channel-list">
+      <div class="channel-category">AI Assistants</div>
+      <div class="channel-item active">
+        <span class="hash">#</span> claude-chat
+      </div>
+      <div class="channel-item">
+        <span class="hash">#</span> code-review
+      </div>
+      <div class="channel-item">
+        <span class="hash">#</span> debug-helper
+      </div>
+
+      <div class="channel-category">Projects</div>
+      <div class="channel-item">
+        <span class="hash">#</span> backend-optimization
+      </div>
+      <div class="channel-item">
+        <span class="hash">#</span> frontend-refactor
+      </div>
+
+      <div class="channel-category">Direct Messages</div>
+      <div class="channel-item">
+        <span class="hash" style="font-size:14px;font-weight:600;">●</span> Claude Opus
+      </div>
+      <div class="channel-item">
+        <span class="hash" style="font-size:14px;font-weight:600;">●</span> GPT-4o
+      </div>
+    </div>
+
+    <div class="channel-footer">
+      <div class="user-avatar">
+        J
+        <span class="user-status"></span>
+      </div>
+      <div class="user-info">
+        <div class="user-name">John</div>
+        <div class="user-desc">Online</div>
+      </div>
+      <div class="user-buttons">
+        <button class="user-btn">🎙</button>
+        <button class="user-btn">⚙</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 聊天区 -->
+  <div class="chat">
+    <div class="chat-title-bar">
+      <span class="hash">#</span> claude-chat
+      <span class="topic">AI-powered code discussion</span>
+    </div>
+
+    <div class="messages">
+      <div class="msg-group">
+        <div class="msg">
+          <div class="msg-avatar c1">C</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-author">Claude</span>
+              <span class="msg-time">14:22</span>
+            </div>
+            <div class="msg-text">你好！我是 Claude，你的 AI 编程助手。我可以帮你做代码审查、调试、架构设计等。今天需要什么帮助？</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg-group">
+        <div class="msg">
+          <div class="msg-avatar c2">J</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-author">John</span>
+              <span class="msg-time">14:23</span>
+            </div>
+            <div class="msg-text">帮我分析这段代码的性能瓶颈：</div>
+            <div class="msg-attachment">
+              <span class="kw">function</span> processItems(items) {<br>
+              &nbsp;&nbsp;<span class="kw">for</span> (let i = <span class="str">0</span>; i &lt; items.length; i++) {<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">// 嵌套循环 O(n²)</span><br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">for</span> (let j = <span class="str">0</span>; j &lt; items.length; j++) {<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;items[i].value += items[j].value;<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+              &nbsp;&nbsp;}<br>
+              }
+            </div>
+            <span class="msg-reaction">💡 1</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-divider">NEW MESSAGES</div>
+
+      <div class="msg-group">
+        <div class="msg">
+          <div class="msg-avatar c1">C</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-author">Claude</span>
+              <span class="msg-time">14:23</span>
+              <span style="font-size:11px;color:var(--green);">● BOT</span>
+            </div>
+            <div class="msg-text">
+              <strong>发现了性能问题！</strong><br><br>
+              这段代码的主要瓶颈是 <strong>嵌套循环</strong>，复杂度为 <code>O(n²)</code>。<br><br>
+              <strong>📊 影响：</strong>当 items 数量达到 10,000 时，需要约 1 亿次迭代。<br><br>
+              <strong>✅ 优化方案：</strong>
+            </div>
+            <div class="msg-attachment">
+              <span class="kw">function</span> processOptimized(items) {<br>
+              &nbsp;&nbsp;<span class="kw">const</span> total = items.reduce(<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;(sum, item) => sum + item.value, <span class="str">0</span><br>
+              &nbsp;&nbsp;);<br>
+              &nbsp;&nbsp;items.forEach(item => { item.value = total; });<br>
+              }
+            </div>
+            <div class="msg-text" style="margin-top:4px;">
+              <strong>效果：</strong>O(n²) → O(n)，2.3s → 12ms 🚀
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg-group">
+        <div class="msg">
+          <div class="msg-avatar c2">J</div>
+          <div class="msg-content">
+            <div class="msg-meta">
+              <span class="msg-author">John</span>
+              <span class="msg-time">14:24</span>
+            </div>
+            <div class="msg-text">能不能再解释一下前缀和的具体原理？</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="input-area">
+      <div class="input-box">
+        <button class="ibtn">+</button>
+        <textarea placeholder="Message #claude-chat" rows="1"></textarea>
+        <div class="input-box-actions">
+          <button class="ibtn">🎁</button>
+          <button class="ibtn">😊</button>
+          <button class="ibtn">📎</button>
+          <button class="ibtn">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
