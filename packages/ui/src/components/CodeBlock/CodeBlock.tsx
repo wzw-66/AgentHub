@@ -6,15 +6,18 @@ function getTheme() {
   return { ...themes.nightOwl, plain: { ...themes.nightOwl.plain, fontSize: "var(--ui-font-sm)" as unknown as number } };
 }
 
-const snippet = {
+const snippet: CSSProperties = {
   padding: "var(--ui-space-4)",
-  backgroundColor: "var(--ui-color-bg-code)",
-  borderRadius: "var(--ui-radius-md)",
-  overflow: "auto",
+  backgroundColor: "var(--ui-color-bg-code, #faf9f7)",
+  borderRadius: "var(--ui-radius-md, 10px)",
+  overflow: "hidden",
   position: "relative" as const,
   fontFamily: "var(--ui-font-mono)",
   fontSize: "var(--ui-font-sm)",
-  lineHeight: 1.6,
+  lineHeight: 1.5,
+  border: "1px solid var(--ui-color-border-light, #eeede9)",
+  wordBreak: "break-all",
+  overflowWrap: "anywhere",
 };
 
 const headerBar: CSSProperties = {
@@ -25,22 +28,23 @@ const headerBar: CSSProperties = {
 };
 
 const langLabel: CSSProperties = {
-  fontSize: "var(--ui-font-xs)",
-  color: "var(--ui-color-text-code)",
-  opacity: 0.7,
+  fontSize: "9px",
+  color: "var(--ui-color-text-code, #1a1a2e)",
+  opacity: 0.5,
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.8px",
+  fontWeight: 500,
 };
 
 const copyBtnBase: CSSProperties = {
-  fontSize: "var(--ui-font-xs)",
+  fontSize: "var(--ui-font-xs, 10px)",
   padding: "2px 8px",
-  border: "1px solid rgba(255,255,255,0.2)",
-  borderRadius: "var(--ui-radius-sm)",
+  border: "1px solid var(--ui-color-border, rgba(0,0,0,0.06))",
+  borderRadius: "var(--ui-radius-sm, 6px)",
   cursor: "pointer",
   background: "transparent",
-  color: "var(--ui-color-text-code)",
-  transition: "all var(--ui-transition-fast)",
+  color: "var(--ui-color-text-code, #1a1a2e)",
+  transition: "all var(--ui-transition-fast, 150ms)",
 };
 
 const lineStyle: CSSProperties = {
@@ -61,6 +65,9 @@ const rowStyle: CSSProperties = {
   tableLayout: "fixed",
   width: "100%",
   borderCollapse: "collapse",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-all",
+  overflowWrap: "anywhere",
 };
 
 export function CodeBlock({
@@ -83,13 +90,13 @@ export function CodeBlock({
     ...copyBtnBase,
     ...(copied
       ? {
-          borderColor: "var(--ui-color-success)",
-          color: "var(--ui-color-success)",
+          borderColor: "var(--ui-color-success, #2b8a6b)",
+          color: "var(--ui-color-success, #2b8a6b)",
         }
       : {}),
   };
 
-  const content = (
+  const contentEl = (
     <Highlight theme={getTheme()} code={code.trimEnd()} language={language}>
       {({ tokens, getLineProps, getTokenProps }) => (
         <div style={rowStyle}>
@@ -129,7 +136,7 @@ export function CodeBlock({
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
-      {content}
+      {contentEl}
     </div>
   );
 }

@@ -1,18 +1,10 @@
 import type { Metadata } from "next";
-import { Fira_Code } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const firaCode = Fira_Code({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-mono",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "AgentHub — AI Agent Command Center",
-  description: "Multi-Agent collaboration platform powered by AI",
+  title: "AgentHub — AI 协作平台",
+  description: "Multi-Agent collaboration platform powered by IM chat",
 };
 
 export default function RootLayout({
@@ -21,12 +13,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${firaCode.variable}`}
-      data-theme="green"
-    >
-      <body className="font-mono noise-overlay">
+    <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

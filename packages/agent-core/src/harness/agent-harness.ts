@@ -54,6 +54,9 @@ export class AgentHarness {
   private toolRegistry: ToolRegistry | null = null;
   private sandbox: Sandbox | null = null;
 
+  /** Tracks the turn count from the last execute() call. */
+  private _lastTurnCount = 0;
+
   constructor(adapter: AgentAdapter, config: HarnessConfig = {}) {
     this.adapter = adapter;
     this.maxTurns = config.maxTurns ?? 25;
@@ -95,22 +98,13 @@ export class AgentHarness {
 
   /**
    * Execute the agent with the given context.
-   * Yields chunks as they are produced across all turns of the agentic loop.
+   * Yields chunks immediately as they are produced — enables real-time
+   * streaming (typewriter effect) on the frontend.
    */
   async *execute(context: AgentContext): AsyncIterable<Chunk> {
-    const result = await this.executeWithResult(context);
-    for (const chunk of result.chunks) {
-      yield chunk;
-    }
-  }
-
-  /**
-   * Execute and collect all chunks into a HarnessResult.
-   */
-  async executeWithResult(context: AgentContext): Promise<HarnessResult> {
-    const allChunks: Chunk[] = [];
     let turn = 0;
     let workingContext: AgentContext = { ...context };
+    let doneYielded = false;
 
     while (turn < this.maxTurns) {
       turn++;
@@ -120,34 +114,55 @@ export class AgentHarness {
       workingContext = await this.pipeline.runBeforeAgent(workingContext);
 
       const turnChunks: Chunk[] = [];
+      const toolCallsInTurn: Chunk[] = [];
+      let turnDoneChunk: Chunk | null = null;
 
-      // Collect all chunks from this turn.
-      // Do NOT break on Done — the adapter may emit ToolCall chunks after
-      // flushing accumulated streaming tool call deltas. Early termination
-      // via iterator.return() would silently swallow those yields.
+      // Stream chunks from the adapter immediately, but collect
+      // ToolCall and Done chunks for post-turn processing.
       for await (const chunk of this.adapter.execute(workingContext)) {
+        // Stream text/code/error chunks immediately for real-time display
+        if (
+          chunk.type === ChunkType.Text ||
+          chunk.type === ChunkType.Code ||
+          chunk.type === ChunkType.Error
+        ) {
+          yield chunk;
+        }
+
+        if (chunk.type === ChunkType.ToolCall) {
+          toolCallsInTurn.push(chunk);
+        }
+
+        if (chunk.type === ChunkType.Done) {
+          turnDoneChunk = chunk;
+        }
+
         turnChunks.push(chunk);
       }
 
       // Run afterAgent middleware
       await this.pipeline.runAfterAgent(workingContext, turnChunks);
 
-      // Find tool calls in this turn
-      const toolCalls = turnChunks.filter((c) => c.type === ChunkType.ToolCall);
-
-      if (toolCalls.length === 0) {
+      if (toolCallsInTurn.length === 0) {
         // No tool calls — execution is complete
-        allChunks.push(...turnChunks);
+        if (turnDoneChunk) {
+          doneYielded = true;
+          yield turnDoneChunk;
+        }
         break;
+      }
+
+      // Yield tool call chunks for UI visibility (after text is streamed)
+      for (const tc of toolCallsInTurn) {
+        yield tc;
       }
 
       // Process tool calls
       const toolMessages: ToolMessage[] = [];
-      for (const toolCall of toolCalls) {
-        allChunks.push(toolCall);
+      for (const toolCall of toolCallsInTurn) {
         const parsed = this.parseToolCall(toolCall.content);
         if (!parsed) {
-          allChunks.push(createChunk(ChunkType.Error, `Failed to parse tool call: ${toolCall.content}`));
+          yield createChunk(ChunkType.Error, `Failed to parse tool call: ${toolCall.content}`);
           continue;
         }
 
@@ -194,7 +209,7 @@ export class AgentHarness {
             continue;
           }
 
-          allChunks.push(createChunk(ChunkType.Error, `Unknown tool: ${parsed.name}`));
+          yield createChunk(ChunkType.Error, `Unknown tool: ${parsed.name}`);
           continue;
         }
 
@@ -236,24 +251,38 @@ export class AgentHarness {
         message: "Continue with the tool results above.",
       };
 
-      this.emit("after_turn", turn, { turn, toolCallCount: toolCalls.length });
+      this.emit("after_turn", turn, { turn, toolCallCount: toolCallsInTurn.length });
     }
 
     // If we hit maxTurns, emit a note
     if (turn >= this.maxTurns) {
-      allChunks.push(createChunk(ChunkType.Text, `\n\n[Execution stopped after ${this.maxTurns} turns]`));
+      yield createChunk(ChunkType.Text, `\n\n[Execution stopped after ${this.maxTurns} turns]`);
     }
 
     // Append final Done chunk if not present
-    if (!allChunks.some((c) => c.type === ChunkType.Done)) {
-      allChunks.push(createChunk(ChunkType.Done, ""));
+    if (!doneYielded) {
+      yield createChunk(ChunkType.Done, "");
     }
 
     this.emit("done", turn, {});
+    this._lastTurnCount = turn;
+  }
+
+  /**
+   * Execute and collect all chunks into a HarnessResult.
+   * Uses the streaming execute() internally — suitable for cases where
+   * you need the complete result rather than real-time streaming.
+   */
+  async executeWithResult(context: AgentContext): Promise<HarnessResult> {
+    const allChunks: Chunk[] = [];
+
+    for await (const chunk of this.execute(context)) {
+      allChunks.push(chunk);
+    }
 
     return {
       chunks: allChunks,
-      turns: turn,
+      turns: this._lastTurnCount,
       text: allChunks
         .filter((c) => c.type === ChunkType.Text || c.type === ChunkType.Code)
         .map((c) => c.content)

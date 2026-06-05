@@ -51,46 +51,31 @@ export default function AgentListPage() {
   });
 
   return (
-    <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/chat")}
-            className="rounded p-1.5 transition-colors"
-            style={{ color: "var(--theme-text-muted)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+            className="rounded p-1.5 transition-colors hover:bg-[var(--theme-bg-secondary)]"
+            style={{ color: "var(--theme-text-dim)" }}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <div>
-            <h1 className="font-mono text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
+            <h1 className="text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
               {t("agentMarket").title}
             </h1>
-            <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            <p className="text-xs" style={{ color: "var(--theme-text-dim)" }}>
               {t("agentMarket").subtitle}
             </p>
           </div>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider transition-all active:scale-[0.98]"
-          style={{
-            borderColor: "var(--theme-accent)",
-            color: "var(--theme-accent)",
-            backgroundColor: "var(--theme-accent-dim)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "var(--theme-accent)";
-            e.currentTarget.style.color = "var(--theme-text-inverse)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)";
-            e.currentTarget.style.color = "var(--theme-accent)";
-          }}
+          className="btn-accent rounded-lg px-4 py-2 text-xs font-semibold"
         >
           {t("agentMarket").create}
         </button>
@@ -101,17 +86,15 @@ export default function AgentListPage() {
         {/* Nav tabs */}
         <div className="mb-6 flex gap-6">
           <span
-            className="font-mono text-xs font-bold tracking-wider pb-1"
+            className="pb-1 text-xs font-semibold"
             style={{ color: "var(--theme-accent)", borderBottom: "2px solid var(--theme-accent)" }}
           >
             {t("agentMarket").allAgents}
           </span>
           <button
             onClick={() => router.push("/agents/contacts")}
-            className="font-mono text-xs tracking-wider pb-1 transition-colors"
-            style={{ color: "var(--theme-text-muted)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-text-secondary)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; }}
+            className="pb-1 text-xs transition-colors hover:text-[var(--theme-text-secondary)]"
+            style={{ color: "var(--theme-text-dim)" }}
           >
             {t("agentMarket").contacts}
           </button>
@@ -149,17 +132,14 @@ export default function AgentListPage() {
         {!isLoading && error && (
           <div className="flex flex-col items-center justify-center py-20">
             <div
-              className="mb-4 rounded-lg border px-4 py-3 font-mono text-xs"
-              style={{ borderColor: "var(--theme-danger)", backgroundColor: "rgba(255,51,85,0.1)", color: "var(--theme-danger)" }}
+              className="mb-4 rounded-lg border px-4 py-3 text-xs"
+              style={{ borderColor: "rgba(244,67,54,0.2)", backgroundColor: "rgba(244,67,54,0.06)", color: "var(--theme-danger)" }}
             >
               [{t("common").error}] {error}
             </div>
             <button
               onClick={fetchAgents}
-              className="rounded-lg border px-4 py-2 font-mono text-xs tracking-wider transition-colors"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-secondary)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--theme-accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--theme-border-light)"; }}
+              className="btn-ghost rounded-lg px-4 py-2 text-xs"
             >
               {t("common").retry}
             </button>
@@ -169,25 +149,12 @@ export default function AgentListPage() {
         {/* Empty */}
         {!isLoading && !error && sortedAgents.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20">
-            <p className="mb-4 font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            <p className="mb-4 text-xs" style={{ color: "var(--theme-text-dim)" }}>
               {t("agentMarket").noAgents}
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider"
-              style={{
-                borderColor: "var(--theme-accent)",
-                color: "var(--theme-accent)",
-                backgroundColor: "var(--theme-accent-dim)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "var(--theme-accent)";
-                e.currentTarget.style.color = "var(--theme-text-inverse)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)";
-                e.currentTarget.style.color = "var(--theme-accent)";
-              }}
+              className="btn-accent rounded-lg px-4 py-2 text-xs font-semibold"
             >
               {t("agentMarket").createFirst}
             </button>

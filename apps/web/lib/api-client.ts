@@ -1,18 +1,6 @@
-// ─── Types ────────────────────────────────────────────────────────────
+// ─── API Base URL ─────────────────────────────────────────────────────
 
-interface ApiClientConfig {
-  baseUrl: string;
-  getAccessToken: () => string | null;
-  getRefreshToken: () => string | null;
-  onTokenRefreshed: (accessToken: string, refreshToken: string) => void;
-  onAuthFailure: () => void;
-}
-
-interface ApiError {
-  status: number;
-  message: string;
-  code?: string;
-}
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 // ─── Token storage helpers (localStorage) ─────────────────────────────
 
@@ -55,157 +43,132 @@ export function clearUser(): void {
   localStorage.removeItem("agenthub_user");
 }
 
-// ─── API Base URL ─────────────────────────────────────────────────────
+// ─── Token Refresh ────────────────────────────────────────────────────
 
-/** Resolved API base URL. Throws if NEXT_PUBLIC_API_URL is not configured. */
-export const API_BASE_URL: string = (() => {
-  const url = process.env.NEXT_PUBLIC_API_URL;
-  if (!url) {
-    throw new Error(
-      "NEXT_PUBLIC_API_URL is not configured. " +
-        "Set it in apps/web/.env.local (or root .env for dev, which is auto-injected by dev.mjs).",
-    );
-  }
-  return url.replace(/\/+$/, "");
-})();
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
 
-// ─── API Client ───────────────────────────────────────────────────────
-
-const defaultConfig: ApiClientConfig = {
-  baseUrl: API_BASE_URL,
-  getAccessToken: getStoredAccessToken,
-  getRefreshToken: getStoredRefreshToken,
-  onTokenRefreshed: (accessToken, refreshToken) => {
-    storeTokens(accessToken, refreshToken);
-  },
-  onAuthFailure: () => {
-    // Avoid redirect loop: if already on /login or /register, just clear state
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/register")) {
-      window.location.href = "/login";
-    }
-  },
-};
-
-let config: ApiClientConfig = { ...defaultConfig };
-
-export function configureApiClient(overrides: Partial<ApiClientConfig>): void {
-  config = { ...config, ...overrides };
-}
-
-// ─── Request helpers ──────────────────────────────────────────────────
-
-function buildUrl(path: string): string {
-  const base = config.baseUrl.replace(/\/+$/, "");
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${cleanPath}`;
-}
-
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  if (!response.ok) {
-    const body = await response.text();
-    let message: string;
-    try {
-      const parsed = JSON.parse(body);
-      message = parsed.message || parsed.error || response.statusText;
-    } catch {
-      message = body || response.statusText;
-    }
-    const error: ApiError = {
-      status: response.status,
-      message,
-    };
-    throw error;
-  }
-  return response.json() as Promise<T>;
-}
-
-async function request<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-  opts?: { skipAuth?: boolean },
-): Promise<T> {
-  const headers: Record<string, string> = {};
-
-  if (!opts?.skipAuth) {
-    const token = config.getAccessToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-
-  const hasBody = body !== undefined;
-  if (hasBody) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const response = await fetch(buildUrl(path), {
-    method,
-    headers,
-    body: hasBody ? JSON.stringify(body) : undefined,
-  });
-
-  // ─── Token refresh on 401 ──────────────────────────────────────
-  if (response.status === 401 && !opts?.skipAuth) {
-    const refreshed = await attemptTokenRefresh();
-    if (refreshed) {
-      // Retry with new token
-      const retryToken = config.getAccessToken();
-      if (retryToken) {
-        headers["Authorization"] = `Bearer ${retryToken}`;
-      }
-      const retryResponse = await fetch(buildUrl(path), {
-        method,
-        headers,
-        body: hasBody ? JSON.stringify(body) : undefined,
-      });
-      return handleResponse<T>(retryResponse);
-    }
-    config.onAuthFailure();
-    throw { status: 401, message: "Authentication failed" } as ApiError;
-  }
-
-  return handleResponse<T>(response);
-}
-
-async function attemptTokenRefresh(): Promise<boolean> {
-  const refreshToken = config.getRefreshToken();
-  if (!refreshToken) return false;
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) return null;
 
   try {
-    const response = await fetch(buildUrl("/auth/refresh"), {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-
-    if (!response.ok) return false;
-
-    const data = await response.json();
-    config.onTokenRefreshed(data.accessToken, data.refreshToken);
-    return true;
+    if (!res.ok) {
+      clearTokens();
+      clearUser();
+      return null;
+    }
+    const data = await res.json() as { accessToken: string };
+    // Store new access token (refresh token stays the same)
+    const storedRefresh = getStoredRefreshToken();
+    if (storedRefresh) {
+      storeTokens(data.accessToken, storedRefresh);
+    }
+    return data.accessToken;
   } catch {
-    return false;
+    return null;
   }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────
+async function getValidAccessToken(): Promise<string | null> {
+  const token = getStoredAccessToken();
+  if (!token) return null;
+
+  // Try to decode and check expiry (best-effort)
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]!));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp - now < 30) {
+      // Token expires in < 30 seconds, refresh proactively
+      return await refreshAccessToken();
+    }
+  } catch {
+    // Can't decode, just try using it
+  }
+
+  return token;
+}
+
+// ─── API Client ───────────────────────────────────────────────────────
+
+async function apiFetch<T>(
+  method: string,
+  endpoint: string,
+  body?: unknown,
+): Promise<T> {
+  // Refresh token proactively if needed
+  let token = await getValidAccessToken();
+
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+
+  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  // If token expired, try refreshing and retry once
+  if (res.status === 401) {
+    const errData = await res.json().catch(() => ({}));
+    if ((errData as { error?: string }).error === "token_expired") {
+      // Avoid multiple concurrent refresh attempts
+      if (!isRefreshing) {
+        isRefreshing = true;
+        refreshPromise = refreshAccessToken().finally(() => {
+          isRefreshing = false;
+          refreshPromise = null;
+        });
+      }
+
+      const newToken = await (refreshPromise ?? refreshAccessToken());
+      if (newToken) {
+        // Retry with new token
+        headers["Authorization"] = `Bearer ${newToken}`;
+        const retryRes = await fetch(`${API_BASE_URL}${endpoint}`, {
+          method,
+          headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        if (!retryRes.ok) {
+          const retryErr = await retryRes.json().catch(() => ({}));
+          throw new Error(
+            (retryErr as { error?: string }).error || `HTTP ${retryRes.status}`,
+          );
+        }
+        return retryRes.json();
+      }
+
+      // Refresh failed - clear auth state
+      clearTokens();
+      clearUser();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+      throw new Error("token_expired");
+    }
+    throw new Error((errData as { error?: string }).error || `HTTP ${res.status}`);
+  }
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error((errData as { error?: string }).error || `HTTP ${res.status}`);
+  }
+
+  // Handle empty responses (e.g., 204 No Content)
+  const text = await res.text();
+  return text ? JSON.parse(text) : (undefined as unknown as T);
+}
 
 export const api = {
-  get: <T>(path: string, opts?: { skipAuth?: boolean }) =>
-    request<T>("GET", path, undefined, opts),
-
-  post: <T>(path: string, body?: unknown, opts?: { skipAuth?: boolean }) =>
-    request<T>("POST", path, body, opts),
-
-  patch: <T>(path: string, body?: unknown) =>
-    request<T>("PATCH", path, body),
-
-  delete: <T>(path: string) =>
-    request<T>("DELETE", path),
+  get: <T>(endpoint: string) => apiFetch<T>("GET", endpoint),
+  post: <T>(endpoint: string, data?: unknown) => apiFetch<T>("POST", endpoint, data),
+  patch: <T>(endpoint: string, data?: unknown) => apiFetch<T>("PATCH", endpoint, data),
+  delete: <T>(endpoint: string) => apiFetch<T>("DELETE", endpoint),
 };
-
-export type { ApiClientConfig, ApiError };

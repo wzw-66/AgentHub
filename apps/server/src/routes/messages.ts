@@ -150,7 +150,7 @@ async function handleCreate(
 
   // Single conversation: trigger agent execution
   if (conversation && conversation.type === "single") {
-    runAgentExecution(conversationId, body.content, cm).catch((err) => {
+    runAgentExecution(conversationId, body.content, cm, request.server.log).catch((err) => {
       request.server.log.error({ err, messageId: message.id }, "Agent execution failed");
       if (cm) {
         cm.pushToConversation(conversationId, "error", {
@@ -259,7 +259,7 @@ async function handleExecute(
 
   // ─── Background: run Agent and push via SSE ──────────────────────────
 
-  runAgentExecution(conversationId, message.content, cm).catch((err) => {
+  runAgentExecution(conversationId, message.content, cm, request.server.log).catch((err) => {
     request.server.log.error({ err, messageId }, "Agent execution failed");
     if (cm) {
       cm.pushToConversation(conversationId, "error", {
@@ -424,12 +424,14 @@ async function runAgentExecution(
   conversationId: string,
   content: string,
   cm: FastifyInstance["connectionManager"],
+  log: FastifyInstance["log"],
 ): Promise<void> {
+  log.info({ conversationId }, "runAgentExecution start");
   const conv = await getConversation(conversationId);
-  if (!conv) return;
+  if (!conv) { log.warn("Conversation not found"); return; }
 
   const contactIds = conv.contactIds ?? [];
-  if (contactIds.length === 0) return;
+  if (contactIds.length === 0) { log.warn("No contactIds"); return; }
 
   if (conv.type === "single") {
     // Single-agent conversation: resolve the target agent and execute
@@ -589,16 +591,13 @@ async function runAgentExecution(
         messageId = saved.id;
       }
 
-      cm.pushToConversation(conversationId, "done", {
-        messageId,
-        agentId: agent.id,
-        tokenUsage: { input: 0, output: 0 },
-      });
+      const donePayload = { messageId, agentId: agent.id, tokenUsage: { input: 0, output: 0 } };
+      cm.pushToConversation(conversationId, "done", donePayload);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "done", donePayload);
     } catch (err) {
-      cm.pushToConversation(conversationId, "error", {
-        message: err instanceof Error ? err.message : "Agent execution failed",
-        code: "ADAPTER_ERROR",
-      });
+      const errorPayload = { message: err instanceof Error ? err.message : "Agent execution failed", code: "ADAPTER_ERROR" };
+      cm.pushToConversation(conversationId, "error", errorPayload);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "error", errorPayload);
     } finally {
       cm.removeAdapter(conversationId);
     }
@@ -615,38 +614,56 @@ function pushChunk(
   switch (chunk.type) {
     case ChunkType.Text:
     case ChunkType.Code:
-    case ChunkType.ToolCall:
-      cm.pushToConversation(conversationId, "chunk", {
+    case ChunkType.ToolCall: {
+      const data = {
         type: chunk.type,
         content: chunk.content,
         timestamp: chunk.timestamp,
         agentId,
-      });
+      };
+      // SSE
+      cm.pushToConversation(conversationId, "chunk", data);
+      // WebSocket: broadcast to all connected users
+      cm.broadcastToConversation(
+        cm.getConnectedUserIds(),
+        "chunk",
+        data,
+      );
       break;
+    }
 
-    case ChunkType.Artifact:
-      cm.pushToConversation(conversationId, "artifact_status", {
+    case ChunkType.Artifact: {
+      const data = {
         id: chunk.metadata?.id ?? "",
         status: chunk.metadata?.status ?? "building",
         title: chunk.metadata?.title,
         agentId,
-      });
+      };
+      cm.pushToConversation(conversationId, "artifact_status", data);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "artifact_status", data);
       break;
+    }
 
-    case ChunkType.Error:
-      cm.pushToConversation(conversationId, "error", {
+    case ChunkType.Error: {
+      const data = {
         message: chunk.content,
         code: "ADAPTER_ERROR",
         agentId,
-      });
+      };
+      cm.pushToConversation(conversationId, "error", data);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "error", data);
       break;
+    }
 
-    case ChunkType.Done:
-      cm.pushToConversation(conversationId, "done", {
+    case ChunkType.Done: {
+      const data = {
         messageId: (chunk.metadata?.messageId as string) ?? "",
         tokenUsage: chunk.metadata?.tokenUsage as { input: number; output: number } | undefined,
-      });
+      };
+      cm.pushToConversation(conversationId, "done", data);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "done", data);
       break;
+    }
   }
 }
 

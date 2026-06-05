@@ -1,8 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
-export type Theme = "green" | "blue" | "purple" | "red";
+export type Theme = "light" | "dark";
 
 interface ThemeContextValue {
   theme: Theme;
@@ -11,10 +17,8 @@ interface ThemeContextValue {
 }
 
 const THEMES: { id: Theme; label: string }[] = [
-  { id: "green", label: "Matrix" },
-  { id: "blue", label: "Cyber" },
-  { id: "purple", label: "Neon" },
-  { id: "red", label: "Inferno" },
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
 ];
 
 const STORAGE_KEY = "agenthub_theme";
@@ -22,13 +26,16 @@ const STORAGE_KEY = "agenthub_theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("green");
+  const [theme, setThemeState] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (saved && THEMES.some((t) => t.id === saved)) {
+    if (saved === "light" || saved === "dark") {
       setThemeState(saved);
+    } else {
+      // Default to light
+      setThemeState("light");
     }
     setMounted(true);
   }, []);

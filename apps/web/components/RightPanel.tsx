@@ -1,228 +1,206 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import AgentDetailContent from "./AgentDetailContent";
-import { api } from "@/lib/api-client";
+import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { useRipple } from "@/hooks/useRipple";
-import type { Artifact } from "@agenthub/shared";
 
 interface RightPanelProps {
-  content: { type: "artifact" | "agent"; id: string } | null;
-  onClose: () => void;
+  content?: { type: string; id: string } | null;
+  onClose?: () => void;
 }
 
-interface AgentData {
-  id: string;
-  name: string;
-  provider: string;
-  model?: string | null;
-  avatarUrl?: string;
-  systemPrompt?: string | null;
-}
+type TabKey = "preview" | "debate" | "branch" | "versions";
 
-async function checkIsContact(contactId: string): Promise<boolean> {
-  try {
-    await api.get(`/api/contacts/${contactId}/detail`);
-    return true;
-  } catch { return false; }
-}
+const PANEL_TABS: { key: TabKey; labelKey: string }[] = [
+  { key: "preview", labelKey: "preview" },
+  { key: "debate", labelKey: "debate" },
+  { key: "branch", labelKey: "branch" },
+  { key: "versions", labelKey: "versions" },
+];
 
-async function startChat(contactId: string): Promise<void> {
-  await api.post("/api/conversations/create", {
-    title: "New Session",
-    type: "single",
-    contactIds: [contactId],
-  });
-}
 
-// Placeholder for future agent market "add to contacts" feature
-async function addContact(_contactId: string): Promise<void> {
-  // TODO: implement when agent market is built
-  throw new Error("Not implemented");
-}
+// ─── Component ─────────────────────────────────────────────────────────
 
-export default function RightPanel({ content, onClose }: RightPanelProps) {
+export default function RightPanel({ onClose: _onClose }: RightPanelProps) {
   const { t } = useI18n();
-  const { addRipple, renderRipples } = useRipple();
-  const [agent, setAgent] = useState<AgentData | null>(null);
-  const [artifact, setArtifact] = useState<Artifact | null>(null);
-  const [isContact, setIsContact] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (content?.type === "agent") {
-      setIsLoading(true);
-      api.get<AgentData>(`/api/contacts/${content.id}/detail`)
-        .then(async (data) => {
-          setAgent(data);
-          const contactStatus = await checkIsContact(content.id);
-          setIsContact(contactStatus);
-        })
-        .catch(() => setAgent(null))
-        .finally(() => setIsLoading(false));
-    } else if (content?.type === "artifact") {
-      setIsLoading(true);
-      api.get<Artifact>(`/api/artifacts/${content.id}/detail`)
-        .then((data) => setArtifact(data))
-        .catch(() => setArtifact(null))
-        .finally(() => setIsLoading(false));
-    } else {
-      setAgent(null);
-      setArtifact(null);
-    }
-  }, [content]);
-
-  if (!content) return null;
+  const [activeTab, setActiveTab] = useState<TabKey>("preview");
 
   return (
-    <div className="flex h-full flex-col" style={{ backgroundColor: "var(--theme-bg-glass-panel)" }}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--theme-border)" }}>
-        <span className="font-mono text-xs font-bold tracking-wider" style={{ color: "var(--theme-text-primary)" }}>
-          {content.type === "artifact" ? t("rightPanel").artifactView : t("rightPanel").agentInfo}
-        </span>
-        <button
-          onClick={onClose}
-          className="btn-ghost rounded p-1"
+    <div
+      className="flex h-full flex-col"
+      style={{
+        background: "var(--bg-sidebar)",
+      }}
+    >
+      {/* Header with tabs — Design Doc Section 6.1 */}
+      <div
+        className="flex items-center justify-between flex-shrink-0"
+        style={{
+          padding: "16px 18px",
+          borderBottom: "1px solid var(--border-light)",
+        }}
+      >
+        <h4
+          className="flex items-center gap-1.5 font-semibold"
+          style={{
+            color: "var(--text-primary)",
+            fontSize: "12px",
+            letterSpacing: "-0.2px",
+          }}
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Content */}
-      {content.type === "artifact" ? (
-        isLoading ? (
-          <div className="flex flex-1 items-center justify-center">
-            <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-              {t("common").loading}
-            </span>
-          </div>
-        ) : !artifact ? (
-          <div className="flex flex-1 items-center justify-center p-4">
-            <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-              {t("rightPanel").selectArtifact}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col overflow-y-auto">
-            {/* Artifact header */}
-            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--theme-border)" }}>
-              <div className="font-mono text-xs font-bold tracking-wider" style={{ color: "var(--theme-text-primary)" }}>
-                {artifact.title}
-              </div>
-              <div className="mt-1 font-mono text-[10px] tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-                {artifact.type}
-              </div>
-            </div>
-            {/* Artifact body */}
-            <div className="flex-1 p-4">
-              {artifact.type === "web_preview" && artifact.content && (
-                <iframe
-                  src={artifact.content}
-                  title={artifact.title}
-                  className="w-full rounded"
-                  style={{ height: "calc(100vh - 200px)", border: "1px solid var(--theme-border)" }}
-                />
-              )}
-              {artifact.type === "code" && artifact.content && (
-                <pre
-                  className="overflow-auto rounded p-4"
-                  style={{
-                    backgroundColor: "var(--theme-bg-code)",
-                    border: "1px solid var(--theme-border)",
-                    fontSize: "var(--ui-font-sm)",
-                    lineHeight: 1.6,
-                    maxHeight: "calc(100vh - 200px)",
-                  }}
-                >
-                  <code>{artifact.content}</code>
-                </pre>
-              )}
-              {artifact.type === "diff" && artifact.content && (
-                <pre
-                  className="overflow-auto rounded p-4"
-                  style={{
-                    backgroundColor: "var(--theme-bg-code)",
-                    border: "1px solid var(--theme-border)",
-                    fontSize: "var(--ui-font-sm)",
-                    lineHeight: 1.6,
-                    maxHeight: "calc(100vh - 200px)",
-                  }}
-                >
-                  <code>{artifact.content}</code>
-                </pre>
-              )}
-              {artifact.type === "document" && artifact.content && (
-                <div
-                  className="rounded p-4"
-                  style={{
-                    backgroundColor: "var(--theme-bg-card)",
-                    border: "1px solid var(--theme-border)",
-                    fontSize: "var(--ui-font-sm)",
-                    lineHeight: 1.8,
-                    whiteSpace: "pre-wrap",
-                    maxHeight: "calc(100vh - 200px)",
-                    overflowY: "auto",
-                  }}
-                >
-                  {artifact.content}
-                </div>
-              )}
-              {!artifact.content && (
-                <div className="flex items-center justify-center h-full">
-                  <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-                    {t("rightPanel").selectArtifact}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      ) : isLoading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-            {t("common").loading}
-          </span>
-        </div>
-      ) : !agent ? (
-        <div className="flex flex-1 items-center justify-center p-4">
-          <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-            {t("rightPanel").selectAgent}
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col overflow-y-auto">
-          <AgentDetailContent agent={agent} />
-
-          {/* Actions */}
-          <div className="px-4 py-3" style={{ borderTop: "1px solid var(--theme-border)" }}>
-            <div className="flex gap-2">
+          <span
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              background: "var(--green)",
+            }}
+          />
+          {t("rightPanel").collaborate}
+        </h4>
+        <div className="flex gap-0.5">
+          {PANEL_TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
               <button
-                onClick={() => startChat(agent.id)}
-                onMouseDown={addRipple}
-                className="btn-gradient flex-1 rounded-xl py-2.5 font-mono text-xs font-bold tracking-wider"
-              >
-                {renderRipples()}
-                {t("rightPanel").startChat}
-              </button>
-              <button
-                onClick={async () => { await addContact(agent.id); setIsContact(true); }}
-                disabled={isContact}
-                className="btn-ghost flex-1 rounded-lg border py-2 font-mono text-xs tracking-wider disabled:opacity-40"
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className="transition-colors cursor-pointer"
                 style={{
-                  borderColor: "var(--theme-border-light)",
-                  color: isContact ? "var(--theme-text-muted)" : "var(--theme-text-secondary)",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  background: isActive ? "var(--accent-light)" : "none",
+                  color: isActive ? "var(--accent)" : "var(--text-tertiary)",
+                  fontSize: "10px",
+                  fontFamily: "var(--font-sans)",
                 }}
               >
-                {isContact ? t("rightPanel").inContacts : t("rightPanel").addContact}
+                {tab.labelKey}
               </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div
+        className="flex-1 overflow-y-auto flex flex-col"
+        style={{ padding: "18px", gap: "14px" }}
+      >
+        {/* Preview Tab */}
+        {activeTab === "preview" && (
+          <>
+            <div
+              className="flex items-center justify-center"
+              style={{
+                background: "var(--bg-app)",
+                border: "1px solid var(--border-light)",
+                borderRadius: "var(--radius-md)",
+                height: "170px",
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>
+                  暂无预览内容
+                </div>
+                <div style={{ color: "var(--text-tertiary)", fontSize: "10px", marginTop: "4px", opacity: 0.7 }}>
+                  发送代码后在此处实时预览
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div
+                className="font-medium uppercase"
+                style={{
+                  color: "var(--text-tertiary)",
+                  fontSize: "10px",
+                  letterSpacing: "0.3px",
+                  marginBottom: "6px",
+                }}
+              >
+                项目文件
+              </div>
+              <div style={{ color: "var(--text-tertiary)", fontSize: "11px", padding: "8px 0", textAlign: "center" }}>
+                暂无项目文件
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Debate Tab */}
+        {activeTab === "debate" && (
+          <div
+            className="flex flex-col items-center justify-center"
+            style={{
+              padding: "40px 0",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "13px", color: "var(--text-tertiary)", marginBottom: "4px" }}>
+              暂无辩论
+            </div>
+            <div style={{ fontSize: "10px", color: "var(--text-tertiary)", opacity: 0.7 }}>
+              多 Agent 辩论内容将在此处展示
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Branch Tab */}
+        {activeTab === "branch" && (
+          <div
+            style={{
+              background: "var(--bg-app)",
+              border: "1px solid var(--border-light)",
+              borderRadius: "var(--radius-sm)",
+              padding: "12px",
+            }}
+          >
+            <div
+              className="font-semibold"
+              style={{
+                fontSize: "9px",
+                color: "var(--text-tertiary)",
+                marginBottom: "6px",
+              }}
+            >
+              对话演进
+            </div>
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <svg width="200" height="40" viewBox="0 0 200 40">
+                <line x1="10" y1="20" x2="190" y2="20" stroke="var(--border)" strokeWidth="2" />
+                <circle cx="180" cy="20" r="5" fill="var(--accent)" />
+              </svg>
+            </div>
+            <div className="flex gap-2.5" style={{ marginTop: "6px" }}>
+              <span className="flex items-center gap-1" style={{ fontSize: "9px", color: "var(--text-tertiary)" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "var(--accent)" }} />
+                主分支
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Versions Tab — Design Doc Section 6.3 */}
+        {activeTab === "versions" && (
+          <div>
+            <div
+              className="font-semibold uppercase"
+              style={{
+                fontSize: "9px",
+                color: "var(--text-tertiary)",
+                letterSpacing: "0.3px",
+                marginBottom: "8px",
+              }}
+            >
+              版本历史
+            </div>
+            <div style={{ color: "var(--text-tertiary)", fontSize: "11px", padding: "16px 0", textAlign: "center" }}>
+              暂无版本记录
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

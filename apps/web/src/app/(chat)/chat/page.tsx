@@ -23,45 +23,63 @@ export default function ChatPage() {
   useSSEStream(activeConversationId);
 
   return (
-    <div className="relative z-10 flex h-screen overflow-hidden">
-      {/* Sidebar */}
+    <div
+      className="flex items-center justify-center"
+      style={{
+        height: "100vh",
+        padding: "24px",
+      }}
+    >
+      {/* Fixed container: 1140x740, centered */}
       <div
-        className="flex-shrink-0"
+        className="relative z-10 flex overflow-hidden"
         style={{
-          width: "var(--sidebar-width)",
-          borderRight: "1px solid var(--theme-border)",
+          width: "1140px",
+          height: "740px",
+          background: "var(--bg-app)",
+          borderRadius: "var(--radius-xl)",
+          boxShadow: "0 2px 24px rgba(0,0,0,0.04), 0 0 0 1px var(--border)",
         }}
       >
-        <Sidebar
-          activeConversationId={activeConversationId}
-          onSelectConversation={setActiveConversationId}
-        />
-      </div>
-
-      {/* Chat Panel */}
-      <div className="flex flex-1 flex-col min-w-0">
-        <ChatPanel
-          conversationId={activeConversationId}
-          onShowArtifact={(id) => setRightPanelContent({ type: "artifact", id })}
-          onShowAgent={(id) => setRightPanelContent({ type: "agent", id })}
-        />
-      </div>
-
-      {/* Right Panel */}
-      {rightPanelContent && (
+        {/* Sidebar */}
         <div
-          className="flex-shrink-0 animate-fade-in-up"
+          className="flex-shrink-0"
           style={{
-            width: "var(--right-panel-width)",
-            borderLeft: "1px solid var(--theme-border)",
+            width: "var(--sidebar-width)",
+            borderRight: "1px solid var(--border)",
           }}
         >
-          <RightPanel
-            content={rightPanelContent}
-            onClose={() => setRightPanelContent(null)}
+          <Sidebar
+            activeConversationId={activeConversationId}
+            onSelectConversation={setActiveConversationId}
           />
         </div>
-      )}
+
+        {/* Chat Panel */}
+        <div className="flex flex-1 flex-col min-w-0">
+          <ChatPanel
+            conversationId={activeConversationId}
+            onShowArtifact={(id) => setRightPanelContent({ type: "artifact", id })}
+            onShowAgent={(id) => setRightPanelContent({ type: "agent", id })}
+          />
+        </div>
+
+        {/* Right Panel */}
+        {rightPanelContent && (
+          <div
+            className="flex-shrink-0 animate-fade-in-up"
+            style={{
+              width: "var(--right-panel-width)",
+              borderLeft: "1px solid var(--border-light)",
+            }}
+          >
+            <RightPanel
+              content={rightPanelContent}
+              onClose={() => setRightPanelContent(null)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

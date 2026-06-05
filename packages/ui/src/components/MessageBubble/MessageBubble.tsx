@@ -12,39 +12,34 @@ function formatTime(iso: string): string {
 const variants = {
   user: {
     alignItems: "flex-end" as const,
-    maxWidth: "100%" as const,
+    maxWidth: "88%" as const,
     content: {
-      backgroundColor: "var(--ui-color-bg-contact)",
-      color: "var(--ui-color-text-primary)",
-      borderBottomRightRadius: "var(--ui-radius-sm)",
-      borderTop: "1px solid var(--ui-color-border)",
-      borderRight: "1px solid var(--ui-color-border)",
-      borderBottom: "1px solid var(--ui-color-border)",
-      borderLeft: "2px solid var(--ui-color-primary)",
+      backgroundColor: "var(--ui-color-bg-user, #1a1a2e)",
+      color: "#ffffff",
+      borderRadius: "16px 4px 16px 16px",
+      border: "none",
     },
   },
   contact: {
     alignItems: "flex-start" as const,
+    maxWidth: "88%" as const,
     content: {
-      backgroundColor: "var(--ui-color-bg-contact)",
-      color: "var(--ui-color-text-primary)",
-      borderBottomLeftRadius: "var(--ui-radius-sm)",
-      borderTop: "1px solid var(--ui-color-border)",
-      borderRight: "1px solid var(--ui-color-border)",
-      borderBottom: "1px solid var(--ui-color-border)",
-      borderLeft: "2px solid var(--ui-color-primary)",
+      backgroundColor: "var(--ui-color-bg-contact, #f7f6f3)",
+      color: "var(--ui-color-text-primary, #1a1a2e)",
+      borderRadius: "4px 16px 16px 16px",
+      border: "1px solid var(--ui-color-border-light, #eeede9)",
     },
   },
   system: {
     alignItems: "center" as const,
-    maxWidth: "100%" as const,
+    maxWidth: "80%" as const,
     content: {
-      backgroundColor: "var(--ui-color-bg-system)",
-      color: "var(--ui-color-text-secondary)",
-      fontSize: "var(--ui-font-sm)",
-      borderRadius: "var(--ui-radius-md)",
+      backgroundColor: "var(--ui-color-bg-system, rgba(0,0,0,0.03))",
+      color: "var(--ui-color-text-secondary, #7c7a76)",
+      fontSize: "var(--ui-font-sm, 11px)",
+      borderRadius: "var(--ui-radius-md, 10px)",
       textAlign: "center" as const,
-      border: "1px solid var(--ui-color-border-light)",
+      border: "1px solid var(--ui-color-border-light, rgba(0,0,0,0.03))",
     },
   },
 } as const;
@@ -59,19 +54,19 @@ function truncate(text: string, max: number): string {
 
 function QuoteBlock({ message }: { message: Message }) {
   const quoteStyle: CSSProperties = {
-    borderLeft: "2px solid var(--ui-color-primary)",
-    padding: "var(--ui-space-2) var(--ui-space-3)",
-    marginBottom: "var(--ui-space-2)",
-    fontSize: "var(--ui-font-sm)",
-    color: "var(--ui-color-text-secondary)",
-    backgroundColor: "var(--ui-color-bg-contact)",
-    borderRadius: "0 var(--ui-radius-sm) var(--ui-radius-sm) 0",
+    borderLeft: "2px solid var(--ui-color-primary, #1a1a2e)",
+    padding: "var(--ui-space-2, 8px) var(--ui-space-3, 12px)",
+    marginBottom: "var(--ui-space-2, 8px)",
+    fontSize: "var(--ui-font-sm, 11px)",
+    color: "var(--ui-color-text-secondary, #7c7a76)",
+    backgroundColor: "var(--ui-color-bg-contact, #f7f6f3)",
+    borderRadius: "0 var(--ui-radius-sm, 6px) var(--ui-radius-sm, 6px) 0",
   };
 
   const labelStyle: CSSProperties = {
-    fontSize: "var(--ui-font-xs)",
+    fontSize: "var(--ui-font-xs, 10px)",
     fontWeight: 600,
-    marginBottom: "var(--ui-space-1)",
+    marginBottom: "var(--ui-space-1, 4px)",
     opacity: 0.7,
   };
 
@@ -94,46 +89,45 @@ export function MessageBubble({
   parentMessage,
 }: MessageBubbleProps) {
   const v = variants[variant];
-  const vMaxWidth = "maxWidth" in v ? v.maxWidth : "70%";
 
   const bubbleStyle: CSSProperties = {
     display: "flex",
     flexDirection: "column",
-    maxWidth: vMaxWidth,
-    marginBottom: "var(--ui-space-3)",
-    gap: "var(--ui-space-1)",
+    maxWidth: v.maxWidth,
+    marginBottom: "var(--ui-space-3, 12px)",
+    gap: "var(--ui-space-1, 4px)",
     alignItems: v.alignItems,
   };
 
   const contentStyle: CSSProperties = {
-    padding: "var(--ui-space-2) var(--ui-space-4)",
-    borderRadius: "var(--ui-radius-lg)",
-    fontSize: "var(--ui-font-base)",
-    lineHeight: 1.5,
+    padding: "10px 15px",
+    fontSize: "13px",
+    lineHeight: 1.6,
+    letterSpacing: "-0.01em",
     wordWrap: "break-word",
     whiteSpace: "pre-wrap",
     ...v.content,
   };
 
   const quoteStyle: CSSProperties = {
-    marginBottom: "var(--ui-space-2)",
-    padding: "var(--ui-space-1) var(--ui-space-2)",
-    borderLeft: "2px solid var(--ui-color-primary)",
-    backgroundColor: "var(--ui-color-bg-system)",
-    borderRadius: "var(--ui-radius-sm)",
-    fontSize: "var(--ui-font-sm)",
-    color: "var(--ui-color-text-secondary)",
+    marginBottom: "var(--ui-space-2, 8px)",
+    padding: "var(--ui-space-1, 4px) var(--ui-space-2, 8px)",
+    borderLeft: "2px solid var(--ui-color-primary, #1a1a2e)",
+    backgroundColor: "var(--ui-color-bg-system, rgba(0,0,0,0.03))",
+    borderRadius: "var(--ui-radius-sm, 6px)",
+    fontSize: "var(--ui-font-sm, 11px)",
+    color: "var(--ui-color-text-secondary, #7c7a76)",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   };
 
   const timestampStyle: CSSProperties = {
-    fontSize: "var(--ui-font-xs)",
-    color: "var(--ui-color-text-secondary)",
-    padding: "0 var(--ui-space-1)",
-    fontFamily: "var(--ui-font-mono)",
-    opacity: 0.7,
+    fontSize: "9px",
+    color: "var(--ui-color-text-secondary, #7c7a76)",
+    padding: "0 var(--ui-space-1, 4px)",
+    fontFamily: "var(--ui-font-mono, monospace)",
+    opacity: 0.6,
   };
 
   return (

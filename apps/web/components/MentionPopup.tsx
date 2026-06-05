@@ -1,73 +1,42 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useChat } from "@/lib/chat-context";
-
 interface MentionPopupProps {
-  searchQuery: string;
-  selectedIndex: number;
-  onSelect: (contactName: string) => void;
-  onHover: (index: number) => void;
+  isOpen?: boolean;
+  agents?: { id: string; name: string }[];
+  selectedIndex?: number;
+  onSelect?: (agentId: string) => void;
 }
 
 export default function MentionPopup({
-  searchQuery,
-  selectedIndex,
+  isOpen = false,
+  agents = [],
+  selectedIndex = 0,
   onSelect,
-  onHover,
 }: MentionPopupProps) {
-  const { contacts } = useChat();
-  const listRef = useRef<HTMLDivElement>(null);
-
-  const filtered = searchQuery
-    ? (contacts || []).filter((a) => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : (contacts || []);
-
-  useEffect(() => {
-    const item = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex]);
-
-  if (filtered.length === 0) return null;
+  if (!isOpen || agents.length === 0) return null;
 
   return (
     <div
-      className="absolute bottom-full left-0 z-50 mb-1 w-64 rounded-lg shadow-xl overflow-hidden"
-      style={{
-        backgroundColor: "var(--theme-bg-elevated)",
-        border: "1px solid var(--theme-border)",
-      }}
+      className="absolute bottom-full left-0 mb-1 w-48 rounded-lg border p-1 shadow-lg"
+      style={{ background: "var(--theme-bg-surface)", borderColor: "var(--theme-border)" }}
+      data-testid="mention-popup"
     >
-      <div ref={listRef} className="max-h-48 overflow-y-auto py-1">
-        {filtered.map((contact, index) => (
-          <button
-            key={contact.id}
-            onClick={() => onSelect(contact.name)}
-            onMouseEnter={() => onHover(index)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors"
-            style={{
-              backgroundColor: index === selectedIndex ? "var(--theme-accent-dim)" : "transparent",
-              color: index === selectedIndex ? "var(--theme-accent)" : "var(--theme-text-primary)",
-            }}
-          >
-            <div
-              className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[8px] font-mono font-bold"
-              style={{
-                backgroundColor: "var(--theme-accent-dim)",
-                color: "var(--theme-accent)",
-              }}
-            >
-              {contact.name.charAt(0).toUpperCase()}
-            </div>
-            <span className="flex-1 min-w-0 font-mono text-xs">
-              {contact.name}
-            </span>
-            <span className="font-mono text-xs flex-shrink-0" style={{ color: "var(--theme-text-dim)" }}>
-              {contact.provider}
-            </span>
-          </button>
-        ))}
+      <div className="px-2 py-1.5 text-xs font-medium" style={{ color: "var(--theme-text-dim)" }}>
+        Agents
       </div>
+      {agents.map((agent, i) => (
+        <button
+          key={agent.id}
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"
+          style={{
+            color: "var(--theme-text-primary)",
+            background: i === selectedIndex ? "var(--theme-bg-secondary)" : "transparent",
+          }}
+          onClick={() => onSelect?.(agent.id)}
+        >
+          {agent.name}
+        </button>
+      ))}
     </div>
   );
 }

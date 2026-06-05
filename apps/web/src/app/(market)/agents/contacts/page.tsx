@@ -91,25 +91,23 @@ export default function ContactListPage() {
   });
 
   return (
-    <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: "1px solid var(--theme-border)" }}>
         <button
           onClick={() => router.push("/agents")}
-          className="rounded p-1.5 transition-colors"
-          style={{ color: "var(--theme-text-muted)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-accent)"; e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+          className="rounded p-1.5 transition-colors hover:bg-[var(--theme-bg-secondary)]"
+          style={{ color: "var(--theme-text-dim)" }}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         <div>
-          <h1 className="font-mono text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
+          <h1 className="text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
             {t("contacts").title}
           </h1>
-          <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+          <p className="text-xs" style={{ color: "var(--theme-text-dim)" }}>
             {t("contacts").subtitle}
           </p>
         </div>
@@ -117,7 +115,6 @@ export default function ContactListPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {/* Loading */}
         {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -133,39 +130,29 @@ export default function ContactListPage() {
           </div>
         )}
 
-        {/* Error */}
         {!isLoading && error && (
           <div className="flex flex-col items-center justify-center py-20">
-            <div className="mb-4 rounded-lg border px-4 py-3 font-mono text-xs"
-              style={{ borderColor: "var(--theme-danger)", backgroundColor: "rgba(255,51,85,0.1)", color: "var(--theme-danger)" }}>
+            <div className="mb-4 rounded-lg border px-4 py-3 text-xs"
+              style={{ borderColor: "rgba(244,67,54,0.2)", backgroundColor: "rgba(244,67,54,0.06)", color: "var(--theme-danger)" }}>
               [{t("common").error}] {error}
             </div>
-            <button onClick={fetchContacts} className="rounded-lg border px-4 py-2 font-mono text-xs tracking-wider"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-secondary)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--theme-accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--theme-border-light)"; }}>
+            <button onClick={fetchContacts} className="btn-ghost rounded-lg px-4 py-2 text-xs">
               {t("common").retry}
             </button>
           </div>
         )}
 
-        {/* Empty */}
         {!isLoading && !error && sortedContacts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20">
-            <p className="mb-4 font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+            <p className="mb-4 text-xs" style={{ color: "var(--theme-text-dim)" }}>
               {t("contacts").noContacts}
             </p>
-            <button onClick={() => router.push("/agents")}
-              className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider"
-              style={{ borderColor: "var(--theme-accent)", color: "var(--theme-accent)", backgroundColor: "var(--theme-accent-dim)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--theme-accent)"; e.currentTarget.style.color = "var(--theme-text-inverse)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; e.currentTarget.style.color = "var(--theme-accent)"; }}>
+            <button onClick={() => router.push("/agents")} className="btn-accent rounded-lg px-4 py-2 text-xs font-semibold">
               {t("contacts").browseAgents}
             </button>
           </div>
         )}
 
-        {/* List */}
         {!isLoading && !error && sortedContacts.length > 0 && (
           <div className="space-y-1">
             {sortedContacts.map((contact) => (
@@ -178,17 +165,15 @@ export default function ContactListPage() {
                   {editingId === contact.id ? (
                     <div className="flex items-center gap-2">
                       <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 rounded-lg border bg-transparent px-2 py-1 font-mono text-xs focus:outline-none"
-                        style={{ borderColor: "var(--theme-accent)", color: "var(--theme-text-primary)" }}
+                        className="input-theme flex-1 rounded-lg px-2 py-1 text-xs"
                         autoFocus />
                       <button onClick={() => handleSaveEdit(contact.id)} disabled={actionLoading === `edit-${contact.id}`}
-                        className="rounded px-2 py-1 font-mono text-xs font-bold disabled:opacity-50"
-                        style={{ backgroundColor: "var(--theme-accent)", color: "var(--theme-text-inverse)" }}>
+                        className="btn-gradient rounded px-2 py-1 text-xs font-semibold disabled:opacity-50">
                         {t("contacts").save}
                       </button>
                       <button onClick={() => setEditingId(null)}
-                        className="rounded px-2 py-1 font-mono text-xs"
-                        style={{ color: "var(--theme-text-muted)" }}>
+                        className="rounded px-2 py-1 text-xs"
+                        style={{ color: "var(--theme-text-dim)" }}>
                         {t("contacts").cancel}
                       </button>
                     </div>
@@ -204,20 +189,17 @@ export default function ContactListPage() {
                           </svg>
                         )}
                       </div>
-                      <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+                      <p className="text-xs" style={{ color: "var(--theme-text-dim)" }}>
                         {contact.provider}
                       </p>
                     </>
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => handleTogglePin(contact)} disabled={actionLoading === `pin-${contact.id}`}
                     className="rounded p-1.5 transition-colors disabled:opacity-50"
-                    style={{ color: contact.isPinned ? "var(--theme-accent)" : "var(--theme-text-muted)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    style={{ color: contact.isPinned ? "var(--theme-accent)" : "var(--theme-text-dim)" }}
                     title={contact.isPinned ? t("contacts").unpin : t("contacts").pin}>
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -225,9 +207,7 @@ export default function ContactListPage() {
                   </button>
 
                   <button onClick={() => { setEditingId(contact.id); setEditName(contact.displayName || contact.name); }}
-                    className="rounded p-1.5 transition-colors" style={{ color: "var(--theme-text-muted)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--theme-accent-dim)"; e.currentTarget.style.color = "var(--theme-accent)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--theme-text-muted)"; }}
+                    className="rounded p-1.5 transition-colors hover:text-[var(--theme-accent)]" style={{ color: "var(--theme-text-dim)" }}
                     title={t("contacts").edit}>
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -237,20 +217,19 @@ export default function ContactListPage() {
                   {deleteConfirmId === contact.id ? (
                     <div className="flex items-center gap-1">
                       <button onClick={() => handleDelete(contact.id)} disabled={actionLoading === `delete-${contact.id}`}
-                        className="rounded px-2 py-1 font-mono text-xs font-bold disabled:opacity-50"
-                        style={{ backgroundColor: "var(--theme-danger)", color: "#ffffff" }}>
+                        className="rounded px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        style={{ backgroundColor: "var(--theme-danger)" }}>
                         {t("contacts").confirm}
                       </button>
-                      <button onClick={() => setDeleteConfirmId(null)} className="rounded px-2 py-1 font-mono text-xs"
-                        style={{ color: "var(--theme-text-muted)" }}>
+                      <button onClick={() => setDeleteConfirmId(null)} className="rounded px-2 py-1 text-xs"
+                        style={{ color: "var(--theme-text-dim)" }}>
                         {t("contacts").cancel}
                       </button>
                     </div>
                   ) : (
                     <button onClick={() => setDeleteConfirmId(contact.id)}
-                      className="rounded p-1.5 transition-colors" style={{ color: "var(--theme-text-muted)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,51,85,0.15)"; e.currentTarget.style.color = "var(--theme-danger)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--theme-text-muted)"; }}
+                      className="rounded p-1.5 transition-colors hover:text-[var(--theme-danger)]"
+                      style={{ color: "var(--theme-text-dim)" }}
                       title={t("contacts").delete}>
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

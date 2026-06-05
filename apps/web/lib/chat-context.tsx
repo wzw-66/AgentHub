@@ -9,7 +9,9 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { api, getStoredAccessToken } from "./api-client";
+import { api } from "./api-client";
+import { useAuth } from "./auth-context";
+import { useWS } from "./ws-context";
 import type { Conversation, Message } from "@agenthub/shared";
 import { SenderType, MessageType } from "@agenthub/shared";
 import type { Dispatch, SetStateAction } from "react";
@@ -72,6 +74,8 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 // ─── Provider ──────────────────────────────────────────────────────────
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  const { onEvent } = useWS();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
@@ -268,8 +272,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // ─── Load contacts (agents) on mount (only if authenticated) ────
+  // ─── Load contacts when authenticated ─────────────────────────
   useEffect(() => {
+    if (!isAuthenticated) {
+      setContacts([]);
+      setIsLoadingContacts(false);
+      return;
+    }
     async function loadContacts() {
       setIsLoadingContacts(true);
       try {
@@ -281,19 +290,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsLoadingContacts(false);
       }
     }
-    if (getStoredAccessToken()) {
-      loadContacts();
-    } else {
-      setIsLoadingContacts(false);
-    }
-  }, []);
+    loadContacts();
+  }, [isAuthenticated]);
 
-  // ─── Load conversations on mount (only if authenticated) ────────
+  // ─── Load conversations when authenticated ────────────────────
   useEffect(() => {
-    if (getStoredAccessToken()) {
-      fetchConversations();
+    if (!isAuthenticated) {
+      setConversations([]);
+      return;
     }
-  }, [fetchConversations]);
+    fetchConversations();
+  }, [isAuthenticated, fetchConversations]);
 
   // ─── Load messages when active conversation changes ──────────────
   useEffect(() => {
@@ -303,6 +310,54 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setMessages([]);
     }
   }, [activeConversationId, fetchMessages]);
+
+  // ─── Subscribe to WebSocket agent events ────────────────────────
+  useEffect(() => {
+    const unsubscribe = onEvent((event) => {
+      switch (event.type) {
+        case "chunk": {
+          if ("content" in event && event.content) {
+            appendMessageChunk(event.content as string, (event as { agentId?: string }).agentId);
+          }
+          break;
+        }
+        case "done": {
+          const doneEvent = event as { messageId?: string; agentId?: string };
+          finalizeMessage(doneEvent.messageId, doneEvent.agentId);
+          if (activeConversationId) {
+            fetchMessages(activeConversationId).then((msgs) => setMessages(msgs));
+          }
+          break;
+        }
+        case "error": {
+          setStreamError((event as { message?: string }).message || "Agent error");
+          break;
+        }
+        case "notification": {
+          fetchConversations();
+          break;
+        }
+        case "replace": {
+          const replaceEvent = event as { messageId?: string; content?: string };
+          if (replaceEvent.messageId && replaceEvent.content) {
+            replaceMessage(replaceEvent.messageId, replaceEvent.content);
+          }
+          break;
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [
+    activeConversationId,
+    appendMessageChunk,
+    finalizeMessage,
+    setStreamError,
+    fetchConversations,
+    fetchMessages,
+    replaceMessage,
+    onEvent,
+  ]);
 
   return (
     <ChatContext.Provider

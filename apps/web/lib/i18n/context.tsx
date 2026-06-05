@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { en, type Translations } from "./translations/en";
-import { zh } from "./translations/zh";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import zh from "./translations/zh";
+import type { Translations } from "./translations/zh";
 
 export type Locale = "en" | "zh";
 
@@ -12,30 +12,23 @@ interface I18nContextValue {
   t: <K extends keyof Translations>(key: K) => Translations[K];
 }
 
-const STORAGE_KEY = "agenthub_locale";
-
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-const translations: Record<Locale, Translations> = { en, zh };
+const translations: Record<Locale, Translations> = { zh, en: zh };
+
+// Dynamic import for English to avoid circular deps
+let enTranslations: Translations | null = null;
+async function getEn() {
+  if (!enTranslations) {
+    const mod = await import("./translations/en");
+    enTranslations = mod.default;
+    translations.en = enTranslations;
+  }
+}
+getEn();
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>("zh");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
-    if (saved === "en" || saved === "zh") {
-      setLocaleState(saved);
-    }
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted) {
-      document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
-      localStorage.setItem(STORAGE_KEY, locale);
-    }
-  }, [locale, mounted]);
 
   const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale);

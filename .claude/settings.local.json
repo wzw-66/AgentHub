@@ -74,7 +74,9 @@
       "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(auth\\\\\\)/)",
       "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(chat\\\\\\)/)",
       "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(market\\\\\\)/)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(git checkout *)",
+      "Bash(git rebase *)"
     ]
   }
 }

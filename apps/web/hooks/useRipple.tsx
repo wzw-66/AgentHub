@@ -1,39 +1,37 @@
 "use client";
 
-import { useState, useCallback, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactElement } from "react";
 
-interface Ripple {
+interface RippleState {
   id: number;
   x: number;
   y: number;
 }
 
 export function useRipple() {
-  const [ripples, setRipples] = useState<Ripple[]>([]);
+  const [ripples, setRipples] = useState<RippleState[]>([]);
+  const nextId = useRef(0);
 
   const addRipple = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const id = Date.now() + Math.random();
+    const id = nextId.current++;
     setRipples((prev) => [...prev, { id, x, y }]);
     setTimeout(() => {
       setRipples((prev) => prev.filter((r) => r.id !== id));
     }, 800);
   }, []);
 
-  function renderRipples(): ReactNode {
-    return ripples.map((r) => (
-      <span
-        key={r.id}
-        className="ripple-effect"
-        style={{
-          left: r.x,
-          top: r.y,
-        }}
-      />
-    ));
-  }
+  const renderRipples = useCallback((): ReactElement => {
+    return (
+      <>
+        {ripples.map((r) => (
+          <span key={r.id} className="ripple-effect" style={{ left: r.x, top: r.y }} />
+        ))}
+      </>
+    );
+  }, [ripples]);
 
   return { addRipple, renderRipples };
 }

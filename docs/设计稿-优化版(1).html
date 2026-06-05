@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentHub — 编辑式极简</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-page: #f4f3f0;
+    --bg-app: #ffffff;
+    --bg-sidebar: #faf9f7;
+    --bg-hover: #f0efeb;
+    --bg-active: #e8e6e1;
+    --bg-msg-agent: #f7f6f3;
+    --bg-user: #1a1a2e;
+    --bg-code: #faf9f7;
+    --border: #e6e4df;
+    --border-light: #eeede9;
+    --text-primary: #1a1a2e;
+    --text-secondary: #7c7a76;
+    --text-tertiary: #b0aea8;
+    --accent: #1a1a2e;
+    --accent-light: rgba(26,26,46,0.06);
+    --green: #2b8a6b;
+    --green-bg: #edf7f3;
+    --red: #c93a3a;
+    --amber: #b8860b;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --font-sans: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-page);
+    background-image: radial-gradient(circle at 30% 50%, rgba(26,26,46,0.02) 0%, transparent 60%),
+                      radial-gradient(circle at 70% 80%, rgba(43,138,107,0.015) 0%, transparent 50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    padding: 24px;
+    color: var(--text-primary);
+  }
+
+  .app {
+    width: 1140px;
+    height: 740px;
+    background: var(--bg-app);
+    border-radius: var(--radius-xl);
+    display: flex;
+    overflow: hidden;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
+  }
+
+  /* ====== Sidebar ====== */
+  .sidebar {
+    width: 250px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-hdr {
+    padding: 22px 18px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sidebar-hdr h2 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+  }
+  .sidebar-hdr h2 span { color: var(--text-tertiary); font-weight: 300; }
+  .sidebar-hdr .new-chat {
+    width: 30px; height: 30px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-app);
+    color: var(--text-secondary);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+  .sidebar-hdr .new-chat:hover {
+    background: var(--bg-hover);
+    transform: scale(1.05);
+  }
+
+  .search-box {
+    margin: 0 14px 12px;
+    padding: 7px 12px;
+    background: var(--bg-app);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus-within { border-color: var(--text-primary); }
+  .search-box .kbd {
+    margin-left: auto;
+    color: var(--text-tertiary);
+    font-size: 9px;
+    padding: 1px 5px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+  }
+
+  .agent-row {
+    padding: 2px 14px 10px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+  }
+  .agent-row::-webkit-scrollbar { display: none; }
+  .agent-row .a {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 4px;
+    background: var(--bg-app);
+    border-radius: 20px;
+    border: 1px solid var(--border-light);
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+  }
+  .agent-row .a:hover {
+    border-color: var(--text-tertiary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+  .agent-row .a .dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: #fff;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .agent-row .a .online {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-left: -2px;
+  }
+
+  .conv-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px;
+  }
+  .conv-list::-webkit-scrollbar { width: 3px; }
+  .conv-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .conv-item {
+    padding: 11px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: all 0.18s ease;
+    position: relative;
+  }
+  .conv-item:hover { background: var(--bg-hover); }
+  .conv-item.active {
+    background: var(--bg-active);
+  }
+  .conv-item.active::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 24px;
+    background: var(--text-primary);
+    border-radius: 0 3px 3px 0;
+  }
+  .conv-item .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .conv-item .title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .conv-item .time {
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+  .conv-item .preview {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conv-item .agents {
+    display: flex;
+    gap: 3px;
+    margin-top: 5px;
+  }
+  .conv-item .agents .m {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    font-size: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    border: 1.5px solid var(--bg-sidebar);
+    transition: transform 0.15s;
+  }
+  .conv-item:hover .agents .m { transform: translateX(1px); }
+
+  .create-btn {
+    margin: 6px 14px 14px;
+    padding: 9px;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    font-family: var(--font-sans);
+  }
+  .create-btn:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+
+  /* ====== Main ====== */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .chat-hdr {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .chat-hdr .left { display: flex; align-items: center; gap: 10px; }
+  .chat-hdr .avs { display: flex; }
+  .chat-hdr .avs .a {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    margin-right: -7px;
+    border: 2px solid var(--bg-app);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #fff;
+    font-weight: 500;
+    transition: transform 0.2s;
+  }
+  .chat-hdr .avs .a:hover { transform: translateY(-2px); z-index: 1; }
+  .chat-hdr .info h3 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+  .chat-hdr .info .sub {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-top: 1px;
+  }
+  .chat-hdr .actions { display: flex; gap: 4px; }
+  .chat-hdr .actions button {
+    width: 30px; height: 30px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s ease;
+  }
+  .chat-hdr .actions button:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+  .chat-hdr .actions .preview-btn {
+    font-size: 11px;
+    width: auto;
+    padding: 0 10px;
+    gap: 4px;
+    color: var(--text-secondary);
+  }
+  .chat-hdr .actions .preview-btn:hover { background: var(--bg-active); }
+
+  /* ====== 群成员管理 - 微信式折叠 ====== */
+  .group-section {
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+  }
+  .group-section .toggle-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 24px;
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .group-section .toggle-bar:hover { background: var(--bg-hover); }
+  .group-section .toggle-bar .stacked-avs { display: flex; }
+  .group-section .toggle-bar .stacked-avs .a {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    margin-right: -6px;
+    border: 1.5px solid var(--bg-app);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: #fff;
+    font-weight: 500;
+    transition: transform 0.2s;
+  }
+  .group-section .toggle-bar .stacked-avs .a:hover { transform: translateY(-2px); z-index: 1; }
+  .group-section .toggle-bar .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .group-section .toggle-bar .label strong { color: var(--text-primary); }
+  .group-section .toggle-bar .arrow {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    transition: transform 0.25s ease;
+    font-family: var(--font-mono);
+  }
+  .group-section .toggle-bar .arrow.open { transform: rotate(180deg); }
+
+  /* 折叠体 */
+  .group-section .expand-body {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.35s ease, padding 0.3s ease;
+    padding: 0 24px;
+  }
+  .group-section .expand-body.open {
+    max-height: 300px;
+    padding: 6px 24px 12px;
+  }
+  .group-section .expand-body .member-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .group-section .expand-body .member {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 5px;
+    background: var(--bg-msg-agent);
+    border: 1px solid var(--border-light);
+    border-radius: 20px;
+    cursor: default;
+    transition: all 0.18s ease;
+    font-size: 11px;
+    color: var(--text-secondary);
+    position: relative;
+  }
+  .group-section .expand-body .member:hover {
+    border-color: var(--border);
+    background: var(--bg-hover);
+  }
+  .group-section .expand-body .member .av {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: #fff;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .group-section .expand-body .member .role-tag {
+    font-size: 8px;
+    color: var(--text-tertiary);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-sidebar);
+    margin-left: 2px;
+  }
+  .group-section .expand-body .member .remove-btn {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: transparent;
+    font-size: 7px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    line-height: 1;
+    margin-left: 2px;
+  }
+  .group-section .expand-body .member:hover .remove-btn {
+    background: rgba(201,58,58,0.08);
+    color: var(--red);
+  }
+  .group-section .expand-body .member .remove-btn:hover {
+    background: var(--red);
+    color: #fff;
+    transform: scale(1.2);
+  }
+  .group-section .expand-body .add-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px 4px 8px;
+    border: 1.5px dashed var(--border);
+    border-radius: 20px;
+    background: none;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: var(--font-sans);
+  }
+  .group-section .expand-body .add-btn:hover {
+    border-color: var(--green);
+    color: var(--green);
+    background: var(--green-bg);
+  }
+
+  /* ====== 添加成员弹窗（折叠版） ====== */
+  .invite-overlay {
+    position: absolute;
+    top: 100%;
+    right: 24px;
+    width: 280px;
+    background: var(--bg-app);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    z-index: 10;
+    display: none;
+    overflow: hidden;
+  }
+  .invite-overlay.open { display: block; }
+  .invite-overlay .ihdr {
+    padding: 12px 14px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.2px;
+  }
+  .invite-overlay .isearch {
+    margin: 4px 10px 8px;
+    padding: 6px 10px;
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .invite-overlay .ilist { max-height: 200px; overflow-y: auto; }
+  .invite-overlay .ilist .iitem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .invite-overlay .ilist .iitem:hover { background: var(--bg-hover); }
+  .invite-overlay .ilist .iitem .av {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #fff;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .invite-overlay .ilist .iitem .info { flex: 1; }
+  .invite-overlay .ilist .iitem .info .nm { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+  .invite-overlay .ilist .iitem .info .desc { font-size: 10px; color: var(--text-tertiary); margin-top: 1px; }
+  .invite-overlay .ilist .iitem .add-tag {
+    font-size: 9px;
+    color: var(--green);
+    background: var(--green-bg);
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .invite-overlay .ilist .iitem .add-tag:hover {
+    background: var(--green);
+    color: #fff;
+  }
+
+  /* ====== Content Layout ====== */
+  .content {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ====== Messages ====== */
+  .msg {
+    display: flex;
+    gap: 10px;
+    max-width: 88%;
+    opacity: 0;
+    animation: msgIn 0.35s ease forwards;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg:nth-child(1) { animation-delay: 0s; }
+  .msg:nth-child(2) { animation-delay: 0.08s; }
+  .msg:nth-child(3) { animation-delay: 0.16s; }
+  .msg:nth-child(4) { animation-delay: 0.24s; }
+  .msg:nth-child(5) { animation-delay: 0.32s; }
+  .msg:nth-child(6) { animation-delay: 0.4s; }
+  .msg:nth-child(7) { animation-delay: 0.48s; }
+
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg .av {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #fff;
+    font-weight: 500;
+    transition: transform 0.2s;
+  }
+  .msg .av:hover { transform: scale(1.15); }
+
+  .msg .bubble {
+    padding: 10px 15px;
+    font-size: 13px;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+  }
+  .msg.agent .bubble {
+    background: var(--bg-msg-agent);
+    color: var(--text-primary);
+    border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg);
+    border: 1px solid var(--border-light);
+  }
+  .msg.user .bubble {
+    background: var(--bg-user);
+    color: #f0efeb;
+    border-radius: var(--radius-lg) 4px var(--radius-lg) var(--radius-lg);
+  }
+  .msg .name-tag {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+  }
+  .msg .name-tag .role {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-weight: 400;
+  }
+
+  /* Code Block */
+  .code-block {
+    background: var(--bg-code);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin: 8px 0;
+    transition: box-shadow 0.2s;
+  }
+  .code-block:hover {
+    box-shadow: var(--shadow-sm);
+  }
+  .code-block .hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .code-block .hdr .lang {
+    color: var(--text-tertiary);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 500;
+  }
+  .code-block .hdr .actions { display: flex; gap: 6px; }
+  .code-block .hdr .actions button {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 2px 7px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+  }
+  .code-block .hdr .actions button:hover {
+    background: var(--bg-hover);
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+  .code-block .hdr .actions .run-btn { color: var(--green); }
+  .code-block .hdr .actions .run-btn:hover {
+    background: var(--green-bg);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .code-block pre {
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    overflow-x: auto;
+  }
+
+  /* Diff Card */
+  .diff-card {
+    background: var(--bg-code);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin: 8px 0;
+    transition: box-shadow 0.2s;
+  }
+  .diff-card:hover { box-shadow: var(--shadow-sm); }
+  .diff-card .hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .diff-card .hdr .file {
+    color: var(--green);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+  .diff-card .hdr .actions { display: flex; gap: 6px; }
+  .diff-card .hdr .actions button {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+  }
+  .diff-card .hdr .actions button:hover {
+    background: var(--bg-hover);
+    border-color: var(--border);
+  }
+  .diff-card .hdr .actions .apply {
+    background: var(--green);
+    color: #fff;
+    padding: 2px 12px;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    border: none;
+  }
+  .diff-card .hdr .actions .apply:hover {
+    background: #236e55;
+    opacity: 0.9;
+  }
+
+  .diff-body {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.7;
+  }
+  .diff-body .line {
+    display: flex;
+    padding: 0 12px;
+    min-height: 23px;
+    align-items: stretch;
+    transition: background 0.1s;
+  }
+  .diff-body .line:hover { background: rgba(0,0,0,0.015); }
+  .diff-body .line .gutter {
+    width: 24px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+  .diff-body .line .gutter .cb {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    border: 1.5px solid var(--border);
+    display: inline-block;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .diff-body .line .gutter .cb:hover { border-color: var(--text-tertiary); }
+  .diff-body .line .gutter .cb.ck {
+    background: var(--green);
+    border-color: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .diff-body .line .gutter .cb.ck::after {
+    content: '✓';
+    color: #fff;
+    font-size: 8px;
+    line-height: 12px;
+    font-weight: 700;
+  }
+  .diff-body .line .content {
+    flex: 1;
+    white-space: pre;
+    padding: 0 6px;
+  }
+  .diff-body .line.add { background: rgba(43,138,107,0.04); }
+  .diff-body .line.add .content { color: var(--green); }
+  .diff-body .line.del { background: rgba(201,58,58,0.04); }
+  .diff-body .line.del .content { color: var(--red); text-decoration: line-through; }
+  .diff-body .line.ctx .content { color: var(--text-tertiary); }
+
+  .diff-foot {
+    padding: 6px 12px;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .diff-foot .stat {
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+  .diff-foot .stat .add { color: var(--green); }
+  .diff-foot .stat .del { color: var(--red); }
+  .diff-foot .ask {
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+  }
+  .diff-foot .ask:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  /* Preview Card */
+  .preview-card {
+    background: var(--bg-app);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin: 8px 0;
+    width: 300px;
+    transition: box-shadow 0.2s;
+  }
+  .preview-card:hover { box-shadow: var(--shadow-md); }
+  .preview-card .mock {
+    height: 140px;
+    background: linear-gradient(160deg, var(--bg-sidebar), var(--bg-app));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .preview-card .mock .inner { text-align: center; }
+  .preview-card .mock .inner h4 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+  }
+  .preview-card .mock .inner p {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  .preview-card .mock .inner .btns { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+  .preview-card .mock .inner .btns .p {
+    background: var(--text-primary);
+    color: #fff;
+    padding: 4px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+  }
+  .preview-card .mock .inner .btns .s {
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 4px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+  }
+  .preview-card .foot {
+    padding: 6px 12px;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .preview-card .foot span { color: var(--text-tertiary); font-size: 10px; }
+  .preview-card .foot button {
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+    transition: color 0.15s;
+    font-family: var(--font-sans);
+  }
+  .preview-card .foot button:hover { color: var(--text-primary); }
+
+  /* Deploy Card */
+  .deploy-card {
+    background: var(--green-bg);
+    border: 1px solid rgba(43,138,107,0.15);
+    border-radius: var(--radius-md);
+    margin: 8px 0;
+    padding: 14px;
+    transition: box-shadow 0.2s;
+  }
+  .deploy-card:hover { box-shadow: var(--shadow-sm); }
+  .deploy-card .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .deploy-card .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 2px rgba(43,138,107,0.15);
+  }
+  .deploy-card .row .txt {
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+  }
+  .deploy-card .url {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+  }
+  .deploy-card .url strong { color: var(--text-secondary); }
+  .deploy-card .btn {
+    margin-top: 10px;
+    background: var(--green);
+    border: none;
+    color: #fff;
+    padding: 5px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.15s;
+    font-family: var(--font-sans);
+    font-weight: 500;
+  }
+  .deploy-card .btn:hover { opacity: 0.85; }
+
+  /* ====== Collab Panel ====== */
+  .collab-panel {
+    width: 290px;
+    border-left: 1px solid var(--border-light);
+    background: var(--bg-sidebar);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .collab-hdr {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .collab-hdr h4 {
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .collab-hdr h4 .live {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .collab-hdr button {
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+    font-size: 15px;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .collab-hdr button:hover { color: var(--text-secondary); }
+  .collab-hdr .tabs { display: flex; gap: 2px; margin-left: auto; }
+  .collab-hdr .tabs button {
+    border: none; background: none; color: var(--text-tertiary); font-size: 10px;
+    padding: 2px 8px; border-radius: 4px; cursor: pointer; transition: 0.12s; font-family: var(--font-sans);
+  }
+  .collab-hdr .tabs button:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .collab-hdr .tabs button.active { color: var(--accent); background: var(--accent-light); }
+  .collab-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .collab-body .live-box {
+    background: var(--bg-app);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    height: 170px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: box-shadow 0.2s;
+  }
+  .collab-body .live-box:hover { box-shadow: var(--shadow-sm); }
+  .collab-body .files { list-style: none; }
+  .collab-body .files .file-label {
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .collab-body .files li {
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+  .collab-body .files li:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .collab-body .files li .s {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .collab-body .files li .s.new { background: var(--green); }
+  .collab-body .files li .s.mod { background: var(--amber); }
+  .collab-body .files li .issue {
+    margin-left: auto;
+    font-size: 9px;
+    color: var(--red);
+    font-family: var(--font-sans);
+  }
+
+  /* ====== Input ====== */
+  .input-area {
+    padding: 14px 24px 18px;
+    border-top: 1px solid var(--border-light);
+    flex-shrink: 0;
+  }
+  .input-box {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--bg-sidebar);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 9px 14px;
+    transition: all 0.2s ease;
+  }
+  .input-box:focus-within {
+    border-color: var(--text-primary);
+    background: var(--bg-app);
+    box-shadow: 0 0 0 3px rgba(26,26,46,0.04);
+  }
+  .input-box .mention {
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 2px 7px;
+    background: var(--accent-light);
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .input-box input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 4px 0;
+    font-family: var(--font-sans);
+  }
+  .input-box input::placeholder { color: var(--text-tertiary); }
+  .input-box .send {
+    width: 30px; height: 30px;
+    background: var(--text-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .input-box .send:hover {
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+
+  .input-tools {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 0 4px;
+  }
+  .input-tools button {
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+  }
+  .input-tools button:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+  .input-tools .chips {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .input-tools .chips .chip {
+    font-size: 10px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-light);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+  }
+  .input-tools .chips .chip:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+    background: var(--bg-app);
+  }
+
+  /* ⭐ 创新: 多Agent 正在输入 */
+  .typing-indicator {
+    display: flex; gap: 10px; align-items: center;
+    padding: 0 0 0 38px;
+    animation: msgIn 0.3s ease forwards;
+    opacity: 0;
+  }
+  .typing-indicator .avs { display: flex; }
+  .typing-indicator .avs .av {
+    width: 22px; height: 22px; border-radius: 50%;
+    margin-right: -7px; border: 2px solid var(--bg-app);
+    font-size: 8px; display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .typing-indicator .dots {
+    display: flex; gap: 4px; align-items: center;
+    background: var(--bg-msg-agent); padding: 6px 14px; border-radius: 12px;
+  }
+  .typing-indicator .dots span {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--text-tertiary);
+    animation: bounce 1.4s infinite;
+  }
+  .typing-indicator .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); background: var(--accent); } }
+  .typing-indicator .debate-label { font-size: 9px; color: var(--text-tertiary); margin-left: 4px; white-space: nowrap; }
+
+  /* ⭐ 创新: 辩论对比表 */
+  .debate-table { background: var(--bg-app); border: 1px solid var(--border-light); border-radius: var(--radius-sm); overflow: hidden; margin: 6px 0; }
+  .debate-table table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .debate-table th { padding: 6px 10px; text-align: left; font-weight: 600; color: var(--text-primary); background: var(--bg-sidebar); border-bottom: 1px solid var(--border-light); }
+  .debate-table td { padding: 6px 10px; color: var(--text-secondary); border-bottom: 1px solid var(--border-light); }
+  .debate-table td:first-child { font-weight: 500; color: var(--text-primary); white-space: nowrap; }
+  .debate-table tr:last-child td { border-bottom: none; }
+  .debate-table .win { color: var(--green); font-weight: 600; }
+  .debate-table .av-mini { width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 7px; color: #fff; margin-right: 4px; vertical-align: middle; }
+
+  /* ⭐ 创新: 静默审查者 */
+  .silent-alert { background: #fff5f5; border: 1px solid rgba(201,58,58,0.2); border-radius: var(--radius-sm); padding: 10px 14px; margin: 6px 0; }
+  .silent-alert .alert-hdr { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; color: var(--red); margin-bottom: 4px; }
+  .silent-alert .alert-body { font-size: 12px; color: var(--text-primary); line-height: 1.5; }
+
+  /* ⭐ 创新: Agent 犹豫 */
+  .msg.hesitate .bubble { background: linear-gradient(135deg, #fff8e1, #fff3cd) !important; border: 1px solid rgba(184,134,11,0.2) !important; }
+  .hesitate-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .hesitate-options .opt { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-app); color: var(--text-secondary); font-size: 11px; cursor: pointer; transition: 0.12s; font-family: var(--font-sans); }
+  .hesitate-options .opt:hover { border-color: var(--amber); color: var(--amber); background: #fff8e1; }
+  .hesitate-options .opt.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .hesitate-options .opt.primary:hover { opacity: 0.85; }
+
+  /* ⭐ 创新: 对话即版本 */
+  .version-timeline { position: relative; }
+  .version-timeline .vt-label { font-size: 9px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.3px; text-transform: uppercase; margin-bottom: 8px; }
+  .version-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; transition: 0.12s; position: relative; }
+  .version-item:hover { background: var(--bg-hover); }
+  .version-item.active { background: var(--accent-light); }
+  .version-item .v-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border); background: var(--bg-app); flex-shrink: 0; z-index: 1; }
+  .version-item.active .v-dot { border-color: var(--accent); background: var(--accent); }
+  .version-item .v-info { flex: 1; min-width: 0; }
+  .version-item .v-info .v-name { font-size: 11px; font-weight: 500; color: var(--text-primary); }
+  .version-item .v-info .v-time { font-size: 9px; color: var(--text-tertiary); }
+  .version-item .v-tag { font-size: 8px; padding: 1px 6px; border-radius: 4px; background: var(--accent-light); color: var(--accent); font-weight: 500; }
+  .version-item .v-tag.current { background: var(--green-bg); color: var(--green); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ====== Sidebar ====== -->
+  <div class="sidebar">
+    <div class="sidebar-hdr">
+      <h2>Agent<span>Hub</span></h2>
+      <button class="new-chat">+</button>
+    </div>
+    <div class="search-box">
+      &#128269; 搜索
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="agent-row">
+      <div class="a"><span class="dot" style="background:var(--text-primary);">O</span>Orchestrator<span class="online"></span></div>
+      <div class="a"><span class="dot" style="background:#b8860b;">C</span>Claude<span class="online"></span></div>
+      <div class="a"><span class="dot" style="background:var(--green);">X</span>Codex<span class="online"></span></div>
+      <div class="a"><span class="dot" style="background:var(--red);">S</span>Security <span style="font-size:8px;color:var(--text-tertiary);">🎧 静默</span></div>
+    </div>
+    <div class="conv-list">
+      <div class="conv-item active">
+        <div class="top"><span class="title">官网 Landing</span><span class="time">3m</span></div>
+        <div class="preview">ReviewBot 审核完成</div>
+        <div class="agents"><span class="m" style="background:#b8860b;">C</span><span class="m" style="background:var(--green);">X</span><span class="m" style="background:var(--text-primary);">O</span></div>
+      </div>
+      <div class="conv-item">
+        <div class="top"><span class="title">登录暗黑模式</span><span class="time">1h</span></div>
+        <div class="preview">Agent 讨论了 CSS 变量方案</div>
+        <div class="agents"><span class="m" style="background:#b8860b;">C</span><span class="m" style="background:var(--text-primary);">O</span></div>
+      </div>
+      <div class="conv-item">
+        <div class="top"><span class="title">数据库 Schema</span><span class="time">2h</span></div>
+        <div class="preview">Codex 建议了 PostgreSQL 方案</div>
+        <div class="agents"><span class="m" style="background:var(--green);">X</span></div>
+      </div>
+    </div>
+    <button class="create-btn">+ 创建新 Agent</button>
+  </div>
+
+  <!-- ====== Main ====== -->
+  <div class="main">
+    <div class="chat-hdr">
+      <div class="left">
+        <div class="avs">
+          <span class="a" style="background:var(--text-primary);">O</span>
+          <span class="a" style="background:#b8860b;">C</span>
+          <span class="a" style="background:var(--green);">X</span>
+        </div>
+        <div class="info">
+          <h3>官网 Landing</h3>
+          <div class="sub">Orchestrator · Claude · Codex</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="preview-btn">&#9644; 预览</button>
+        <button>• • •</button>
+      </div>
+    </div>
+
+    <!-- ====== 微信式折叠群成员管理 ====== -->
+    <div class="group-section">
+      <div class="toggle-bar" id="groupToggle">
+        <div class="stacked-avs">
+          <span class="a" style="background:var(--text-primary);">O</span>
+          <span class="a" style="background:#b8860b;">C</span>
+          <span class="a" style="background:var(--green);">X</span>
+          <span class="a" style="background:#7c3aed;">R</span>
+        </div>
+        <span class="label">群成员 <strong>5</strong> 位</span>
+        <span class="arrow" id="groupArrow">&#9660;</span>
+      </div>
+      <div class="expand-body" id="groupBody">
+        <div class="member-list">
+          <div class="member">
+            <span class="av" style="background:var(--text-primary);">O</span>
+            Orchestrator <span class="role-tag">协调者</span>
+            <button class="remove-btn">✕</button>
+          </div>
+          <div class="member">
+            <span class="av" style="background:#b8860b;">C</span>
+            Claude <span class="role-tag">前端</span>
+            <button class="remove-btn">✕</button>
+          </div>
+          <div class="member">
+            <span class="av" style="background:var(--green);">X</span>
+            Codex <span class="role-tag">SEO·部署</span>
+            <button class="remove-btn">✕</button>
+          </div>
+          <div class="member">
+            <span class="av" style="background:#7c3aed;">R</span>
+            ReviewBot <span class="role-tag">代码审查</span>
+            <button class="remove-btn">✕</button>
+          </div>
+          <button class="add-btn" id="addMemberBtn">+ 邀请</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 添加成员弹窗 ====== -->
+    <div class="invite-overlay" id="inviteOverlay">
+      <div class="ihdr">添加 Agent 到群聊</div>
+      <div class="isearch">&#128269; 搜索 Agent 名称...</div>
+      <div class="ilist">
+        <div class="iitem">
+          <span class="av" style="background:#f43f5e;">T</span>
+          <div class="info"><div class="nm">翻译助手</div><div class="desc">中英文互译，保留代码格式</div></div>
+          <span class="add-tag">邀请</span>
+        </div>
+        <div class="iitem">
+          <span class="av" style="background:#8b5cf6;">D</span>
+          <div class="info"><div class="nm">数据分析师</div><div class="desc">连接数据库，生成数据报表</div></div>
+          <span class="add-tag">邀请</span>
+        </div>
+        <div class="iitem">
+          <span class="av" style="background:#14b8a6;">W</span>
+          <div class="info"><div class="nm">文档助手</div><div class="desc">读代码生成 API 文档</div></div>
+          <span class="add-tag">邀请</span>
+        </div>
+        <div class="iitem">
+          <span class="av" style="background:#f97316;">M</span>
+          <div class="info"><div class="nm">测试 Agent</div><div class="desc">自动生成并运行单元测试</div></div>
+          <span class="add-tag">邀请</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="chat-area">
+        <div class="messages">
+          <div class="msg user"><div class="av" style="background:#7c7a76;">U</div><div class="bubble">给登录页加暗黑模式，看看什么方案好</div></div>
+          <div class="msg agent hesitate">
+            <div class="av" style="background:#b8860b;">C</div>
+            <div class="bubble">
+              <div class="name-tag">Claude <span class="role">🤔 有点犹豫</span></div>
+              直接做可以，但两个风险：<br>1️⃣ 没有测试可能引入回归 bug<br>2️⃣ 第三方库兼容性不确定<br><br>建议先写 3 个 E2E 测试，你同意吗？
+              <div class="hesitate-options">
+                <span class="opt primary">同意，先写测试</span>
+                <span class="opt">列兼容性清单</span>
+                <span class="opt">直接做</span>
+              </div>
+            </div>
+          </div>
+          <div class="msg user"><div class="av" style="background:#7c7a76;">U</div><div class="bubble">同意，先写测试</div></div>
+          <div class="typing-indicator" id="debateTyping">
+            <div class="avs"><div class="av" style="background:#b8860b;">C</div><div class="av" style="background:var(--green);">X</div></div>
+            <div class="dots"><span></span><span></span><span></span></div>
+            <span class="debate-label">Claude 和 Codex 正在分析</span>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="1">
+            <div class="av" style="background:var(--text-primary);">O</div>
+            <div class="bubble"><div class="name-tag">Orchestrator <span class="role">协调者</span></div>暗黑模式是好需求。Claude 和 Codex 各自出了方案，他们观点不太一样——</div>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="2">
+            <div class="av" style="background:#b8860b;">C</div>
+            <div class="bubble"><div class="name-tag">Claude <span class="role">前端</span></div>我建议 <b>CSS 变量方案</b>，一行 var() 全域生效。
+            <div class="code-block"><div class="hdr"><span class="lang">CSS</span><div class="actions"><button>复制</button><button class="run-btn">▶ 运行</button></div></div><pre>:root { --bg: #fff; --text: #1a1a2e; }
+[data-theme="dark"] { --bg: #121212; --text: #e0e0e0; }
+body { background: var(--bg); color: var(--text); }</pre></div>
+            </div>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="3">
+            <div class="av" style="background:var(--red);">S</div>
+            <div class="bubble">
+              <div class="name-tag">Security <span class="role">🎧 静默模式 · 已关闭</span></div>
+              <div class="silent-alert"><div class="alert-hdr">⚠️ 发现 1 个安全问题</div><div class="alert-body"><b>位置：</b>第 42 行 <b>问题：</b>innerHTML → <b>XSS 风险</b> <b>建议：</b>改用 textContent</div></div>
+            </div>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="4">
+            <div class="av" style="background:var(--green);">X</div>
+            <div class="bubble"><div class="name-tag">Codex <span class="role">SEO·性能</span></div>我不同意。CSS 变量切换 <b>一定闪白屏</b>。用户先看到白色再变暗。
+            <div class="diff-card"><div class="hdr"><span class="file">方案对比</span><div class="actions"><button class="apply">✓ 接受</button></div></div>
+            <div class="diff-body">
+              <div class="line add"><span class="gutter"><span class="cb ck"></span></span><span class="content">+ html { transition: background 0.3s; }</span></div>
+              <div class="line del"><span class="gutter"><span class="cb"></span></span><span class="content">- [data-theme] { /* 闪白屏 */ }</span></div>
+            </div>
+            <div class="diff-foot"><span class="stat"><span class="add">+1</span> <span class="del">-1</span></span><button class="ask">追问差异</button></div></div>
+            </div>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="5">
+            <div class="av" style="background:#b8860b;">C</div>
+            <div class="bubble"><div class="name-tag">Claude <span class="role">前端</span></div><b>document.startViewTransition</b> 可零闪白。CSS 变量改 1 处全部生效。</div>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="6">
+            <div class="av" style="background:var(--text-primary);">O</div>
+            <div class="bubble"><div class="name-tag">Orchestrator <span class="role">协调者</span></div>辩论结果：
+            <div class="debate-table"><table>
+              <tr><th></th><th>方案 A (Claude)</th><th>方案 B (Codex)</th></tr>
+              <tr><td>方案</td><td>CSS 变量 + ViewTransition</td><td>class 切换 + transition</td></tr>
+              <tr><td>维护</td><td class="win">改 1 处 ✓</td><td>每个组件加 class ✗</td></tr>
+              <tr><td>闪白屏</td><td class="win">零闪白 ✓</td><td class="win">无 ✓</td></tr>
+              <tr><td colspan="3" style="text-align:center;font-weight:600;color:var(--accent);">结论：方案 A · Claude 执行 · Codex 审查</td></tr>
+            </table></div>
+            </div>
+          </div>
+          <div class="msg user" style="display:none;" data-debate="7"><div class="av" style="background:#7c7a76;">U</div><div class="bubble">好，按方案 A</div></div>
+          <div class="msg agent" style="display:none;" data-debate="8">
+            <div class="av" style="background:#b8860b;">C</div>
+            <div class="bubble"><div class="name-tag">Claude <span class="role">前端</span></div>暗黑模式已完成：
+            <div class="code-block"><div class="hdr"><span class="lang">JS</span><div class="actions"><button>复制</button><button class="run-btn">▶ 运行</button></div></div><pre>const toggle = () => {
+  document.startViewTransition(() =>
+    document.body.classList.toggle('dark')
+  );
+};</pre></div>
+            <div class="preview-card"><div class="mock"><div class="inner"><h4>登录页 · 暗黑模式</h4><p>CSS 变量 + ViewTransition</p><div class="btns"><span class="p">切换主题</span><span class="s">预览</span></div></div></div><div class="foot"><span>实时渲染</span><button>展开 →</button></div></div>
+            </div>
+          </div>
+          <div class="msg agent" style="display:none;" data-debate="9">
+            <div class="av" style="background:var(--green);">X</div>
+            <div class="bubble"><div class="name-tag">Codex <span class="role">部署</span></div>审查通过，已部署：
+            <div class="deploy-card"><div class="row"><div class="dot"></div><div class="txt">已部署 · 运行中</div></div><div class="url"><strong>✦</strong> agenthub-demo.vercel.app</div><button class="btn">访问网站</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <div class="input-box">
+            <span class="mention">@Orchestrator</span>
+            <input placeholder="输入消息，@ 指定 Agent..." autofocus>
+            <button class="send">→</button>
+          </div>
+          <div class="input-tools">
+            <button>📎 附件</button>
+            <button>/ 指令</button>
+            <div class="chips">
+              <span class="chip">重构组件</span>
+              <span class="chip">写测试</span>
+              <span class="chip" id="playDebateBtn" style="background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:500;cursor:pointer;">&#9654; 播放辩论</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="collab-panel">
+        <div class="collab-hdr">
+          <h4><span class="live"></span> 协作</h4>
+          <div class="tabs">
+            <button class="active" onclick="switchPanel('preview')">预览</button>
+            <button onclick="switchPanel('debate')">辩论</button>
+            <button onclick="switchPanel('branch')">分支</button>
+            <button onclick="switchPanel('versions')">版本</button>
+          </div>
+        </div>
+        <div class="collab-body" id="panelPreview">
+          <div class="live-box"><div style="text-align:center;"><div style="font-size:15px;font-weight:600;color:var(--text-primary);">星云科技</div><div style="color:var(--text-tertiary);font-size:11px;margin-top:4px;">让数据自己说话</div></div></div>
+          <div><div class="file-label">项目文件</div><ul class="files"><li><span class="s new"></span> index.html <span class="issue">2 issues</span></li><li><span class="s new"></span> style.css</li></ul></div>
+        </div>
+        <div class="collab-body" id="panelDebate" style="display:none;">
+          <div style="background:var(--bg-app);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:12px;">
+            <div style="font-size:9px;font-weight:600;color:var(--text-tertiary);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:8px;">辩论双方</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;"><span style="width:22px;height:22px;border-radius:50%;background:#b8860b;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;">C</span><div style="flex:1;font-size:11px;">Claude · CSS 变量</div><span style="font-size:9px;padding:2px 8px;border-radius:100px;background:var(--accent-light);color:var(--accent);font-weight:500;">正方</span></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;"><span style="width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;">X</span><div style="flex:1;font-size:11px;">Codex · 闪白屏</div><span style="font-size:9px;padding:2px 8px;border-radius:100px;background:var(--bg-hover);color:var(--text-tertiary);font-weight:500;">反方</span></div>
+            </div>
+          </div>
+          <div class="debate-table"><table>
+            <tr><th colspan="2">辩论过程</th></tr>
+            <tr><td><span class="av-mini" style="background:#b8860b;">C</span> 提议</td><td>CSS 变量方案</td></tr>
+            <tr><td><span class="av-mini" style="background:var(--red);">S</span> 安全审查</td><td>发现 XSS 风险</td></tr>
+            <tr><td><span class="av-mini" style="background:var(--green);">X</span> 反驳</td><td>闪白屏问题</td></tr>
+            <tr><td><span class="av-mini" style="background:var(--text-primary);">O</span> 裁决</td><td class="win" style="font-weight:600;">方案 A ✓</td></tr>
+          </table></div>
+        </div>
+        <div class="collab-body" id="panelBranch" style="display:none;">
+          <div style="background:var(--bg-app);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:12px;">
+            <div style="font-size:9px;font-weight:600;color:var(--text-tertiary);margin-bottom:6px;">对话演进</div>
+            <canvas id="branchCanvas" width="250" height="60" style="width:100%;height:60px;"></canvas>
+            <div style="display:flex;gap:10px;margin-top:6px;"><span style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-tertiary);"><span style="width:8px;height:8px;border-radius:2px;background:var(--accent);"></span> 主分支</span></div>
+          </div>
+        </div>
+        <div class="collab-body" id="panelVersions" style="display:none;">
+          <div class="version-timeline">
+            <div class="vt-label">版本历史</div>
+            <div class="version-item active"><span class="v-dot"></span><div class="v-info"><div class="v-name">暗黑模式上线</div><div class="v-time">刚刚</div></div><span class="v-tag current">当前</span></div>
+            <div class="version-item"><span class="v-dot"></span><div class="v-info"><div class="v-name">暗黑模式完成</div><div class="v-time">10分钟前</div></div><span class="v-tag">v4</span></div>
+            <div class="version-item"><span class="v-dot"></span><div class="v-info"><div class="v-name">SEO 标签添加</div><div class="v-time">25分钟前</div></div><span class="v-tag">v3</span></div>
+            <div class="version-item"><span class="v-dot"></span><div class="v-info"><div class="v-name">Hero 区块完成</div><div class="v-time">40分钟前</div></div><span class="v-tag">v2</span></div>
+            <div class="version-item"><span class="v-dot"></span><div class="v-info"><div class="v-name">项目初始化</div><div class="v-time">1小时前</div></div><span class="v-tag">v1</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  function switchPanel(tab) {
+    var btns = document.querySelectorAll('.collab-hdr .tabs button');
+    ['panelPreview','panelDebate','panelBranch','panelVersions'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    btns.forEach(function(b) { b.classList.remove('active'); });
+    var target = document.getElementById('panel' + tab.charAt(0).toUpperCase() + tab.slice(1));
+    if (target) target.style.display = 'flex';
+    var idx = {preview:0, debate:1, branch:2, versions:3}[tab];
+    if (idx !== undefined && btns[idx]) btns[idx].classList.add('active');
+  }
+
+  var bc = document.getElementById('branchCanvas');
+  if (bc) {
+    var ctx = bc.getContext('2d');
+    ctx.beginPath(); ctx.moveTo(10, 30); ctx.lineTo(240, 30);
+    ctx.strokeStyle = '#e6e4df'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(230, 30, 5, 0, Math.PI*2);
+    ctx.fillStyle = '#1a1a2e'; ctx.fill();
+  }
+
+  var debateStep = 0, debateRunning = false, debateTimer = null;
+  var playBtn = document.getElementById('playDebateBtn');
+  if (playBtn) {
+    playBtn.addEventListener('click', function() {
+      if (debateRunning) return;
+      debateRunning = true; debateStep = 0;
+      var btn = this, typing = document.getElementById('debateTyping');
+      btn.textContent = '⏸ 辩论中...';
+      function showNext() {
+        debateStep++;
+        var msg = document.querySelector('[data-debate="' + debateStep + '"]');
+        if (msg) {
+          msg.style.display = 'flex';
+          msg.style.animation = 'none'; msg.offsetHeight; msg.style.animation = '';
+          if (debateStep === 1 && typing) typing.style.display = 'none';
+          debateTimer = setTimeout(showNext, 700);
+        } else {
+          debateRunning = false; btn.textContent = '▶ 播放辩论';
+          if (typing) typing.style.display = 'none';
+        }
+      }
+      document.querySelectorAll('[data-debate]').forEach(function(m) { m.style.display = 'none'; });
+      if (typing) typing.style.display = 'flex';
+      debateTimer = setTimeout(showNext, 500);
+    });
+  }
+
+  document.getElementById('groupToggle').addEventListener('click', function() {
+    document.getElementById('groupBody').classList.toggle('open');
+    document.getElementById('groupArrow').classList.toggle('open');
+  });
+  document.getElementById('groupBody').classList.add('open');
+  document.getElementById('groupArrow').classList.add('open');
+
+  document.getElementById('addMemberBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.getElementById('inviteOverlay').classList.toggle('open');
+  });
+  document.addEventListener('click', function(e) {
+    var o = document.getElementById('inviteOverlay');
+    if (!e.target.closest('.invite-overlay') && !e.target.closest('#addMemberBtn')) o.classList.remove('open');
+  });
+  document.querySelectorAll('.add-tag').forEach(function(el) {
+    el.addEventListener('click', function() { document.getElementById('inviteOverlay').classList.remove('open'); });
+  });
+  document.querySelectorAll('.remove-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var m = this.closest('.member');
+      m.style.transition = 'all 0.25s ease';
+      m.style.opacity = '0'; m.style.transform = 'scale(0.8)';
+      setTimeout(function() {
+        if (m.parentNode) m.remove();
+        document.querySelector('.toggle-bar .label strong').textContent = document.querySelectorAll('.group-section .member').length;
+      }, 250);
+    });
+  });
+</script>
+</body>
+</html>

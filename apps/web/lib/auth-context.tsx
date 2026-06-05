@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessToken: string;
       refreshToken: string;
       user: { id: string; name: string; email: string };
-    }>("/auth/login", { email, password }, { skipAuth: true });
+    }>("/auth/login", { email, password });
 
     storeTokens(data.accessToken, data.refreshToken);
     // Map backend `name` to frontend `username`
@@ -81,7 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api.post<Record<string, unknown>>(
         "/auth/register",
         { name, email, password },
-        { skipAuth: true },
       );
     },
     [],

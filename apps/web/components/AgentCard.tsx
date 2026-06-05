@@ -1,9 +1,6 @@
 "use client";
 
-import { AgentAvatar } from "@agenthub/ui";
-import { useI18n } from "@/lib/i18n";
-
-interface AgentCardAgent {
+interface AgentInfo {
   id: string;
   name: string;
   provider: string;
@@ -12,49 +9,47 @@ interface AgentCardAgent {
 }
 
 interface AgentCardProps {
-  agent: AgentCardAgent;
+  agent: AgentInfo;
   onClick: (id: string) => void;
 }
 
-export default function AgentCard({ agent, onClick }: AgentCardProps) {
-  const { t } = useI18n();
+const providerLabels: Record<string, string> = {
+  claude: "Claude",
+  opencode: "OpenCode",
+  custom: "自定义",
+};
 
-  const providerLabel = (provider: string): string => {
-    const labels = t("agentInfo").providerLabels;
-    return labels[provider as keyof typeof labels] || provider.toUpperCase();
-  };
+const avatarColors: Record<string, string> = {
+  claude: "var(--theme-warning)",
+  opencode: "var(--theme-success)",
+  custom: "var(--theme-accent)",
+};
+
+export default function AgentCard({ agent, onClick }: AgentCardProps) {
+  const providerLabel = providerLabels[agent.provider] || agent.provider;
+  const modelInfo = agent.model ? ` · ${agent.model}` : "";
+  const avatarLetter = agent.name.charAt(0).toUpperCase();
 
   return (
     <button
       onClick={() => onClick(agent.id)}
-      className="hover-card flex w-full items-center gap-4 rounded-xl border px-5 py-4 text-left animate-fade-in-up"
-      style={{
-        borderColor: "var(--theme-border)",
-        backgroundColor: "var(--theme-bg-surface)",
-      }}
+      className="agent-item flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all hover:translate-x-1"
+      style={{ background: "var(--theme-bg-surface)", borderColor: "var(--theme-border-light)" }}
     >
-      <AgentAvatar name={agent.name} avatarUrl={agent.avatarUrl} size="md" />
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white"
+        style={{ background: avatarColors[agent.provider] || "var(--theme-accent)" }}
+      >
+        {avatarLetter}
+      </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate" style={{ color: "var(--theme-text-primary)" }}>
+        <div className="text-sm font-medium truncate" style={{ color: "var(--theme-text-primary)" }}>
           {agent.name}
-        </p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-accent)" }}>
-            {providerLabel(agent.provider)}
-          </span>
-          {agent.model && (
-            <>
-              <span style={{ color: "var(--theme-text-muted)" }}>·</span>
-              <span className="font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
-                {agent.model}
-              </span>
-            </>
-          )}
+        </div>
+        <div className="text-xs truncate" style={{ color: "var(--theme-text-dim)" }}>
+          {providerLabel}{modelInfo}
         </div>
       </div>
-      <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--theme-text-muted)" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-      </svg>
     </button>
   );
 }

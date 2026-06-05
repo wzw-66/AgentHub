@@ -39,27 +39,25 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4" style={{ background: "var(--theme-bg-primary)" }}>
       <div className="w-full max-w-sm animate-fade-in-up">
         {/* Header */}
         <div className="mb-10 text-center">
           <div className="inline-flex items-center justify-center gap-3">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl hover-glow"
+              className="flex h-12 w-12 items-center justify-center rounded-xl"
               style={{
-                backgroundColor: "var(--theme-accent-dim)",
-                border: "1px solid var(--theme-border-light)",
+                background: "var(--theme-accent)",
+                borderRadius: "12px",
               }}
             >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="var(--theme-accent)" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-              </svg>
+              <span className="text-xl font-bold text-white">A</span>
             </div>
             <div className="text-left">
-              <h1 className="font-mono text-xl font-semibold leading-tight" style={{ color: "var(--theme-text-primary)" }}>
+              <h1 className="text-xl font-semibold leading-tight" style={{ color: "var(--theme-text-primary)" }}>
                 {t("brand").name}
               </h1>
-              <p className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+              <p className="text-xs" style={{ color: "var(--theme-text-dim)" }}>
                 {t("brand").tagline}
               </p>
             </div>
@@ -67,17 +65,17 @@ export default function RegisterPage() {
         </div>
 
         {/* Card */}
-        <div className="glass-panel rounded-xl p-8">
-          <h2 className="mb-2 text-center font-mono text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
+        <div className="rounded-xl border p-8" style={{ background: "var(--theme-bg-surface)", borderColor: "var(--theme-border)", boxShadow: "0 4px 24px rgba(0,0,0,0.04)" }}>
+          <h2 className="mb-2 text-center text-lg font-semibold" style={{ color: "var(--theme-text-primary)" }}>
             {t("auth").register.title}
           </h2>
-          <p className="mb-6 text-center font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+          <p className="mb-6 text-center text-xs" style={{ color: "var(--theme-text-dim)" }}>
             {t("auth").register.subtitle}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+              <label className="text-xs font-medium" style={{ color: "var(--theme-text-secondary)" }}>
                 {t("auth").register.username}
               </label>
               <input
@@ -85,15 +83,14 @@ export default function RegisterPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("auth").register.usernamePlaceholder}
-                className="input-theme mt-1.5 block w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm"
-                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+                className="input-theme mt-1.5 block w-full rounded-lg px-4 py-2.5 text-sm"
                 required
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+              <label className="text-xs font-medium" style={{ color: "var(--theme-text-secondary)" }}>
                 {t("auth").register.email}
               </label>
               <input
@@ -101,35 +98,33 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t("auth").register.emailPlaceholder}
-                className="input-theme mt-1.5 block w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm"
-                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+                className="input-theme mt-1.5 block w-full rounded-lg px-4 py-2.5 text-sm"
                 required
               />
             </div>
 
             <div>
-              <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
+              <label className="text-xs font-medium" style={{ color: "var(--theme-text-secondary)" }}>
                 {t("auth").register.password}
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="input-theme mt-1.5 block w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm"
-                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+                className="input-theme mt-1.5 block w-full rounded-lg px-4 py-2.5 text-sm"
                 required
               />
-              <p className="mt-1 font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+              <p className="mt-1 text-xs" style={{ color: "var(--theme-text-dim)" }}>
                 {t("auth").register.minChars}
               </p>
             </div>
 
             {error && (
               <div
-                className="rounded-lg border px-4 py-3 font-mono text-xs"
+                className="rounded-lg border px-4 py-3 text-xs"
                 style={{
-                  borderColor: "var(--theme-danger)",
-                  backgroundColor: "rgba(255,51,85,0.1)",
+                  borderColor: "rgba(244,67,54,0.2)",
+                  background: "rgba(244,67,54,0.06)",
                   color: "var(--theme-danger)",
                 }}
               >
@@ -141,7 +136,7 @@ export default function RegisterPage() {
               type="submit"
               onMouseDown={addRipple}
               disabled={loading}
-              className="btn-gradient relative w-full rounded-xl px-4 py-3 font-mono text-sm font-bold tracking-wider disabled:opacity-50"
+              className="btn-gradient relative w-full rounded-xl px-4 py-3 text-sm font-bold tracking-wider disabled:opacity-50"
             >
               {renderRipples()}
               {loading ? (
@@ -158,17 +153,17 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center font-mono text-xs" style={{ color: "var(--theme-text-muted)" }}>
+          <p className="mt-6 text-center text-xs" style={{ color: "var(--theme-text-dim)" }}>
             {t("auth").register.hasAccount}{" "}
-            <Link href="/login" className="font-bold tracking-wider transition-colors hover-glow" style={{ color: "var(--theme-accent)" }}>
+            <Link href="/login" className="font-semibold transition-colors" style={{ color: "var(--theme-accent)" }}>
               {t("auth").register.login}
             </Link>
           </p>
         </div>
 
         <div className="mt-4 flex items-center justify-center gap-4">
-          <div className="font-mono text-xs tracking-widest" style={{ color: "var(--theme-text-muted)" }}>
-            <span className="inline-block w-2 h-2 rounded-full mr-1.5 pulse-glow" style={{ backgroundColor: "var(--theme-accent)" }} />
+          <div className="text-xs" style={{ color: "var(--theme-text-dim)" }}>
+            <span className="inline-block mr-1.5 h-2 w-2 rounded-full" style={{ background: "var(--theme-success)" }} />
             {t("common").systemReady}
           </div>
           <LanguageSwitcher />

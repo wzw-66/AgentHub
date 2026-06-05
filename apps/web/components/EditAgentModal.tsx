@@ -2,248 +2,139 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api-client";
-import { useI18n } from "@/lib/i18n";
-import { useRipple } from "@/hooks/useRipple";
+
+interface AgentData {
+  id: string;
+  name: string;
+  provider: string;
+  model?: string | null;
+  avatarUrl?: string;
+  systemPrompt?: string | null;
+  config?: Record<string, unknown> | null;
+  displayName?: string | null;
+  tags?: string[];
+}
 
 interface EditAgentModalProps {
-  agent: {
-    id: string;
-    name: string;
-    provider: string;
-    model?: string | null;
-    systemPrompt?: string | null;
-    config?: Record<string, unknown> | null;
-  };
+  agent: AgentData;
   onClose: () => void;
   onSaved: () => void;
 }
 
 export default function EditAgentModal({ agent, onClose, onSaved }: EditAgentModalProps) {
-  const { t } = useI18n();
   const [name, setName] = useState(agent.name);
-  const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt ?? "");
-  const [model, setModel] = useState(agent.model ?? "");
-  const [apiUrl, setApiUrl] = useState(
-    typeof agent.config?.apiUrl === "string" ? agent.config.apiUrl
-    : typeof agent.config?.apiEndpoint === "string" ? agent.config.apiEndpoint
-    : ""
-  );
-  const [apiKey, setApiKey] = useState(
-    typeof agent.config?.apiKey === "string" ? agent.config.apiKey : ""
-  );
-  const [customProviderName, setCustomProviderName] = useState(
-    typeof agent.config?.providerName === "string" ? agent.config.providerName : ""
-  );
+  const [displayName, setDisplayName] = useState(agent.displayName || "");
+  const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt || "");
+  const [tags, setTags] = useState((agent.tags || []).join(", "));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const { addRipple, renderRipples } = useRipple();
-
-  const isCustom = agent.provider === "Custom";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setValidationError(null);
+    if (!name.trim()) return;
+    setLoading(true);
     setError(null);
-
-    if (!name.trim()) {
-      setValidationError(t("agentDetail").editModal.nameEmpty);
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      const body: Record<string, unknown> = {
+      const tagList = tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      await api.patch(`/api/contacts/${agent.id}/update`, {
         name: name.trim(),
-        systemPrompt: systemPrompt.trim() || null,
-      };
-
-      if (isCustom) {
-        body.model = model.trim() || null;
-        body.config = {
-          providerName: customProviderName.trim() || undefined,
-          apiUrl: apiUrl.trim() || undefined,
-          apiKey: apiKey.trim() || undefined,
-        };
-      }
-
-      await api.patch(`/api/contacts/${agent.id}/update`, body);
+        displayName: displayName.trim() || undefined,
+        systemPrompt: systemPrompt.trim() || undefined,
+        tags: tagList.length > 0 ? tagList : undefined,
+      });
       onSaved();
-    } catch {
-      setError(t("agentDetail").editModal.saveFailed);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string };
+      setError(apiErr.message || "保存失败，请重试");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
-    >
+    <>
+      <div className="fixed inset-0 z-50" style={{ background: "rgba(0,0,0,0.3)" }} onClick={onClose} />
       <div
-        className="w-full max-w-md rounded-xl p-6 shadow-2xl animate-fade-in-up"
-        style={{
-          backgroundColor: "var(--theme-bg-elevated)",
-          border: "1px solid var(--theme-border)",
-        }}
+        className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border p-6 shadow-lg"
+        style={{ background: "var(--bg-app)", borderColor: "var(--border)", boxShadow: "var(--shadow-md)" }}
       >
-        <h3 className="mb-1 font-mono text-base font-semibold" style={{ color: "var(--theme-text-primary)" }}>
-          {t("agentDetail").editModal.title}
-        </h3>
-        <p className="mb-5 font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-          {t("agentDetail").editModal.subtitle}
-        </p>
+        <h2 className="mb-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>编辑 Agent</h2>
+        <p className="mb-5 text-xs" style={{ color: "var(--text-tertiary)" }}>修改 Agent 配置</p>
+
+        {error && (
+          <div
+            className="mb-4 rounded-lg border px-4 py-3 text-xs"
+            style={{ borderColor: "rgba(201,58,58,0.2)", background: "rgba(201,58,58,0.06)", color: "var(--red)" }}
+          >
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Provider (read-only) */}
           <div>
-            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-              {t("agentDetail").editModal.providerReadonly}
-            </label>
-            <div
-              className="mt-1.5 w-full rounded-lg border px-3 py-2 font-mono text-xs"
-              style={{
-                borderColor: "var(--theme-border-light)",
-                color: "var(--theme-text-muted)",
-                backgroundColor: "var(--theme-bg-primary)",
-              }}
-            >
-              {agent.provider}{agent.model ? ` / ${agent.model}` : ""}
-            </div>
-          </div>
-
-          {/* Name */}
-          <div>
-            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-              {t("createAgent").name} <span style={{ color: "var(--theme-danger)" }}>{t("createAgent").nameRequired}</span>
-            </label>
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>名称</label>
             <input
-              type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+              className="input-theme mt-1 block w-full rounded-lg px-3 py-2 text-sm"
+              required
+              autoFocus
             />
           </div>
-
-          {/* System Prompt */}
           <div>
-            <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-              {t("createAgent").systemPrompt}
-            </label>
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>显示名称</label>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="input-theme mt-1 block w-full rounded-lg px-3 py-2 text-sm"
+              placeholder="可选"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>类型</label>
+            <div
+              className="mt-1 rounded-lg border px-3 py-2 text-sm"
+              style={{
+                borderColor: "var(--border-light)",
+                color: "var(--text-tertiary)",
+                background: "var(--bg-sidebar)",
+              }}
+            >
+              {agent.provider === "Custom" ? "Harness 自定义 Agent" : `本地 ${agent.provider}`}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>系统提示词</label>
             <textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder={t("createAgent").systemPromptPlaceholder}
-              rows={4}
-              className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
+              className="input-theme mt-1 block w-full rounded-lg px-3 py-2 text-sm"
+              rows={3}
             />
           </div>
-
-          {/* Custom provider config fields */}
-          {isCustom && (
-            <>
-              <div>
-                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-                  {t("createAgent").customProviderName}
-                </label>
-                <input type="text" value={customProviderName} onChange={(e) => setCustomProviderName(e.target.value)}
-                  placeholder={t("createAgent").customProviderNamePlaceholder}
-                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
-                />
-              </div>
-
-              <div>
-                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-                  {t("createAgent").apiUrl}
-                </label>
-                <input type="text" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)}
-                  placeholder={t("createAgent").apiUrlPlaceholder}
-                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
-                />
-              </div>
-
-              <div>
-                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-                  {t("createAgent").apiKey}
-                </label>
-                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={t("createAgent").apiKeyPlaceholder}
-                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
-                />
-              </div>
-
-              <div>
-                <label className="font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-secondary)" }}>
-                  {t("createAgent").model}
-                </label>
-                <input type="text" value={model} onChange={(e) => setModel(e.target.value)}
-                  placeholder={t("createAgent").modelPlaceholder}
-                  className="mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs transition-all focus:outline-none"
-                  style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-primary)" }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--theme-accent)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--theme-border-light)")}
-                />
-              </div>
-            </>
-          )}
-
-          {/* Validation Error */}
-          {validationError && (
-            <p className="font-mono text-xs" style={{ color: "var(--theme-danger)" }}>
-              [{t("createAgent").validation}] {validationError}
-            </p>
-          )}
-          {error && (
-            <p className="font-mono text-xs" style={{ color: "var(--theme-danger)" }}>
-              [{t("common").error}] {error}
-            </p>
-          )}
-
+          <div>
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>标签</label>
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              className="input-theme mt-1 block w-full rounded-lg px-3 py-2 text-sm"
+              placeholder="逗号分隔，如：前端, 部署"
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="rounded-lg border px-4 py-2 font-mono text-xs tracking-wider transition-colors disabled:opacity-50"
-              style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-secondary)" }}
-            >
-              {t("createAgent").cancel}
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              onMouseDown={addRipple}
-              className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{
-                borderColor: "var(--theme-accent)",
-                color: "var(--theme-accent)",
-                backgroundColor: "var(--theme-accent-dim)",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              {renderRipples()}
-              {isSubmitting ? t("agentDetail").saving : t("agentDetail").editModal.save}
+            <button type="button" onClick={onClose}
+              className="btn-ghost rounded-lg px-4 py-2 text-xs font-medium">取消</button>
+            <button type="submit" disabled={loading || !name.trim()}
+              className="btn-gradient rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50">
+              {loading ? "保存中..." : "保存"}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 }

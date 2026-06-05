@@ -28,20 +28,48 @@ interface MessageStatusEvent {
   status: "sent" | "delivered" | "read";
 }
 
-type WSEvent = OnlineStatusEvent | MessageStatusEvent;
-
-interface OnlineStatusMap {
-  [userId: string]: boolean;
+interface ChunkEvent {
+  type: "chunk";
+  content: string;
+  agentId: string;
+  timestamp?: number;
 }
 
-interface MessageStatusMap {
-  [messageId: string]: "sent" | "delivered" | "read";
+interface DoneEvent {
+  type: "done";
+  messageId: string;
+  agentId: string;
+  tokenUsage?: { input: number; output: number };
 }
+
+interface ErrorEvent {
+  type: "error";
+  message: string;
+  code: string;
+  agentId?: string;
+}
+
+interface ReplaceEvent {
+  type: "replace";
+  messageId: string;
+  content: string;
+  agentId: string;
+}
+
+interface NotificationEvent {
+  type: "notification";
+  conversationId: string;
+  senderId: string;
+  preview: string;
+}
+
+type WSEvent = OnlineStatusEvent | MessageStatusEvent | ChunkEvent | DoneEvent | ErrorEvent | ReplaceEvent | NotificationEvent;
+
+type WSEventHandler = (event: WSEvent) => void;
 
 interface WSContextValue {
   status: WSConnectionStatus;
-  onlineStatuses: OnlineStatusMap;
-  messageStatuses: MessageStatusMap;
+  onEvent: (handler: WSEventHandler) => () => void;
 }
 
 // ─── Context ───────────────────────────────────────────────────────────
@@ -56,39 +84,27 @@ const BASE_DELAY = 1000;
 export function WSProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<WSConnectionStatus>("disconnected");
-  const [onlineStatuses, setOnlineStatuses] = useState<OnlineStatusMap>({});
-  const [messageStatuses, setMessageStatuses] = useState<MessageStatusMap>({});
   const wsRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  const handlersRef = useRef<Set<WSEventHandler>>(new Set());
 
-  // ─── Handle incoming messages ───────────────────────────────────
-  const handleMessage = useCallback((event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data) as WSEvent;
-
-      switch (data.type) {
-        case "online_status":
-          setOnlineStatuses((prev) => ({
-            ...prev,
-            [data.userId]: data.online,
-          }));
-          break;
-
-        case "message_status":
-          setMessageStatuses((prev) => ({
-            ...prev,
-            [data.messageId]: data.status,
-          }));
-          break;
-      }
-    } catch {
-      // Ignore malformed messages
-    }
+  // ─── Event system ─────────────────────────────────────────────────
+  const onEvent = useCallback((handler: WSEventHandler): () => void => {
+    handlersRef.current.add(handler);
+    return () => {
+      handlersRef.current.delete(handler);
+    };
   }, []);
 
-  // ─── Ping/pong heartbeat ────────────────────────────────────────
+  const emitEvent = useCallback((event: WSEvent) => {
+    handlersRef.current.forEach((handler) => {
+      try { handler(event); } catch { /* ignore handler errors */ }
+    });
+  }, []);
+
+  // ─── Heartbeat ────────────────────────────────────────────────────
   const startHeartbeat = useCallback((ws: WebSocket) => {
     pingIntervalRef.current = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -127,7 +143,20 @@ export function WSProvider({ children }: { children: ReactNode }) {
       };
 
       ws.onmessage = (event) => {
-        handleMessage(event);
+        try {
+          const raw = JSON.parse(event.data as string) as {
+            type: string;
+            payload?: unknown;
+            timestamp?: string;
+          };
+          // Unwrap WS message format: { type, payload, timestamp } → flat event
+          const flatEvent = raw.payload !== undefined
+            ? { ...(raw.payload as Record<string, unknown>), type: raw.type }
+            : raw;
+          emitEvent(flatEvent as WSEvent);
+        } catch {
+          // Ignore malformed messages
+        }
       };
 
       ws.onclose = () => {
@@ -135,7 +164,6 @@ export function WSProvider({ children }: { children: ReactNode }) {
         setStatus("disconnected");
         stopHeartbeat();
 
-        // Auto-reconnect
         if (retryCountRef.current < MAX_RETRIES) {
           const delay = Math.min(
             BASE_DELAY * Math.pow(2, retryCountRef.current),
@@ -152,9 +180,8 @@ export function WSProvider({ children }: { children: ReactNode }) {
     } catch {
       setStatus("disconnected");
     }
-  }, [handleMessage, startHeartbeat, stopHeartbeat]);
+  }, [emitEvent, startHeartbeat, stopHeartbeat]);
 
-  // ─── Disconnect ─────────────────────────────────────────────────
   const disconnect = useCallback(() => {
     stopHeartbeat();
     wsRef.current?.close();
@@ -163,16 +190,14 @@ export function WSProvider({ children }: { children: ReactNode }) {
     retryCountRef.current = 0;
   }, [stopHeartbeat]);
 
-  // ─── Lifecycle: connect when authenticated ──────────────────────
+  // ─── Lifecycle ──────────────────────────────────────────────────
   useEffect(() => {
     mountedRef.current = true;
-
     if (isAuthenticated) {
       connect();
     } else {
       disconnect();
     }
-
     return () => {
       mountedRef.current = false;
       disconnect();
@@ -180,13 +205,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, connect, disconnect]);
 
   return (
-    <WSContext.Provider
-      value={{
-        status,
-        onlineStatuses,
-        messageStatuses,
-      }}
-    >
+    <WSContext.Provider value={{ status, onEvent }}>
       {children}
     </WSContext.Provider>
   );
