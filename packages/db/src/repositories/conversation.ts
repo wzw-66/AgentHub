@@ -124,3 +124,40 @@ export async function updateConversation(
 ): Promise<Conversation> {
   return prisma.conversation.update({ where: { id }, data });
 }
+
+export async function addConversationMembers(
+  id: string,
+  memberIds: string[],
+  prisma: PrismaClient = defaultPrisma
+): Promise<Conversation> {
+  const existing = await prisma.conversation.findUnique({
+    where: { id },
+    select: { contactIds: true },
+  });
+  if (!existing) throw new Error(`Conversation ${id} not found`);
+
+  const merged = [...new Set([...existing.contactIds, ...memberIds])];
+  return prisma.conversation.update({
+    where: { id },
+    data: { contactIds: merged },
+  });
+}
+
+export async function removeConversationMembers(
+  id: string,
+  memberIds: string[],
+  prisma: PrismaClient = defaultPrisma
+): Promise<Conversation> {
+  const existing = await prisma.conversation.findUnique({
+    where: { id },
+    select: { contactIds: true },
+  });
+  if (!existing) throw new Error(`Conversation ${id} not found`);
+
+  const removeSet = new Set(memberIds);
+  const filtered = existing.contactIds.filter((id) => !removeSet.has(id));
+  return prisma.conversation.update({
+    where: { id },
+    data: { contactIds: filtered },
+  });
+}

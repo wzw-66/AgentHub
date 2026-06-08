@@ -46,7 +46,7 @@ interface ArtifactDetail {
 }
 
 export default function RightPanel({ content, onClose: _onClose, conversationId }: RightPanelProps) {
-  const { conversations, contacts } = useChat();
+  const { conversations, contacts, fetchConversations } = useChat();
   const activeConversation = conversations.find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
   const convContactIds = activeConversation?.contactIds ?? [];
@@ -55,6 +55,39 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
   const [artifactData, setArtifactData] = useState<ArtifactDetail | null>(null);
   const [artifactLoading, setArtifactLoading] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
+
+  async function handleRemoveMember(memberId: string) {
+    if (!conversationId) return;
+    setMemberError(null);
+    try {
+      await api.patch(`/api/conversations/${conversationId}/update`, {
+        removeMembers: [memberId],
+      });
+      await fetchConversations();
+    } catch {
+      setMemberError("移除成员失败，请重试");
+    }
+  }
+
+  async function handleAddMember(agentId: string) {
+    if (!conversationId) return;
+    setMemberError(null);
+    try {
+      await api.patch(`/api/conversations/${conversationId}/update`, {
+        addMembers: [agentId],
+      });
+      await fetchConversations();
+      setShowAddMember(false);
+    } catch {
+      setMemberError("添加成员失败，请重试");
+    }
+  }
+
+  const availableForAdd = (contacts || []).filter(
+    (c) => !convContactIds.includes(c.id),
+  );
 
   // Fetch artifact detail when content changes to an artifact
   useEffect(() => {
@@ -149,9 +182,81 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
               color: getAgentColor(m.id),
               role: m.provider,
             }))}
-            onRemoveMember={() => {}}
-            onAddMember={() => {}}
+            onRemoveMember={handleRemoveMember}
+            onAddMember={() => setShowAddMember(true)}
           />
+        )}
+
+        {memberError && (
+          <div
+            className="text-xs px-3 py-1.5 rounded"
+            style={{
+              color: "var(--red)",
+              background: "var(--red-bg, rgba(201,58,58,0.08))",
+            }}
+          >
+            {memberError}
+          </div>
+        )}
+
+        {/* Add member overlay */}
+        {showAddMember && (
+          <div
+            className="absolute inset-0 z-50 flex flex-col rounded-lg"
+            style={{
+              background: "var(--bg-app)",
+              border: "1px solid var(--border)",
+              margin: "8px",
+            }}
+          >
+            <div
+              className="flex items-center justify-between px-3 py-2"
+              style={{ borderBottom: "1px solid var(--border-light)" }}
+            >
+              <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                邀请 Agent
+              </span>
+              <button
+                onClick={() => setShowAddMember(false)}
+                className="border-none cursor-pointer text-xs"
+                style={{ color: "var(--text-tertiary)", background: "none" }}
+              >
+                取消
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {availableForAdd.length === 0 ? (
+                <div className="text-xs py-4 text-center" style={{ color: "var(--text-tertiary)" }}>
+                  没有可添加的 Agent
+                </div>
+              ) : (
+                availableForAdd.map((agent) => (
+                  <button
+                    key={agent.id}
+                    onClick={() => handleAddMember(agent.id)}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-xs transition-colors cursor-pointer"
+                    style={{ color: "var(--text-primary)", background: "none", border: "none" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span
+                      className="flex items-center justify-center text-white font-medium rounded-full flex-shrink-0"
+                      style={{
+                        width: "22px",
+                        height: "22px",
+                        background: getAgentColor(agent.name ?? ""),
+                        fontSize: "8px",
+                      }}
+                    >
+                      {(agent.name ?? "?")[0]?.toUpperCase()}
+                    </span>
+                    <span className="flex-1 text-left">{agent.name}</span>
+                    <span className="text-xs" style={{ color: "var(--accent)" }}>+ 邀请</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
         )}
 
         {/* Preview Tab */}

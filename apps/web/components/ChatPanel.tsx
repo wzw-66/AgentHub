@@ -202,18 +202,23 @@ export default function ChatPanel({
   // ─── @mention detection ─────────────────────────────────────────
   useEffect(() => {
     if (!isGroupChat || !textareaRef.current) {
+      if (!isGroupChat) console.log("[mention] isGroupChat is false, skipping");
+      if (!textareaRef.current) console.log("[mention] textareaRef is null, skipping");
       setMentionState(null);
       return;
     }
     const cursorPos = textareaRef.current.selectionStart;
     const beforeCursor = input.slice(0, cursorPos);
     const atIndex = beforeCursor.lastIndexOf("@");
+    console.log("[mention]", { cursorPos, beforeCursor, atIndex, input, contactsCount: contacts?.length });
     if (atIndex === -1) { setMentionState(null); return; }
     if (atIndex > 0 && beforeCursor[atIndex - 1] !== " " && beforeCursor[atIndex - 1] !== "\n") {
+      console.log("[mention] @ not preceded by space/start");
       setMentionState(null); return;
     }
     const query = beforeCursor.slice(atIndex + 1);
     if (query.includes(" ")) { setMentionState(null); return; }
+    console.log("[mention] setting mentionState", { query });
     setMentionState({ atIndex, query });
     setMentionSelectedIndex(0);
   }, [input, isGroupChat]);
@@ -854,6 +859,7 @@ export default function ChatPanel({
             borderRadius: "var(--radius-lg)",
             padding: "9px 14px",
             transition: "all 0.2s ease",
+            position: "relative",
           }}
           onFocus={(e) => {
             const el = e.currentTarget;

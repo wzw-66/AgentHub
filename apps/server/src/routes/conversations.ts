@@ -5,6 +5,8 @@ import {
   createConversation as dbCreateConversation,
   updateConversation as dbUpdateConversation,
   deleteConversation as dbDeleteConversation,
+  addConversationMembers,
+  removeConversationMembers,
   findSingleConversationByAgentId,
   findUserById,
 } from "@agenthub/db";
@@ -23,6 +25,8 @@ type CreateConversationBody = {
 type UpdateConversationBody = {
   title?: string;
   isArchived?: boolean;
+  addMembers?: string[];
+  removeMembers?: string[];
 };
 
 type ConversationParams = {
@@ -145,7 +149,34 @@ async function handleUpdate(
   }
 
   const body = request.body as UpdateConversationBody;
-  const conversation = await dbUpdateConversation(request.params.id, body);
+
+  // Handle member management fields separately
+  const { addMembers, removeMembers, ...updateFields } = body;
+
+  let conversation = existing;
+
+  // Apply scalar updates first (title, isArchived, etc.)
+  if (Object.keys(updateFields).length > 0) {
+    conversation = await dbUpdateConversation(request.params.id, updateFields);
+  }
+
+  // Add members
+  if (addMembers && addMembers.length > 0) {
+    conversation = await addConversationMembers(request.params.id, addMembers);
+  }
+
+  // Remove members
+  if (removeMembers && removeMembers.length > 0) {
+    conversation = await removeConversationMembers(request.params.id, removeMembers);
+
+    // Abort any active agent streaming for this conversation
+    try {
+      request.server.connectionManager.abortAdapters(request.params.id);
+    } catch {
+      // ConnectionManager may not be available in all contexts
+    }
+  }
+
   return reply.status(200).send(conversation);
 }
 

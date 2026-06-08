@@ -23,6 +23,9 @@ interface ContactInfo {
   name: string;
   provider: string;
   avatarUrl?: string;
+  displayName?: string | null;
+  tags?: string[];
+  systemPrompt?: string | null;
 }
 
 interface StreamingMessage {
