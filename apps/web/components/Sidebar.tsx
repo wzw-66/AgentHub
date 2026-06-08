@@ -236,6 +236,7 @@ export default function Sidebar({ activeConversationId, onSelectConversation }: 
         >
           <ChatListView
             conversations={conversations}
+            contacts={contacts}
             isLoadingConversations={isLoadingConversations}
             activeConversationId={activeConversationId}
             onSelectConversation={onSelectConversation}

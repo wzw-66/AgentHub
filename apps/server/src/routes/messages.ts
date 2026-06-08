@@ -293,9 +293,13 @@ async function runOrchestration(
 
   log.info({ conversationId, messageId }, "Starting orchestration");
 
-  // Build SSE push function
+  // Build SSE push function — also broadcasts chunk/done/error to WebSocket
+  // so the client (which listens on WebSocket) receives streaming events
   const pushSSE: PushSSEFn = (event: string, data: unknown) => {
     cm.pushToConversation(conversationId, event, data);
+    if (event === "chunk" || event === "done" || event === "error") {
+      cm.broadcastToConversation(cm.getConnectedUserIds(), event, data);
+    }
   };
 
   // Resolve agents from conversation contactIds only

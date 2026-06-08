@@ -6,6 +6,7 @@ import type { Conversation } from "@agenthub/shared";
 
 interface ChatListViewProps {
   conversations: Conversation[];
+  contacts?: { id: string; name: string }[];
   isLoadingConversations: boolean;
   activeConversationId: string | null;
   onSelectConversation: (id: string) => void;
@@ -30,6 +31,7 @@ function getAgentColor(name: string): string {
 
 export default function ChatListView({
   conversations,
+  contacts,
   isLoadingConversations,
   activeConversationId,
   onSelectConversation,
@@ -37,6 +39,10 @@ export default function ChatListView({
   togglePinConversation,
   toggleArchiveConversation,
 }: ChatListViewProps) {
+  const contactsMap = useMemo(
+    () => new Map(contacts?.map((c) => [c.id, c.name]) ?? []),
+    [contacts],
+  );
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
@@ -72,7 +78,7 @@ export default function ChatListView({
           placeholder={t("chat").searchPlaceholder}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 bg-transparent text-xs outline-none"
+          className="flex-1 bg-transparent text-xs outline-none focus-visible:outline-none"
           style={{ color: "var(--text-primary)", fontSize: "12px" }}
         />
         <kbd
@@ -208,6 +214,7 @@ export default function ChatListView({
                   {conv.contactIds && conv.contactIds.length > 0 && (
                     <div className="flex gap-0.5" style={{ marginTop: "5px" }}>
                       {conv.contactIds.slice(0, 3).map((contactId, i) => {
+                        const agentName = contactsMap.get(contactId) ?? contactId;
                         return (
                           <span
                             key={contactId ?? i}
@@ -217,11 +224,11 @@ export default function ChatListView({
                               height: "16px",
                               borderRadius: "50%",
                               fontSize: "7px",
-                              background: getAgentColor(contactId),
+                              background: getAgentColor(agentName),
                               border: "1.5px solid var(--bg-sidebar)",
                             }}
                           >
-                            {(contactId[0] ?? "?").toUpperCase()}
+                            {(agentName[0] ?? "?").toUpperCase()}
                           </span>
                         );
                       })}

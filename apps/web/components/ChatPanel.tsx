@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChat } from "@/lib/chat-context";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
@@ -165,7 +165,7 @@ export default function ChatPanel({
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  // (showDeleteConfirm removed)
 
   // ─── Reply state ────────────────────────────────────────────────
   const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(null);
@@ -189,6 +189,28 @@ export default function ChatPanel({
     }
     return -1;
   })();
+
+  const lastAgentMsgIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (isGroupChat) {
+      const seen = new Set<string>();
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i]!;
+        if (m.senderType?.toLowerCase?.() === "contact" && !seen.has(m.senderId)) {
+          seen.add(m.senderId);
+          ids.add(m.id);
+        }
+      }
+    } else {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]!.senderType?.toLowerCase?.() === "contact") {
+          ids.add(messages[i]!.id);
+          break;
+        }
+      }
+    }
+    return ids;
+  }, [messages, isGroupChat]);
 
   // ─── Auto-scroll ────────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
@@ -284,18 +306,7 @@ export default function ChatPanel({
     }
   }
 
-  async function handlePin(messageId: string) {
-    if (!conversationId) return;
-    try {
-      await api.post(
-        `/api/conversations/${conversationId}/messages/${messageId}/pin`,
-      );
-    } catch {
-      // silent
-    }
-  }
-
-  // ─── Message edit / delete handlers ─────────────────────────────
+  // (handlePin removed - Fork button no longer exists)// ─── Message edit / delete handlers ─────────────────────────────
   function startEditing(msg: Message) {
     setEditingMessageId(msg.id);
     setEditContent(msg.content);
@@ -327,18 +338,7 @@ export default function ChatPanel({
     setEditContent("");
   }
 
-  async function handleDelete(msgId: string) {
-    if (!conversationId) return;
-    try {
-      await api.delete(
-        `/api/conversations/${conversationId}/messages/${msgId}/delete`,
-      );
-      setMessages((prev) => prev.filter((m) => m.id !== msgId));
-      setShowDeleteConfirm(null);
-    } catch {
-      // silent
-    }
-  }
+  // (handleDelete removed - Delete button no longer exists)
 
   // ─── Empty state ────────────────────────────────────────────────
   if (!conversationId) {
@@ -477,7 +477,6 @@ export default function ChatPanel({
                 senderType === "user" ? "user" :
                 senderType === "system" ? "system" : "contact";
 
-              const isLastUserMsg = idx === lastUserMsgIdx;
               const isEditing = editingMessageId === msg.id;
 
               return (
@@ -529,7 +528,7 @@ export default function ChatPanel({
                     </div>
                   )}
 
-                  <div className="min-w-0" style={{ position: "relative" }}>
+                  <div className="min-w-0">
                     {/* Sender name tag */}
                     {variant === "contact" && (
                       <div
@@ -537,41 +536,6 @@ export default function ChatPanel({
                         style={{ fontSize: "10px", color: "var(--text-secondary)", fontWeight: 500 }}
                       >
                         {contacts?.find((c) => c.id === msg.senderId)?.name ?? msg.senderId}
-                      </div>
-                    )}
-
-                    {/* Hover actions */}
-                    {variant !== "system" && hoveredMsgId === msg.id && !isEditing && (
-                      <div
-                        className="hover-actions"
-                        style={variant === "user" ? { right: "auto", left: "2px" } : {}}
-                      >
-                        {variant === "contact" && (
-                          <>
-                            <button title="Fork" onClick={() => handlePin(msg.id)}>
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2" />
-                              </svg>
-                            </button>
-                            <button title="重新生成" onClick={() => handleRegenerate(msg.id)}>
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            </button>
-                          </>
-                        )}
-                        <button title="复制" onClick={() => { navigator.clipboard.writeText(msg.content); }}>
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        {variant === "user" && (
-                          <button title={t("common").edit ?? "Edit"} onClick={() => startEditing(msg)}>
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                        )}
                       </div>
                     )}
 
@@ -613,7 +577,7 @@ export default function ChatPanel({
                             ref={editTextareaRef}
                             value={editContent}
                             onChange={(e) => setEditContent(e.target.value)}
-                            className="w-full resize-none rounded border bg-transparent px-2 py-1 text-sm outline-none"
+                            className="w-full resize-none rounded border bg-transparent px-2 py-1 text-sm outline-none focus-visible:outline-none"
                             style={{ borderColor: "var(--accent)", color: "var(--text-primary)" }}
                             rows={3}
                           />
@@ -643,63 +607,48 @@ export default function ChatPanel({
                       )}
                     </div>
 
-                    {/* Side buttons for reply/pin/delete */}
+                    {/* Bottom actions — merged below bubble */}
                     {variant !== "system" && hoveredMsgId === msg.id && !isEditing && (
                       <div
-                        className="flex gap-1 mt-1"
+                        className="msg-actions mt-1"
                         style={{
-                          justifyContent: variant === "user" ? "flex-end" : "flex-start",
+                          justifyContent: variant === "user" ? "flex-start" : "flex-end",
                         }}
                       >
+                        {/* Copy — all non-system messages */}
+                        <button title="复制" onClick={() => { navigator.clipboard.writeText(msg.content); }}>
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+
+                        {/* Reply — all non-system messages */}
                         <button
+                          title="Reply"
                           onClick={() => setReplyTargetId(msg.id)}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
-                          style={{ color: "var(--text-tertiary)" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--accent-light)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
                         >
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                           </svg>
-                          Reply
                         </button>
-                        {isLastUserMsg && (
-                          <button
-                            onClick={() => setShowDeleteConfirm(msg.id)}
-                            className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
-                            style={{ color: "var(--text-tertiary)" }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--red)"; e.currentTarget.style.background = "rgba(201,58,58,0.08)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
-                          >
+
+                        {/* Regenerate — agent messages only, last per agent */}
+                        {variant === "contact" && lastAgentMsgIds.has(msg.id) && (
+                          <button title="重新生成" onClick={() => handleRegenerate(msg.id)}>
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            Delete
                           </button>
                         )}
-                      </div>
-                    )}
 
-                    {/* Delete confirmation */}
-                    {showDeleteConfirm === msg.id && (
-                      <div className="mt-1 flex items-center gap-2" style={{ justifyContent: variant === "user" ? "flex-end" : "flex-start" }}>
-                        <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          {t("common").confirm}?
-                        </span>
-                        <button
-                          onClick={() => handleDelete(msg.id)}
-                          className="rounded px-2 py-0.5 text-xs"
-                          style={{ color: "#fff", background: "var(--red)" }}
-                        >
-                          {t("common").delete}
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(null)}
-                          className="rounded px-2 py-0.5 text-xs"
-                          style={{ color: "var(--text-tertiary)" }}
-                        >
-                          {t("common").cancel}
-                        </button>
+                        {/* Edit — user messages only, last user message */}
+                        {variant === "user" && idx === lastUserMsgIdx && (
+                          <button title={t("common").edit ?? "Edit"} onClick={() => startEditing(msg)}>
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -861,18 +810,6 @@ export default function ChatPanel({
             transition: "all 0.2s ease",
             position: "relative",
           }}
-          onFocus={(e) => {
-            const el = e.currentTarget;
-            el.style.borderColor = "var(--text-primary)";
-            el.style.background = "var(--bg-app)";
-            el.style.boxShadow = "0 0 0 3px rgba(26,26,46,0.04)";
-          }}
-          onBlur={(e) => {
-            const el = e.currentTarget;
-            el.style.borderColor = "var(--border)";
-            el.style.background = "var(--bg-sidebar)";
-            el.style.boxShadow = "none";
-          }}
         >
           {mentionState && (
             <MentionPopup
@@ -924,7 +861,7 @@ export default function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 resize-none bg-transparent border-none outline-none"
+            className="flex-1 resize-none bg-transparent border-none outline-none focus-visible:outline-none"
             style={{
               color: "var(--text-primary)",
               fontSize: "13px",

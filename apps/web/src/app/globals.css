@@ -1004,20 +1004,15 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 0 2px rgba(43, 138, 107, 0.15);
 }
 
-/* ─── Hover actions on messages ───────────────────────────────────── */
-.hover-actions {
-  position: absolute;
-  top: -14px;
-  right: 2px;
+/* ─── Message action buttons ──────────────────────────────────────────── */
+.msg-actions {
   display: flex;
   gap: 2px;
   opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 2;
+  transition: opacity 0.15s ease;
 }
-.hover-actions.user { right: auto; left: 2px; }
-*:hover > .hover-actions { opacity: 1; }
-.hover-actions button {
+*:hover > .msg-actions { opacity: 1; }
+.msg-actions button {
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -1032,7 +1027,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
 }
-.hover-actions button:hover {
+.msg-actions button:hover {
   color: var(--text-primary);
   border-color: var(--border);
 }
