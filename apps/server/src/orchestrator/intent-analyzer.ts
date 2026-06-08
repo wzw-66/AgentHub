@@ -304,10 +304,19 @@ export async function decomposeMessage(params: {
     agentMap.set(agent.id, agent);
   }
 
+  // Deduplicate assigned agents by agentId — LLM may return the same agent
+  // multiple times (e.g. once via @mention and once via content inference)
+  const seenAgents = new Set<string>();
+  const uniqueAssignments = result.assignedAgents.filter((a) => {
+    if (seenAgents.has(a.agentId)) return false;
+    seenAgents.add(a.agentId);
+    return true;
+  });
+
   // Create sub-tasks from LLM result
   const subtasks: SubTask[] = [];
 
-  for (const assignment of result.assignedAgents) {
+  for (const assignment of uniqueAssignments) {
     // Try to find agent by ID first, then fall back to name matching
     let agent = agentMap.get(assignment.agentId);
     if (!agent) {

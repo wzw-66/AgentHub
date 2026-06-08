@@ -329,9 +329,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         case "done": {
           const doneEvent = event as { messageId?: string; agentId?: string };
           finalizeMessage(doneEvent.messageId, doneEvent.agentId);
-          if (activeConversationId) {
-            fetchMessages(activeConversationId).then((msgs) => setMessages(msgs));
-          }
           break;
         }
         case "error": {

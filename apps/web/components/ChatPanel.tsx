@@ -122,6 +122,7 @@ export default function ChatPanel({
   const { t } = useI18n();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -162,7 +163,6 @@ export default function ChatPanel({
   }
 
   // ─── Message edit / delete state ─────────────────────────────────
-  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   // (showDeleteConfirm removed)
@@ -257,7 +257,8 @@ export default function ChatPanel({
   // ─── Send ───────────────────────────────────────────────────────
   async function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed || !conversationId || sending) return;
+    if (!trimmed || !conversationId || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setStreamError(null);
     try {
@@ -268,6 +269,7 @@ export default function ChatPanel({
     } catch {
       // silent
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -470,7 +472,7 @@ export default function ChatPanel({
             </span>
           </div>
         ) : (
-          <div className="flex flex-col" style={{ gap: "12px" }}>
+          <div className="flex flex-col">
             {messages.map((msg, idx) => {
               const senderType = msg.senderType?.toLowerCase?.() ?? "";
               const variant =
@@ -479,20 +481,26 @@ export default function ChatPanel({
 
               const isEditing = editingMessageId === msg.id;
 
+              // Dynamic gap: group user↔agent as Q&A pair, separate agent→user between rounds
+              const prevMsg = idx > 0 ? messages[idx - 1] : null;
+              const prevSenderType = prevMsg?.senderType?.toLowerCase?.() ?? "";
+              const isFirst = idx === 0;
+              const isBetweenRounds = prevSenderType === "agent" && senderType === "user";
+              const msgMarginTop = isFirst ? "0px" : isBetweenRounds ? "24px" : "8px";
+
               return (
                 <div
                   key={msg.id}
                   className="flex gap-2.5"
                   style={{
                     maxWidth: "88%",
+                    marginTop: msgMarginTop,
                     alignSelf: variant === "user" ? "flex-end" : variant === "system" ? "center" : "flex-start",
                     flexDirection: variant === "user" ? "row-reverse" : "row",
                     opacity: 0,
                     animation: `msgIn 0.35s ease forwards`,
                     animationDelay: `${Math.min(idx * 0.08, 0.48)}s`,
                   }}
-                  onMouseEnter={() => setHoveredMsgId(msg.id)}
-                  onMouseLeave={() => setHoveredMsgId(null)}
                 >
                   {/* Agent avatar (left side for agent messages) */}
                   {variant === "contact" && (
@@ -608,7 +616,7 @@ export default function ChatPanel({
                     </div>
 
                     {/* Bottom actions — merged below bubble */}
-                    {variant !== "system" && hoveredMsgId === msg.id && !isEditing && (
+                    {variant !== "system" && !isEditing && (
                       <div
                         className="msg-actions mt-1"
                         style={{
@@ -658,16 +666,20 @@ export default function ChatPanel({
             })}
 
             {/* Streaming messages (supporting multiple agents) */}
-            {allStreamingMessages.map((sm) => (
-              <div
-                key={sm.id}
-                className="flex gap-2.5"
-                style={{
-                  maxWidth: "88%",
-                  alignSelf: "flex-start",
-                  opacity: 0,
-                  animation: "msgIn 0.35s ease forwards",
-                }}
+            {allStreamingMessages.map((sm, smIdx) => {
+              // Streaming messages are always agent responses — always close to the message before
+              const streamMarginTop = smIdx === 0 ? (messages.length > 0 ? "8px" : "0px") : "8px";
+              return (
+                <div
+                  key={sm.id}
+                  className="flex gap-2.5"
+                  style={{
+                    maxWidth: "88%",
+                    marginTop: streamMarginTop,
+                    alignSelf: "flex-start",
+                    opacity: 0,
+                    animation: "msgIn 0.35s ease forwards",
+                  }}
               >
                 <div
                   className="flex-shrink-0 flex items-center justify-center text-white font-medium"
@@ -709,7 +721,8 @@ export default function ChatPanel({
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}

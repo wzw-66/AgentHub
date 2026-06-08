@@ -364,10 +364,10 @@ async function runOrchestration(
     agentMap,
     pushSSE,
     undefined, // onAgentChunk
-    // onTaskCompleted: save each agent's full response as a Contact message
+    // onTaskCompleted: save each agent's full response as a Contact message and return its ID
     async (subtask, result) => {
       try {
-        await createMessage({
+        const msg = await createMessage({
           conversationId,
           senderType: "Contact",
           senderId: subtask.agentId,
@@ -376,8 +376,10 @@ async function runOrchestration(
           parentId: messageId,
         });
         log.info({ agentId: subtask.agentId }, "Agent message saved");
+        return msg.id;
       } catch (err) {
         log.error({ err, agentId: subtask.agentId }, "Failed to save agent message");
+        return undefined;
       }
     },
   );

@@ -67,10 +67,13 @@ interface ClaudeStreamEvent {
 export interface ClaudeStreamState {
   /** Accumulated tool call info while streaming input_json_delta */
   pendingToolCall: { id: string; name: string; input: string } | null;
+  /** Whether any text_delta has been received — used to skip duplicate
+   *  full-text from assistant events when --include-partial-messages is set */
+  hasStreamedText: boolean;
 }
 
 export function createClaudeStreamState(): ClaudeStreamState {
-  return { pendingToolCall: null };
+  return { pendingToolCall: null, hasStreamedText: false };
 }
 
 /**
@@ -108,6 +111,7 @@ export function parseClaudeStreamJson(line: string, state?: ClaudeStreamState): 
 
       // Text content
       if (delta.type === "text_delta" && delta.text) {
+        if (state) state.hasStreamedText = true;
         return createChunk(ChunkType.Text, delta.text);
       }
 
@@ -148,14 +152,19 @@ export function parseClaudeStreamJson(line: string, state?: ClaudeStreamState): 
     return null;
   }
 
-  // ── assistant message (v2.1+) ──────────────────────────────────
+  // ── assistant message (v2.1+) — full-text event, skip if text was already
+  //    streamed via content_block_delta/text_delta (avoid duplication when
+  //    --include-partial-messages is set, which causes both to be emitted)
   if (parsed.type === "assistant" && parsed.message?.content) {
-    for (const block of parsed.message.content) {
-      if (block.type === "text" && block.text) {
-        return createChunk(ChunkType.Text, block.text);
+    if (!state?.hasStreamedText) {
+      for (const block of parsed.message.content) {
+        if (block.type === "text" && block.text) {
+          return createChunk(ChunkType.Text, block.text);
+        }
+        // Tool calls will be yielded in subsequent assistant messages
       }
-      // Tool calls will be yielded in subsequent assistant messages
     }
+    return null;
   }
 
   // ── message_delta (informational) ───────────────────────────────

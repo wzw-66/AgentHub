@@ -242,7 +242,7 @@ export default function ChatListView({
                     className="flex items-center gap-0.5"
                     style={{
                       position: "absolute",
-                      top: "8px",
+                      bottom: "8px",
                       right: "10px",
                       zIndex: 10,
                     }}
@@ -301,7 +301,7 @@ export default function ChatListView({
                     className="flex items-center gap-1.5"
                     style={{
                       position: "absolute",
-                      top: "8px",
+                      bottom: "8px",
                       right: "10px",
                       zIndex: 10,
                     }}
