@@ -48,6 +48,8 @@ interface ChatContextValue {
   streamError: string | null;
   contacts: ContactInfo[];
   typingAgents: Map<string, boolean>;
+  /** Per-agent tool call status — shows what tool the agent is currently using */
+  toolStatusMap: Map<string, { toolName: string; timestamp: number }>;
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isLoadingContacts: boolean;
@@ -98,6 +100,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     useState<Map<string, StreamingMessage>>(new Map());
   const [streamError, setStreamError] = useState<string | null>(null);
   const streamIdRef = useRef(0);
+
+  // ─── Tool status state ──────────────────────────────────────────
+  const [toolStatusMap, setToolStatusMap] = useState<
+    Map<string, { toolName: string; timestamp: number }>
+  >(new Map());
 
   const fetchConversations = useCallback(async () => {
     setIsLoadingConversations(true);
@@ -329,6 +336,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         case "done": {
           const doneEvent = event as { messageId?: string; agentId?: string };
           finalizeMessage(doneEvent.messageId, doneEvent.agentId);
+          // Clear tool status for this agent when done
+          if (doneEvent.agentId) {
+            setToolStatusMap((prev) => {
+              const next = new Map(prev);
+              next.delete(doneEvent.agentId!);
+              return next;
+            });
+          }
           if (activeConversationId) {
             fetchMessages(activeConversationId).then((msgs) => setMessages(msgs));
           }
@@ -340,6 +355,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         case "notification": {
           fetchConversations();
+          break;
+        }
+        case "tool_status": {
+          const toolEvent = event as { toolName?: string; agentId?: string };
+          if (toolEvent.toolName && toolEvent.agentId) {
+            setToolStatusMap((prev) => {
+              const next = new Map(prev);
+              next.set(toolEvent.agentId!, {
+                toolName: toolEvent.toolName!,
+                timestamp: Date.now(),
+              });
+              return next;
+            });
+          }
           break;
         }
         case "replace": {
@@ -374,6 +403,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         streamError,
         contacts,
         typingAgents,
+        toolStatusMap,
         isLoadingConversations,
         isLoadingMessages,
         isLoadingContacts,

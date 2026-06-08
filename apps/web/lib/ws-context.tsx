@@ -63,7 +63,14 @@ interface NotificationEvent {
   preview: string;
 }
 
-type WSEvent = OnlineStatusEvent | MessageStatusEvent | ChunkEvent | DoneEvent | ErrorEvent | ReplaceEvent | NotificationEvent;
+interface ToolStatusEvent {
+  type: "tool_status";
+  toolName: string;
+  content: string;
+  agentId: string;
+}
+
+type WSEvent = OnlineStatusEvent | MessageStatusEvent | ChunkEvent | DoneEvent | ErrorEvent | ReplaceEvent | NotificationEvent | ToolStatusEvent;
 
 type WSEventHandler = (event: WSEvent) => void;
 

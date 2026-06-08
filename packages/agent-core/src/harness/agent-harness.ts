@@ -101,6 +101,59 @@ export class AgentHarness {
    * Yields chunks immediately as they are produced — enables real-time
    * streaming (typewriter effect) on the frontend.
    */
+	// ─── Tool name aliases: normalize LLM-specific names to canonical names ─
+  private static readonly TOOL_ALIASES: Record<string, string> = {
+    // Claude CLI built-in tool names (capitalized)
+    Write: "write_file",
+    Read: "read_file",
+    Bash: "execute_command",
+    Edit: "write_file",
+    Glob: "",     // File search — agent can fall back to list_dir
+    Grep: "",     // Text search — agent can fall back to execute_command with find/grep
+    // Claude CLI lowercase variants
+    write: "write_file",
+    read: "read_file",
+    bash: "execute_command",
+    edit: "write_file",
+    glob: "",
+    grep: "",
+    think: "", // Think is Claude's internal reasoning, no handler needed — skip
+    // OpenCode tool names
+    executeCommand: "execute_command",
+    readFile: "read_file",
+    writeFile: "write_file",
+    listDir: "list_dir",
+    // Already canonical
+    write_file: "write_file",
+    read_file: "read_file",
+    execute_command: "execute_command",
+    list_dir: "list_dir",
+  };
+
+  /**
+   * Resolve a tool name to a registered handler name.
+   * Tries: alias map → case-insensitive match → original name.
+   */
+  private resolveToolName(rawName: string, registry?: ToolRegistry | null): string {
+    // 1. Direct alias lookup
+    const aliased = AgentHarness.TOOL_ALIASES[rawName];
+    if (aliased !== undefined) return aliased;
+
+    // 2. Case-insensitive match against tool registry
+    if (registry) {
+      const lower = rawName.toLowerCase();
+      for (const t of registry.getAll()) {
+        if (t.name.toLowerCase() === lower) return t.name;
+      }
+    }
+
+    // 3. Return as-is (will produce "Unknown tool" error)
+    return rawName;
+  }
+
+  /**
+   * Start execution from line 104
+   */
   async *execute(context: AgentContext): AsyncIterable<Chunk> {
     let turn = 0;
     let workingContext: AgentContext = { ...context };
@@ -166,6 +219,11 @@ export class AgentHarness {
           continue;
         }
 
+        // Normalize tool name via alias map → case-insensitive → original
+        const canonicalName = this.resolveToolName(parsed.name, this.toolRegistry);
+        // Skip tools with empty canonical name (e.g., Claude's "think")
+        if (!canonicalName) continue;
+
         // Extract toolCallId from the parsed tool call content
         let toolCallId = `call_${turn}_${Date.now()}`;
         try {
@@ -181,39 +239,39 @@ export class AgentHarness {
           toolName: parsed.name,
         });
 
-        const handler = this.tools.get(parsed.name);
+        const handler = this.tools.get(canonicalName);
         if (!handler) {
           // Try the tool registry as fallback
-          if (this.toolRegistry?.has(parsed.name)) {
+          if (this.toolRegistry?.has(canonicalName)) {
             const toolExecContext: ToolExecutionContext = {
               conversationId: workingContext.conversationId,
               sandbox: this.sandbox ?? undefined,
             };
 
-            this.emit("tool_start", turn, { toolName: parsed.name, args: parsed.args });
+            this.emit("tool_start", turn, { toolName: canonicalName, args: parsed.args });
 
             let toolResult = "";
             try {
-              toolResult = await this.toolRegistry.execute(parsed.name, parsed.args, toolExecContext);
+              toolResult = await this.toolRegistry.execute(canonicalName, parsed.args, toolExecContext);
             } catch (err) {
               toolResult = err instanceof Error ? err.message : "Unknown tool error";
             }
 
-            this.emit("tool_end", turn, { toolName: parsed.name, result: toolResult });
+            this.emit("tool_end", turn, { toolName: canonicalName, result: toolResult });
             toolMessages.push({
               role: "tool",
               content: toolResult,
               toolCallId,
-              toolName: parsed.name,
+              toolName: canonicalName,
             });
             continue;
           }
 
-          yield createChunk(ChunkType.Error, `Unknown tool: ${parsed.name}`);
+          yield createChunk(ChunkType.Error, `Unknown tool: ${canonicalName}`);
           continue;
         }
 
-        this.emit("tool_start", turn, { toolName: parsed.name, args: parsed.args });
+        this.emit("tool_start", turn, { toolName: canonicalName, args: parsed.args });
 
         // Execute the tool handler
         const toolExecContext: ToolExecutionContext = {
@@ -223,7 +281,7 @@ export class AgentHarness {
 
         let toolResult = "";
         try {
-          const rawResult = handler(parsed.name, parsed.args, toolExecContext);
+          const rawResult = handler(canonicalName, parsed.args, toolExecContext);
           for await (const resultChunk of normalizeToolResult(rawResult)) {
             toolResult += typeof resultChunk === "string" ? resultChunk : resultChunk.content;
           }
@@ -231,14 +289,14 @@ export class AgentHarness {
           toolResult = err instanceof Error ? err.message : "Unknown tool error";
         }
 
-        this.emit("tool_end", turn, { toolName: parsed.name, result: toolResult });
+        this.emit("tool_end", turn, { toolName: canonicalName, result: toolResult });
 
         // Record the tool result message
         toolMessages.push({
           role: "tool",
           content: toolResult,
           toolCallId,
-          toolName: parsed.name,
+          toolName: canonicalName,
         });
       }
 
@@ -248,7 +306,7 @@ export class AgentHarness {
       workingContext = {
         ...workingContext,
         toolMessages: [...existing, ...toolMessages],
-        message: "Continue with the tool results above.",
+        message: "Based on the tool results above, provide your final response concisely without restating what you already said.",
       };
 
       this.emit("after_turn", turn, { turn, toolCallCount: toolCallsInTurn.length });

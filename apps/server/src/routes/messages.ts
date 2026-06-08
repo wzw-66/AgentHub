@@ -561,31 +561,49 @@ async function runAgentExecution(
         tools: toolDefinitions,
       };
 
-      let fullResponse = "";
+      // ── Multi-turn text tracking ─────────────────────────────────
+      // Track text per-turn: discard intermediate turns' text (where the agent
+      // called tools) and keep only the final turn's clean response.
+      let finalResponse = "";
+      let streamingText = "";
+      let lastPushedContent = "";
 
       for await (const chunk of harness.execute(context)) {
-        // Only accumulate text/code for the persisted message — skip tool calls
-        if (
-          chunk.type === ChunkType.Text ||
-          chunk.type === ChunkType.Code
-        ) {
-          fullResponse += chunk.content;
+        if (chunk.type === ChunkType.Text || chunk.type === ChunkType.Code) {
+          streamingText += chunk.content;
+          finalResponse += chunk.content;
+
+          if (chunk.type === ChunkType.Text && chunk.content === lastPushedContent) {
+            continue;
+          }
+          lastPushedContent = chunk.content;
         }
-        // Don't forward Done chunk — we persist first, then push done event
+
+        // A ToolCall ends this turn. The text so far was intermediate thinking;
+        // discard it so the next turn becomes the new finalResponse.
+        if (chunk.type === ChunkType.ToolCall) {
+          finalResponse = "";
+        }
+
         if (chunk.type !== ChunkType.Done) {
           pushChunk(cm, conversationId, chunk, agent.id);
         }
       }
 
+      // Fallback: if last turn had no text, use full stream as-is
+      if (!finalResponse && streamingText) {
+        finalResponse = streamingText;
+      }
+
       // Save AI response to database
       let messageId = "";
-      if (fullResponse) {
+      if (finalResponse) {
         const saved = await dbCreateMessage({
           conversationId,
           senderType: "Contact",
           senderId: agent.id,
           type: "Text",
-          content: fullResponse,
+          content: finalResponse,
           parentId: null,
         });
         messageId = saved.id;
@@ -605,6 +623,18 @@ async function runAgentExecution(
   // Group-type conversations use the orchestrator path (handled in handleCreate)
 }
 
+/**
+ * Extract the tool name from a ToolCall chunk's JSON content.
+ */
+function extractToolName(content: string): string {
+  try {
+    const parsed = JSON.parse(content) as { name?: string; toolName?: string };
+    return parsed.name ?? parsed.toolName ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 function pushChunk(
   cm: FastifyInstance["connectionManager"],
   conversationId: string,
@@ -613,8 +643,7 @@ function pushChunk(
 ): void {
   switch (chunk.type) {
     case ChunkType.Text:
-    case ChunkType.Code:
-    case ChunkType.ToolCall: {
+    case ChunkType.Code: {
       const data = {
         type: chunk.type,
         content: chunk.content,
@@ -623,12 +652,21 @@ function pushChunk(
       };
       // SSE
       cm.pushToConversation(conversationId, "chunk", data);
-      // WebSocket: broadcast to all connected users
-      cm.broadcastToConversation(
-        cm.getConnectedUserIds(),
-        "chunk",
-        data,
-      );
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "chunk", data);
+      break;
+    }
+
+    case ChunkType.ToolCall: {
+      // Send tool calls as a separate event — frontend renders them
+      // as processing indicators, not as chat text.
+      const toolName = extractToolName(chunk.content);
+      const data = {
+        toolName,
+        content: chunk.content,
+        agentId,
+      };
+      cm.pushToConversation(conversationId, "tool_status", data);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "tool_status", data);
       break;
     }
 

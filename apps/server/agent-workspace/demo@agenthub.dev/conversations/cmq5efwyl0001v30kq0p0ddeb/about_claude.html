@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>关于 Claude</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0a0a0f;
+      color: #e4e4e7;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* 粒子背景 */
+    #particles {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 20%, rgba(120, 80, 255, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0, 200, 255, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(180, 100, 255, 0.04) 0%, transparent 50%);
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 24px;
+    }
+
+    /* 头部 */
+    header {
+      text-align: center;
+      margin-bottom: 64px;
+      animation: fadeDown 0.8s ease-out;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      font-weight: 700;
+      color: white;
+      box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: #a1a1aa;
+    }
+
+    /* 卡片 */
+    .card {
+      background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(8px);
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: fadeUp 0.6s ease-out backwards;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.1);
+    }
+
+    .card:nth-child(1) { animation-delay: 0.1s; }
+    .card:nth-child(2) { animation-delay: 0.2s; }
+    .card:nth-child(3) { animation-delay: 0.3s; }
+    .card:nth-child(4) { animation-delay: 0.4s; }
+    .card:nth-child(5) { animation-delay: 0.5s; }
+
+    .card-icon {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #f4f4f5;
+    }
+
+    h2 .accent {
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    p { color: #a1a1aa; margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+
+    ul {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    li {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+      color: #d4d4d8;
+      font-size: 0.95rem;
+    }
+
+    li::before {
+      content: "✦ ";
+      color: #8b5cf6;
+    }
+
+    /* 标签 */
+    .tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin: 3px 4px 3px 0;
+    }
+
+    .tag-purple { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .tag-blue   { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .tag-green  { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .tag-orange { background: rgba(251,146,60,0.15); color: #fb923c; }
+
+    /* 数据统计行 */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 16px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .stat-num {
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #71717a;
+      margin-top: 4px;
+    }
+
+    /* 页脚 */
+    footer {
+      text-align: center;
+      padding: 40px 0 20px;
+      color: #52525b;
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: #8b5cf6;
+      text-decoration: none;
+    }
+
+    footer a:hover { text-decoration: underline; }
+
+    /* 动画 */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 响应式 */
+    @media (max-width: 640px) {
+      h1 { font-size: 2rem; }
+      ul { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+      .card { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="particles"></div>
+
+  <div class="container">
+    <header>
+      <div class="logo">Cl</div>
+      <h1>Claude</h1>
+      <p class="subtitle">Anthropic 推出的下一代 AI 助手 · 安全 · 智能 · 可靠</p>
+    </header>
+
+    <!-- 基本信息 -->
+    <div class="card">
+      <div class="card-icon">🤖</div>
+      <h2>关于 <span class="accent">Claude</span></h2>
+      <p>
+        Claude 是由 <strong>Anthropic</strong> 开发的大型语言模型（LLM），
+        致力于成为安全、诚实、且有用的 AI 助手。我的名字来源于数学家
+        <strong>Claude Shannon</strong>（信息论之父）。
+      </p>
+      <p>
+        我的设计核心理念是 <strong>Constitutional AI</strong>（宪法 AI）——
+        通过一套明确的原则来引导行为，确保输出安全、可靠且符合人类价值观。
+      </p>
+      <div style="margin-top:12px;">
+        <span class="tag tag-purple">Constitutional AI</span>
+        <span class="tag tag-blue">LLM</span>
+        <span class="tag tag-green">多语言</span>
+        <span class="tag tag-orange">代码生成</span>
+      </div>
+    </div>
+
+    <!-- 核心能力 -->
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h2>核心 <span class="accent">能力</span></h2>
+      <ul>
+        <li>代码编写与调试</li>
+        <li>多语言翻译</li>
+        <li>文档撰写与总结</li>
+        <li>数据分析与推理</li>
+        <li>创意写作</li>
+        <li>数学与逻辑问题</li>
+        <li>API 设计与架构</li>
+        <li>知识问答</li>
+      </ul>
+    </div>
+
+    <!-- 关键特性 -->
+    <div class="card">
+      <div class="card-icon">✨</div>
+      <h2>关键 <span class="accent">特性</span></h2>
+      <p>
+        <strong>海量上下文</strong> — 支持最高 <strong>200K</strong> token 的上下文窗口，
+        可以一次性处理像《三体》三部曲这样的长篇内容。
+      </p>
+      <p>
+        <strong>视觉识别</strong> — 支持图像理解能力，可以分析图表、截图、文档等内容。
+      </p>
+      <p>
+        <strong>工具使用</strong> — 可以通过工具调用与外部系统交互，执行代码、搜索网络、操作文件等。
+      </p>
+      <p>
+        <strong>多语言</strong> — 流利支持中文、英文、日文、法文等多种语言。
+      </p>
+    </div>
+
+    <!-- 数据统计 -->
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <h2>能力 <span class="accent">概览</span></h2>
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-num">200K</div>
+          <div class="stat-label">上下文窗口 (tokens)</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">10+</div>
+          <div class="stat-label">支持语言</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">99%</div>
+          <div class="stat-label">编码任务准确率</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 可用版本 -->
+    <div class="card">
+      <div class="card-icon">📱</div>
+      <h2>可用 <span class="accent">版本</span></h2>
+      <p>
+        <strong>Claude Code</strong> — 终端内的 AI 编程助手，直接在命令行中与 Claude 协作。
+      </p>
+      <p>
+        <strong>claude.ai</strong> — Web 对话界面，支持文件上传、长文写作等。
+      </p>
+      <p>
+        <strong>Claude API</strong> — 通过 Anthropic API 将 Claude 集成到你的应用中。
+      </p>
+      <p>
+        <strong>移动端 App</strong> — iOS 和 Android 应用，随时随地的 AI 助手。
+      </p>
+    </div>
+
+    <footer>
+      <p>由 <a href="https://anthropic.com" target="_blank">Anthropic</a> 倾心打造</p>
+      <p style="margin-top:8px;">&copy; 2026 — Claude, 你的 AI 助手</p>
+    </footer>
+  </div>
+</body>
+</html>

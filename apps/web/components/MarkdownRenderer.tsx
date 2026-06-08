@@ -9,7 +9,7 @@ interface MarkdownRendererProps {
   content: string;
 }
 
-const components: Components = {
+export const MARKDOWN_COMPONENTS: Components = {
   code({ className, children, ...props }) {
     const match = /language-(\w+)/.exec(className ?? "");
     if (match) {
@@ -51,7 +51,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
     <div className="markdown-render">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        components={components}
+        components={MARKDOWN_COMPONENTS}
       >
         {content}
       </ReactMarkdown>

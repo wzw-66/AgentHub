@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自我介绍</title>
+  <style>
+    /* reset & base */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 20px;
+    }
+
+    /* card */
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      max-width: 480px;
+      width: 100%;
+      padding: 40px;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+    }
+
+    /* avatar */
+    .avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 48px;
+      color: #fff;
+      user-select: none;
+    }
+
+    /* name & title */
+    .name {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 16px;
+      color: #667eea;
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+    .divider {
+      width: 60px;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 2px;
+      margin: 0 auto 24px;
+    }
+
+    /* description */
+    .description {
+      font-size: 15px;
+      line-height: 1.8;
+      color: #555;
+      margin-bottom: 28px;
+    }
+
+    /* info rows */
+    .info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .info-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #666;
+      padding: 10px 16px;
+      background: #f8f9fc;
+      border-radius: 10px;
+    }
+    .info-row .icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      width: 24px;
+      text-align: center;
+    }
+
+    /* skills */
+    .skills {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .skill-tag {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      background: #f0f0ff;
+      color: #667eea;
+      border: 1px solid #e0e0ff;
+      transition: all 0.2s;
+    }
+    .skill-tag:hover {
+      background: #667eea;
+      color: #fff;
+      border-color: #667eea;
+    }
+
+    /* social */
+    .social {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    .social a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #fff;
+      background: #1a1a2e;
+      transition: opacity 0.2s;
+    }
+    .social a:hover {
+      opacity: 0.85;
+    }
+    .social a.github { background: #24292e; }
+    .social a.email { background: #667eea; }
+
+    /* responsive */
+    @media (max-width: 520px) {
+      .card { padding: 28px 20px; }
+      .name { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- avatar -->
+    <div class="avatar">👤</div>
+
+    <!-- name -->
+    <h1 class="name">张三</h1>
+    <p class="title">全栈开发工程师</p>
+    <div class="divider"></div>
+
+    <!-- description -->
+    <p class="description">
+      热爱编程，专注于 Web 全栈开发。善于将复杂问题拆解为简洁优雅的解决方案。
+      持续学习新技术，追求代码质量与用户体验的平衡。
+    </p>
+
+    <!-- info -->
+    <div class="info">
+      <div class="info-row">
+        <span class="icon">📍</span>
+        <span>中国 · 北京</span>
+      </div>
+      <div class="info-row">
+        <span class="icon">💼</span>
+        <span>3 年全栈开发经验</span>
+      </div>
+      <div class="info-row">
+        <span class="icon">🎓</span>
+        <span>计算机科学与技术 · 本科</span>
+      </div>
+    </div>
+
+    <!-- skills -->
+    <div class="skills">
+      <span class="skill-tag">TypeScript</span>
+      <span class="skill-tag">React</span>
+      <span class="skill-tag">Node.js</span>
+      <span class="skill-tag">Python</span>
+      <span class="skill-tag">PostgreSQL</span>
+      <span class="skill-tag">Docker</span>
+    </div>
+
+    <!-- social -->
+    <div class="social">
+      <a href="mailto:zhangsan@example.com" class="email">📧 联系我</a>
+    </div>
+  </div>
+</body>
+</html>

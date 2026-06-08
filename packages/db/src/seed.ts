@@ -12,7 +12,7 @@ async function main() {
     create: {
       name: "Demo User",
       email: "demo@agenthub.dev",
-      passwordHash: "$2b$10$placeholder", // Replace with real hash in production
+      passwordHash: "$2a$10$UjWS/0yNh5gsX6YEsYG7C.BWJ/OafYqv2Fu50YvVU6ZlWNP4w65sC", // demo123456
       avatarUrl: null,
     },
   });
