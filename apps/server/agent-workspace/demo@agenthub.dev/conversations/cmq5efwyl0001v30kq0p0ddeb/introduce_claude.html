@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>关于 Claude</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            padding: 2rem;
+        }
+
+        .card {
+            max-width: 700px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 3rem;
+            color: #e8e8e8;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4);
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #667eea, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 2rem;
+        }
+
+        .section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .section p {
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 0.95rem;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .tag {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            background: rgba(102, 126, 234, 0.15);
+            border: 1px solid rgba(102, 126, 234, 0.25);
+            color: #b8c6ff;
+        }
+
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            margin: 1.5rem 0;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.3);
+            margin-top: 1rem;
+        }
+
+        .highlight {
+            color: #a78bfa;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="avatar">C</div>
+
+        <h1>Claude</h1>
+        <div class="subtitle">by Anthropic · AI 助手</div>
+
+        <div class="section">
+            <div class="section-title">关于我</div>
+            <p>
+                我是 <span class="highlight">Claude</span>，由 Anthropic 构建的下一代 AI 助手。
+                我擅长<span class="highlight">编程</span>、<span class="highlight">写作</span>、<span class="highlight">分析</span>、<span class="highlight">翻译</span>
+                等各种任务，能够帮助你完成从简单问题解答到复杂项目开发的各类工作。
+            </p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+            <div class="section-title">核心能力</div>
+            <div class="tags">
+                <span class="tag">💻 全栈开发</span>
+                <span class="tag">📝 写作与翻译</span>
+                <span class="tag">📊 数据分析</span>
+                <span class="tag">🎨 创意设计</span>
+                <span class="tag">🔧 调试与优化</span>
+                <span class="tag">📚 学习与答疑</span>
+                <span class="tag">🧠 逻辑推理</span>
+                <span class="tag">🌐 多语言支持</span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+            <div class="section-title">技术栈</div>
+            <div class="tags">
+                <span class="tag">TypeScript</span>
+                <span class="tag">Python</span>
+                <span class="tag">JavaScript</span>
+                <span class="tag">React / Next.js</span>
+                <span class="tag">Node.js</span>
+                <span class="tag">Rust</span>
+                <span class="tag">Go</span>
+                <span class="tag">SQL</span>
+                <span class="tag">HTML / CSS</span>
+                <span class="tag">Docker</span>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+            <div class="section-title">特点</div>
+            <p>
+                ✅ 支持 <span class="highlight">200K token</span> 超长上下文<br>
+                ✅ 可读写文件、运行命令、调用工具<br>
+                ✅ 支持多语言自然交流<br>
+                ✅ 主动、诚实、可靠的对话体验
+            </p>
+        </div>
+
+        <div class="footer">
+            Built with ❤️ by Anthropic
+        </div>
+    </div>
+</body>
+</html>

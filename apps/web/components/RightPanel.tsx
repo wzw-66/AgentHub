@@ -5,6 +5,8 @@ import { useI18n } from "@/lib/i18n";
 import { useChat } from "@/lib/chat-context";
 import { api } from "@/lib/api-client";
 import GroupSection from "./GroupSection";
+import FileExplorer from "./FileExplorer";
+import FileEditor from "./FileEditor";
 
 interface RightPanelProps {
   content?: { type: string; id: string } | null;
@@ -57,6 +59,7 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   async function handleRemoveMember(memberId: string) {
     if (!conversationId) return;
@@ -108,6 +111,11 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
       setArtifactData(null);
     }
   }, [content]);
+
+  // Reset selected file when conversation changes
+  useEffect(() => {
+    setSelectedFile(null);
+  }, [conversationId]);
 
   return (
     <div
@@ -338,6 +346,7 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
               </div>
             )}
 
+            {/* ─── Project Files Section ─────────────────────────────── */}
             <div>
               <div
                 className="font-medium uppercase"
@@ -350,9 +359,21 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
               >
                 项目文件
               </div>
-              <div style={{ color: "var(--text-tertiary)", fontSize: "11px", padding: "8px 0", textAlign: "center" }}>
-                暂无项目文件
-              </div>
+
+              {selectedFile && conversationId ? (
+                <div className="mb-3">
+                  <FileEditor
+                    conversationId={conversationId}
+                    filePath={selectedFile}
+                    onClose={() => setSelectedFile(null)}
+                  />
+                </div>
+              ) : null}
+
+              <FileExplorer
+                conversationId={conversationId ?? null}
+                onFileSelect={setSelectedFile}
+              />
             </div>
           </>
         )}

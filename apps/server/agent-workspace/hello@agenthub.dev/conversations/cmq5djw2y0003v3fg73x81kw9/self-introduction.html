@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自我介绍</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 48px;
+            color: white;
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+
+        .title {
+            color: #667eea;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .bio {
+            color: #555;
+            line-height: 1.8;
+            margin-bottom: 24px;
+            font-size: 15px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .info-item {
+            background: #f8f9ff;
+            border-radius: 12px;
+            padding: 16px 12px;
+        }
+
+        .info-item .label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .info-item .value {
+            font-size: 15px;
+            color: #1a1a2e;
+            font-weight: 500;
+        }
+
+        .skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 28px;
+        }
+
+        .skill-tag {
+            background: #eef0ff;
+            color: #667eea;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .contact-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            padding: 12px 36px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 500;
+            transition: opacity 0.3s ease;
+        }
+
+        .contact-btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="avatar">👤</div>
+        <h1>张三</h1>
+        <p class="title">全栈开发工程师</p>
+        <p class="bio">
+            热爱技术和创造，拥有 5 年 Web 开发经验。
+            专注于构建高效、优雅的互联网产品，
+            乐于学习新技术并分享知识。
+        </p>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="label">📍 所在地</div>
+                <div class="value">北京</div>
+            </div>
+            <div class="info-item">
+                <div class="label">💼 当前就职</div>
+                <div class="value">XX科技有限公司</div>
+            </div>
+            <div class="info-item">
+                <div class="label">🎓 教育背景</div>
+                <div class="value">XX大学 计算机科学</div>
+            </div>
+            <div class="info-item">
+                <div class="label">📅 工作经验</div>
+                <div class="value">5 年</div>
+            </div>
+        </div>
+
+        <div class="skills">
+            <span class="skill-tag">TypeScript</span>
+            <span class="skill-tag">React</span>
+            <span class="skill-tag">Node.js</span>
+            <span class="skill-tag">Python</span>
+            <span class="skill-tag">Docker</span>
+            <span class="skill-tag">PostgreSQL</span>
+        </div>
+
+        <a href="mailto:zhangsan@example.com" class="contact-btn">📧 联系我</a>
+    </div>
+</body>
+</html>

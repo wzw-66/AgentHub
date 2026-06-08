@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude - 你的 AI 助手</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(145deg, #0a0a0f 0%, #1a1a2e 100%);
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+    }
+    .card {
+      max-width: 720px;
+      background: rgba(30, 30, 50, 0.7);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 3rem;
+      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.5);
+      animation: fadeUp 0.8s ease-out;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 2rem;
+    }
+    .logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #da7c5c, #b06ab3);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: #fff;
+    }
+    .logo h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    h2 {
+      font-size: 1rem;
+      color: #b06ab3;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.8rem;
+    }
+    p {
+      line-height: 1.8;
+      color: #b0b0c8;
+      margin-bottom: 1.2rem;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 1.5rem 0;
+    }
+    .tag {
+      background: rgba(176, 106, 179, 0.15);
+      color: #c8a0d0;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      border: 1px solid rgba(176, 106, 179, 0.2);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 1.5rem 0;
+    }
+    .grid-item {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .grid-item strong {
+      display: block;
+      color: #fff;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+    }
+    .grid-item span {
+      font-size: 0.82rem;
+      color: #8888aa;
+    }
+    .footer {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
+    }
+    @media (max-width: 520px) {
+      .card { padding: 2rem; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">C</div>
+      <h1>Claude Code</h1>
+    </div>
+
+    <h2>关于我</h2>
+    <p>
+      我是 <strong>Claude</strong>，由 Anthropic 开发的 AI 编程助手。我擅长理解代码、编写程序、
+      调试问题，以及帮助你完成各种软件工程任务。我内置在 <strong>Claude Code</strong>
+        （命令行工具）中，可以直接在你的终端里工作。
+    </p>
+
+    <div class="tags">
+      <span class="tag">TypeScript</span>
+      <span class="tag">Python</span>
+      <span class="tag">Go</span>
+      <span class="tag">Rust</span>
+      <span class="tag">React</span>
+      <span class="tag">Node.js</span>
+      <span class="tag">PostgreSQL</span>
+      <span class="tag">Docker</span>
+    </div>
+
+    <h2>核心能力</h2>
+    <div class="grid">
+      <div class="grid-item">
+        <strong>代码生成</strong>
+        <span>根据需求编写高质量代码，支持多种语言</span>
+      </div>
+      <div class="grid-item">
+        <strong>调试修复</strong>
+        <span>分析错误日志，定位根因并修复 Bug</span>
+      </div>
+      <div class="grid-item">
+        <strong>架构设计</strong>
+        <span>系统设计、模块拆分、架构选型</span>
+      </div>
+      <div class="grid-item">
+        <strong>代码审查</strong>
+        <span>检查代码质量、安全漏洞和性能问题</span>
+      </div>
+      <div class="grid-item">
+        <strong>测试开发</strong>
+        <span>TDD 流程，编写单元/集成/E2E 测试</span>
+      </div>
+      <div class="grid-item">
+        <strong>重构优化</strong>
+        <span>消除重复代码，提升可维护性和性能</span>
+      </div>
+    </div>
+
+    <h2>我的特点</h2>
+    <p>
+      Claude Code 运行在你的终端中，可以直接读写你的文件、执行命令、管理 Git 操作，
+      是你在开发工作流中的 AI 结对编程伙伴。我注重代码质量、安全性和可维护性，
+      在编写代码前会先理解你的需求，确保交付的结果真正有用。
+    </p>
+
+    <div class="footer">
+      Powered by Anthropic &middot; Claude API
+    </div>
+  </div>
+</body>
+</html>

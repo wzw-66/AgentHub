@@ -7,7 +7,9 @@ import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api-client";
 import type { Message } from "@agenthub/shared";
 import TypingIndicator from "./TypingIndicator";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import { MarkdownRenderer, MARKDOWN_COMPONENTS } from "./MarkdownRenderer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import MentionPopup from "./MentionPopup";
 import DeployCard from "./DeployCard";
 import HesitateBubble from "./HesitateBubble";
@@ -34,6 +36,23 @@ function getAgentColor(agentId?: string): string {
   }
   return AGENT_PALETTE[Math.abs(hash) % AGENT_PALETTE.length]!;
 }
+
+// ─── Tool name → display label mapping ──────────────────────────────
+const TOOL_LABELS: Record<string, string> = {
+  // Canonical (used after AgentHarness alias normalization)
+  write_file: "✏️ 写入文件",
+  read_file: "📖 读取文件",
+  execute_command: "💻 执行命令",
+  list_dir: "📂 浏览目录",
+  // Claude CLI raw names (fallback)
+  Write: "✏️ 写入文件",
+  Read: "📖 读取文件",
+  Bash: "💻 执行命令",
+  Glob: "🔍 搜索文件",
+  Grep: "🔍 搜索内容",
+  Edit: "✏️ 编辑文件",
+  Think: "🤔 思考中",
+};
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -116,7 +135,7 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap } = useChat();
   const allStreamingMessages = [...streamingMessages.values()];
   const { user } = useAuth();
   const { t } = useI18n();
@@ -667,7 +686,7 @@ export default function ChatPanel({
 
             {/* Streaming messages (supporting multiple agents) */}
             {allStreamingMessages.map((sm, smIdx) => {
-              // Streaming messages are always agent responses — always close to the message before
+              const toolStatus = toolStatusMap.get(sm.senderId);
               const streamMarginTop = smIdx === 0 ? (messages.length > 0 ? "8px" : "0px") : "8px";
               return (
                 <div
@@ -682,46 +701,78 @@ export default function ChatPanel({
                   }}
               >
                 <div
-                  className="flex-shrink-0 flex items-center justify-center text-white font-medium"
+                  key={sm.id}
+                  className="flex gap-2.5"
                   style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "50%",
-                    background: getAgentColor(sm.senderId),
-                    fontSize: "10px",
-                    marginTop: "4px",
+                    maxWidth: "88%",
+                    alignSelf: "flex-start",
+                    opacity: 0,
+                    animation: "msgIn 0.35s ease forwards",
                   }}
                 >
-                  {(contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "?")[0]?.toUpperCase()}
-                </div>
-                <div className="min-w-0">
                   <div
-                    className="flex items-center gap-1 mb-1"
-                    style={{ fontSize: "10px", color: "var(--text-secondary)", fontWeight: 500 }}
-                  >
-                    {contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId}
-                  </div>
-                  <div
+                    className="flex-shrink-0 flex items-center justify-center text-white font-medium"
                     style={{
-                      padding: "10px 15px",
-                      fontSize: "13px",
-                      lineHeight: 1.6,
-                      background: "var(--bg-msg-agent)",
-                      color: "var(--text-primary)",
-                      borderRadius: "4px 16px 16px 16px",
-                      border: "1px solid var(--border-light)",
-                      wordBreak: "break-all",
-                      overflowWrap: "anywhere",
+                      width: "28px",
+                      height: "28px",
+                      borderRadius: "50%",
+                      background: getAgentColor(sm.senderId),
+                      fontSize: "10px",
+                      marginTop: "4px",
                     }}
                   >
-                    <span>
-                      {sm.content}
-                      <span className="streaming-cursor" />
-                    </span>
+                    {(contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "?")[0]?.toUpperCase()}
+                  </div>
+                  <div className="min-w-0" style={{ maxWidth: "100%" }}>
+                    <div
+                      className="flex items-center gap-1 mb-1"
+                      style={{ fontSize: "10px", color: "var(--text-secondary)", fontWeight: 500 }}
+                    >
+                      {contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId}
+                      {toolStatus && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded"
+                          style={{
+                            fontSize: "9px",
+                            color: "var(--accent)",
+                            background: "var(--accent-light)",
+                            marginLeft: "6px",
+                          }}
+                        >
+                          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{
+                            background: "var(--accent)",
+                            animation: "bounce 1s ease infinite",
+                          }} />
+                          {TOOL_LABELS[toolStatus.toolName] ?? toolStatus.toolName}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        padding: "10px 15px",
+                        fontSize: "13px",
+                        lineHeight: 1.6,
+                        background: "var(--bg-msg-agent)",
+                        color: "var(--text-primary)",
+                        borderRadius: "4px 16px 16px 16px",
+                        border: "1px solid var(--border-light)",
+                        wordBreak: "break-all",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      <span className="markdown-render">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={MARKDOWN_COMPONENTS}
+                        >
+                          {sm.content || "..."}
+                        </ReactMarkdown>
+                        <span className="streaming-cursor" />
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
+              );
             })}
             <div ref={messagesEndRef} />
           </div>

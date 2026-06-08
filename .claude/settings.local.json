@@ -76,7 +76,28 @@
       "Bash(ls D:/code/github/AgentHub/apps/web/app/\\\\\\(market\\\\\\)/)",
       "Bash(npx tsc:*)",
       "Bash(git checkout *)",
-      "Bash(git rebase *)"
+      "Bash(git rebase *)",
+      "Bash(git stash *)",
+      "Bash(find:*)",
+      "Bash(sleep:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(cd ~ && ls -la .claude/plugins/ 2>/dev/null || echo \"No plugins directory\"; ls -la .claude/skills/ 2>/dev/null | head -20)",
+      "Read(//c/Users/zhonghaoming/**)",
+      "Bash(npx @anthropic-ai/claude-code --help)",
+      "Bash(npx @anthropic-ai/claude-code plugin marketplace list)",
+      "Bash(npx @anthropic-ai/claude-code plugin list)",
+      "Bash(claude plugin *)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=$\\(which bash\\) claude plugin list)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx @anthropic-ai/claude-code plugin marketplace add obra/superpowers-marketplace)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:\\\\D\\\\Git\\\\bin\\\\bash.exe\" npx @anthropic-ai/claude-code plugin install superpowers@claude-plugins-official)",
+      "Bash(git ls-remote *)",
+      "Bash(git config *)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:\\\\D\\\\Git\\\\bin\\\\bash.exe\" npx @anthropic-ai/claude-code plugin marketplace add obra/superpowers-marketplace)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:\\\\D\\\\Git\\\\bin\\\\bash.exe\" npx @anthropic-ai/claude-code plugin install superpowers@superpowers-marketplace)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:\\\\D\\\\Git\\\\bin\\\\bash.exe\" npx @anthropic-ai/claude-code plugin list)",
+      "Bash(wmic process *)",
+      "Bash(DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5433/agenthub\" pnpm --filter @agenthub/db db:seed)"
     ]
   }
 }

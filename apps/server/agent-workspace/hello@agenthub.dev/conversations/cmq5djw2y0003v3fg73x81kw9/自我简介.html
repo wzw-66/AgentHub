@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人简介</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: #fff;
+            user-select: none;
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .tagline {
+            color: #667eea;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 24px;
+        }
+
+        .divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, transparent);
+            margin: 20px 0;
+        }
+
+        .bio {
+            color: #666;
+            line-height: 1.8;
+            font-size: 15px;
+            margin-bottom: 24px;
+        }
+
+        .info-list {
+            list-style: none;
+            text-align: left;
+            margin-bottom: 24px;
+        }
+
+        .info-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            color: #555;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-list li:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            color: #667eea;
+            font-weight: 600;
+            min-width: 70px;
+        }
+
+        .skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .skill-tag {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .contact-btn {
+            display: inline-block;
+            padding: 12px 40px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .contact-btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="avatar">😊</div>
+        <h1>张三</h1>
+        <p class="tagline">前端开发工程师</p>
+
+        <div class="divider"></div>
+
+        <p class="bio">
+            热爱编程，专注于 Web 前端开发。喜欢探索新技术，
+            追求优雅的代码和出色的用户体验。
+            工作之余，喜欢读书、摄影和户外运动。
+        </p>
+
+        <ul class="info-list">
+            <li><span class="label">地点</span>中国 · 北京</li>
+            <li><span class="label">经验</span>3 年</li>
+            <li><span class="label">邮箱</span>zhangsan@example.com</li>
+            <li><span class="label">GitHub</span>github.com/zhangsan</li>
+        </ul>
+
+        <div class="skills">
+            <span class="skill-tag">HTML / CSS</span>
+            <span class="skill-tag">JavaScript</span>
+            <span class="skill-tag">TypeScript</span>
+            <span class="skill-tag">React</span>
+            <span class="skill-tag">Vue.js</span>
+            <span class="skill-tag">Node.js</span>
+        </div>
+
+        <a href="mailto:zhangsan@example.com" class="contact-btn">联系我</a>
+    </div>
+</body>
+</html>

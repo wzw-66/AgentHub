@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>字节跳动 — 全球科技公司介绍</title>
+    <style>
+        /* ===== Reset & Base ===== */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f8f9fc;
+            color: #1a1a2e;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+        img { max-width: 100%; display: block; }
+
+        /* ===== Utility ===== */
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+
+        .section-label {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #6c63ff;
+            margin-bottom: 8px;
+        }
+        .section-title {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 16px;
+        }
+        .section-sub {
+            font-size: 1.05rem;
+            color: #6b7280;
+            max-width: 600px;
+            line-height: 1.7;
+        }
+
+        /* ===== Nav ===== */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            transition: box-shadow 0.3s;
+        }
+        nav.scrolled { box-shadow: 0 1px 12px rgba(0,0,0,0.06); }
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 28px;
+        }
+        .nav-logo {
+            font-weight: 800;
+            font-size: 1.05rem;
+            color: #1a1a2e;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-logo span { color: #6c63ff; }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a {
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: #6b7280;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover { color: #1a1a2e; }
+
+        /* ===== Hero ===== */
+        .hero {
+            padding: 140px 0 80px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -30%; right: -20%;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(108,99,255,0.08), transparent 70%);
+            pointer-events: none;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -20%; left: -10%;
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, rgba(255,107,157,0.06), transparent 70%);
+            pointer-events: none;
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+        .hero h1 {
+            font-size: clamp(2.8rem, 6vw, 4.2rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 20px;
+        }
+        .hero h1 em {
+            font-style: normal;
+            background: linear-gradient(135deg, #6c63ff, #ff6b9d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1.1rem;
+            color: #6b7280;
+            line-height: 1.8;
+            margin-bottom: 36px;
+            max-width: 480px;
+        }
+
+        /* Hero Stats */
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            background: #fff;
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+            border: 1px solid rgba(0,0,0,0.04);
+        }
+        .hero-stat { text-align: center; }
+        .hero-stat + .hero-stat { border-left: 1px solid rgba(0,0,0,0.06); }
+        .hero-stat-num {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #1a1a2e;
+            letter-spacing: -0.02em;
+        }
+        .hero-stat-label {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+
+        /* ===== Section common ===== */
+        .section { padding: 96px 0; }
+
+        /* ===== Products ===== */
+        #products { background: #fff; }
+        .products-header { margin-bottom: 48px; }
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            background: rgba(0,0,0,0.04);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .product-card {
+            background: #fff;
+            padding: 32px 28px;
+            transition: all 0.3s;
+            position: relative;
+            cursor: default;
+        }
+        .product-card:hover {
+            background: #fafbff;
+        }
+        .product-card .icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+            display: block;
+        }
+        .product-card h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+        .product-card p {
+            font-size: 0.88rem;
+            color: #6b7280;
+            line-height: 1.7;
+        }
+        .product-card .tag {
+            display: inline-block;
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 100px;
+            margin-bottom: 12px;
+            letter-spacing: 0.02em;
+        }
+        .tag-blue { background: #eef2ff; color: #4f46e5; }
+        .tag-pink { background: #fdf2f8; color: #db2777; }
+        .tag-green { background: #ecfdf5; color: #059669; }
+        .tag-orange { background: #fff7ed; color: #ea580c; }
+        .tag-purple { background: #f5f3ff; color: #7c3aed; }
+
+        /* ===== Timeline ===== */
+        .timeline-visual {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px 80px;
+            position: relative;
+        }
+        .timeline-visual::before {
+            content: '';
+            position: absolute;
+            left: calc(50% - 1px);
+            top: 12px;
+            bottom: 12px;
+            width: 2px;
+            background: linear-gradient(to bottom, #6c63ff, #ff6b9d);
+            opacity: 0.3;
+        }
+        .tl-item {
+            position: relative;
+            padding: 20px 0;
+        }
+        .tl-item:nth-child(odd) { text-align: right; padding-right: 40px; }
+        .tl-item:nth-child(even) { padding-left: 40px; }
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            top: 28px;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #6c63ff;
+            border: 3px solid #f8f9fc;
+            box-shadow: 0 0 0 2px #6c63ff;
+        }
+        .tl-item:nth-child(odd)::before { right: -5px; }
+        .tl-item:nth-child(even)::before { left: -5px; }
+        .tl-year {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #6c63ff;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .tl-item h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .tl-item p {
+            font-size: 0.88rem;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        /* ===== Values ===== */
+        #values { background: #fff; }
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        .value-card {
+            border-radius: 16px;
+            padding: 28px 24px;
+            border: 1px solid rgba(0,0,0,0.04);
+            transition: all 0.3s;
+        }
+        .value-card:hover {
+            border-color: rgba(108,99,255,0.15);
+            box-shadow: 0 8px 30px rgba(108,99,255,0.06);
+            transform: translateY(-2px);
+        }
+        .value-card .emoji {
+            font-size: 2.2rem;
+            margin-bottom: 16px;
+            display: block;
+        }
+        .value-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .value-card p {
+            font-size: 0.85rem;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        /* ===== Global ===== */
+        .global-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        .global-card {
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.04);
+            border-radius: 16px;
+            padding: 28px 24px;
+            transition: all 0.3s;
+        }
+        .global-card:hover {
+            border-color: rgba(108,99,255,0.12);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        }
+        .global-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .global-card p {
+            font-size: 0.88rem;
+            color: #6b7280;
+            line-height: 1.65;
+        }
+
+        /* ===== Tech bento ===== */
+        .tech-bento {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 16px;
+        }
+        .bento-item {
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.04);
+            border-radius: 20px;
+            padding: 28px 24px;
+            transition: all 0.35s;
+            cursor: default;
+        }
+        .bento-item:hover {
+            border-color: rgba(108,99,255,0.12);
+            box-shadow: 0 8px 32px rgba(108,99,255,0.06);
+            transform: translateY(-3px);
+        }
+        .bento-item:nth-child(1) { grid-column: span 3; }
+        .bento-item:nth-child(2) { grid-column: span 3; }
+        .bento-item:nth-child(3) { grid-column: span 2; }
+        .bento-item:nth-child(4) { grid-column: span 2; }
+        .bento-item:nth-child(5) { grid-column: span 2; }
+        .bento-item:nth-child(6) { grid-column: span 6; }
+        .bento-item h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .bento-item p {
+            font-size: 0.88rem;
+            color: #6b7280;
+            line-height: 1.7;
+        }
+        .bento-item .icon-lg {
+            font-size: 2.4rem;
+            margin-bottom: 14px;
+            display: block;
+        }
+
+        /* ===== Footer ===== */
+        footer {
+            border-top: 1px solid rgba(0,0,0,0.05);
+            padding: 40px 0;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 0.82rem;
+        }
+        footer a { color: #6c63ff; text-decoration: none; }
+
+        /* ===== Animations ===== */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in {
+            animation: fadeUp 0.6s ease-out forwards;
+            opacity: 0;
+        }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 900px) {
+            .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+            .hero p { max-width: 100%; }
+            .product-grid { grid-template-columns: 1fr; }
+            .values-grid { grid-template-columns: repeat(2, 1fr); }
+            .timeline-visual { grid-template-columns: 1fr; gap: 0; }
+            .timeline-visual::before { left: 11px; }
+            .tl-item:nth-child(odd) { text-align: left; padding-right: 0; padding-left: 40px; }
+            .tl-item:nth-child(odd)::before,
+            .tl-item:nth-child(even)::before { left: -5px; right: auto; }
+            .tech-bento { grid-template-columns: 1fr; }
+            .bento-item:nth-child(n) { grid-column: span 1; }
+            .global-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+            .hero { padding: 100px 0 48px; }
+            .hero-stats { grid-template-columns: 1fr; gap: 16px; padding: 24px; }
+            .hero-stat + .hero-stat { border-left: none; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.06); }
+            .values-grid { grid-template-columns: 1fr; }
+            .section { padding: 64px 0; }
+            .nav-links { gap: 14px; }
+            .nav-links a { font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===== Nav ===== -->
+<nav id="navbar">
+    <div class="nav-inner">
+        <a href="#" class="nav-logo"><span>●</span> ByteDance</a>
+        <div class="nav-links">
+            <a href="#products">产品</a>
+            <a href="#history">历程</a>
+            <a href="#values">文化</a>
+            <a href="#global">全球</a>
+            <a href="#tech">技术</a>
+        </div>
+    </div>
+</nav>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-grid">
+            <div>
+                <h1>
+                    连接人与信息，<br />
+                    激发<em>创作与交流</em>
+                </h1>
+                <p>
+                    字节跳动是一家全球化的科技公司，致力于通过人工智能技术
+                    让信息更高效地流动，让每个人都能自由创作、平等交流。
+                </p>
+                <div class="hero-stats animate-in">
+                    <div class="hero-stat">
+                        <div class="hero-stat-num">150,000+</div>
+                        <div class="hero-stat-label">全球员工</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-num">150+</div>
+                        <div class="hero-stat-label">覆盖国家/地区</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-num">20亿+</div>
+                        <div class="hero-stat-label">月活跃用户</div>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: center;">
+                <div style="
+                    width: 100%; aspect-ratio: 1; max-width: 380px;
+                    background: linear-gradient(135deg, #6c63ff 0%, #ff6b9d 50%, #fbbf24 100%);
+                    border-radius: 32px;
+                    display: flex; align-items: center; justify-content: center;
+                    position: relative; overflow: hidden;
+                    box-shadow: 0 20px 60px rgba(108,99,255,0.2);
+                ">
+                    <div style="
+                        position: absolute; inset: 4px; border-radius: 28px;
+                        background: #f8f9fc;
+                        display: flex; flex-direction: column;
+                        align-items: center; justify-content: center;
+                        text-align: center; padding: 24px;
+                    ">
+                        <div style="font-size: 4rem; margin-bottom: 8px; line-height: 1;">⚡</div>
+                        <div style="font-weight: 800; font-size: 1.6rem; letter-spacing: -0.02em;">字节跳动</div>
+                        <div style="font-size: 0.85rem; color: #6b7280; margin-top: 4px;">ByteDance</div>
+                        <div style="margin-top: 16px; display: flex; gap: 12px;">
+                            <span style="font-size: 1.8rem;">🎵</span>
+                            <span style="font-size: 1.8rem;">📰</span>
+                            <span style="font-size: 1.8rem;">💼</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== Products ===== -->
+<section class="section" id="products">
+    <div class="container">
+        <div class="products-header">
+            <span class="section-label">● Products</span>
+            <h2 class="section-title">核心产品</h2>
+            <p class="section-sub">从信息分发到社交娱乐，字节跳动的产品矩阵覆盖全球数十亿用户。</p>
+        </div>
+        <div class="product-grid">
+            <div class="product-card">
+                <span class="icon">🎵</span>
+                <span class="tag tag-pink">全球爆款</span>
+                <h3>TikTok / 抖音</h3>
+                <p>全球领先的短视频平台。抖音在国内家喻户晓，TikTok 覆盖海外 150+ 国家和地区，连续多年位居全球应用下载量榜首。强大的推荐算法让每个人都能发现感兴趣的内容。</p>
+            </div>
+            <div class="product-card">
+                <span class="icon">📰</span>
+                <span class="tag tag-blue">开创者</span>
+                <h3>今日头条</h3>
+                <p>国内领先的个性化信息推荐平台，开创了"你关心的，才是头条"的内容分发模式。基于深度学习算法，从海量信息中精准匹配用户兴趣，重新定义了资讯获取方式。</p>
+            </div>
+            <div class="product-card">
+                <span class="icon">🎬</span>
+                <span class="tag tag-green">中长视频</span>
+                <h3>西瓜视频</h3>
+                <p>中长视频平台，涵盖影视、综艺、纪录片、知识科普等多品类内容。通过专业内容生产和智能推荐，为用户提供深度、优质的视频观看体验。</p>
+            </div>
+            <div class="product-card">
+                <span class="icon">📚</span>
+                <span class="tag tag-orange">免费阅读</span>
+                <h3>番茄小说 / Fizzo</h3>
+                <p>免费网文阅读平台，首创"免费阅读 + 广告"模式。拥有海量正版小说资源，在国内和海外市场都获得了快速增长，深受读者喜爱。</p>
+            </div>
+            <div class="product-card">
+                <span class="icon">💼</span>
+                <span class="tag tag-purple">企业服务</span>
+                <h3>飞书 / Lark</h3>
+                <p>一站式企业协作平台，整合即时通讯、文档协作、日历、视频会议、OKR 等功能。以"文档先行"和"信息透明"为核心理念，帮助全球团队高效协同。</p>
+            </div>
+            <div class="product-card">
+                <span class="icon">🤖</span>
+                <span class="tag tag-blue">AI 前沿</span>
+                <h3>豆包大模型</h3>
+                <p>字节跳动自研的通用大语言模型系列，涵盖语言理解、代码生成、多模态理解等能力。通过豆包 App 和 API 对外开放，推动 AI 技术普惠化。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== History ===== -->
+<section class="section" id="history">
+    <div class="container">
+        <span class="section-label">● Timeline</span>
+        <h2 class="section-title">发展历程</h2>
+        <p class="section-sub" style="margin-bottom: 48px;">从一家创业公司到全球科技巨头，字节跳动的每一步都在重塑行业格局。</p>
+        <div class="timeline-visual">
+            <div class="tl-item">
+                <div class="tl-year">2012</div>
+                <h3>诞生</h3>
+                <p>张一鸣在北京创立字节跳动，同年 8 月推出「今日头条」，开创了个性化推荐信息流产品的新模式。</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-year">2016</div>
+                <h3>抖音上线</h3>
+                <p>推出「抖音」短视频 App，以全屏、高清、音乐+视频的创新交互迅速引爆市场，开启短视频时代。</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-year">2017</div>
+                <h3>全球化启航</h3>
+                <p>收购 Musical.ly 并与之合并推出 TikTok，正式开启全球化战略，迅速登顶多国应用商店榜首。</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-year">2020</div>
+                <h3>全球爆发</h3>
+                <p>TikTok 全球下载量突破 20 亿次，成为现象级社交媒体平台。字节跳动全球员工突破 10 万人。</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-year">2023</div>
+                <h3>AI 新纪元</h3>
+                <p>推出「豆包」AI 助手，发力大语言模型和 AGI 领域，在生成式 AI、机器学习基础设施上持续加大投入。</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-year">2024 — 今</div>
+                <h3>持续进化</h3>
+                <p>豆包大模型系列持续迭代，AI 产品矩阵不断丰富。字节跳动已成为全球 AI 赛道最重要的参与者之一。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== Values ===== -->
+<section class="section" id="values">
+    <div class="container">
+        <span class="section-label">● Culture</span>
+        <h2 class="section-title">企业文化</h2>
+        <p class="section-sub" style="margin-bottom: 48px;">"Always Day 1" —— 始终像创业第一天那样思考和行动。</p>
+        <div class="values-grid">
+            <div class="value-card">
+                <span class="emoji">🚀</span>
+                <h3>始终创业</h3>
+                <p>保持创业心态，拒绝惯性。无论公司多大，都要像第一天那样敏捷、进取、敢想敢做。</p>
+            </div>
+            <div class="value-card">
+                <span class="emoji">🤝</span>
+                <h3>坦诚清晰</h3>
+                <p>信息透明，有话直说。推崇"上下文"而非"控制"，让决策基于事实而非层级。</p>
+            </div>
+            <div class="value-card">
+                <span class="emoji">🎯</span>
+                <h3>极致务实</h3>
+                <p>以结果为导向，拒绝空谈。追求极致的产品体验和技术方案，用数据和事实说话。</p>
+            </div>
+            <div class="value-card">
+                <span class="emoji">💡</span>
+                <h3>追求卓越</h3>
+                <p>不断设定更高的目标，突破自我设限。鼓励创新，容忍失败，但永远不满足于"够好"。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== Global ===== -->
+<section class="section" id="global">
+    <div class="container">
+        <span class="section-label">● Global</span>
+        <h2 class="section-title">全球化布局</h2>
+        <p class="section-sub" style="margin-bottom: 48px;">字节跳动是全球最具影响力的中国科技公司之一，产品和服务覆盖全球绝大多数国家和地区。</p>
+        <div class="global-grid">
+            <div class="global-card">
+                <h3>🌏 全球办公室</h3>
+                <p>在北京、上海、深圳、洛杉矶、纽约、伦敦、巴黎、柏林、东京、新加坡、迪拜等全球核心城市均设有办公室，构筑全球化运营网络。</p>
+            </div>
+            <div class="global-card">
+                <h3>🌐 本地化运营</h3>
+                <p>TikTok 在海外拥有高度本地化的运营团队，理解每个市场的文化、法规和用户习惯，真正做到"全球产品，本地运营"。</p>
+            </div>
+            <div class="global-card">
+                <h3>🤖 全球人才</h3>
+                <p>汇聚来自全球顶尖科技公司和高校的人才，涵盖 AI、推荐系统、计算机视觉、自然语言处理等多个前沿领域。</p>
+            </div>
+            <div class="global-card">
+                <h3>📊 市场影响力</h3>
+                <p>TikTok 连续多年蝉联全球移动应用消费额榜首，在全球社交媒体市场占据重要地位，深刻影响了内容消费和创作方式。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== Tech ===== -->
+<section class="section" id="tech" style="background: #fff;">
+    <div class="container">
+        <span class="section-label">● Technology</span>
+        <h2 class="section-title">技术实力</h2>
+        <p class="section-sub" style="margin-bottom: 48px;">人工智能是字节跳动的核心引擎，从推荐系统到 AGI，技术驱动着每一个产品。</p>
+        <div class="tech-bento">
+            <div class="bento-item">
+                <span class="icon-lg">🧠</span>
+                <h3>推荐算法</h3>
+                <p>业界领先的深度学习推荐系统，实时处理海量用户行为数据，实现秒级个性化内容匹配，是抖音和今日头条的核心技术支柱。</p>
+            </div>
+            <div class="bento-item">
+                <span class="icon-lg">🗣️</span>
+                <h3>自然语言处理</h3>
+                <p>在大语言模型、机器翻译、语音识别、文本理解等领域拥有深厚积累，豆包大模型系列已广泛应用于多个产品线，服务数亿用户。</p>
+            </div>
+            <div class="bento-item">
+                <span class="icon-lg">👁️</span>
+                <h3>计算机视觉</h3>
+                <p>特效引擎、AR 技术、图像识别、视频理解等能力行业领先，为抖音/TikTok 的创意工具和内容理解提供强大支撑。</p>
+            </div>
+            <div class="bento-item">
+                <span class="icon-lg">⚡</span>
+                <h3>大规模基础设施</h3>
+                <p>自研分布式存储、计算引擎和机器学习平台，支持 EB 级数据存储和百万级 QPS 服务，保障全球数亿用户流畅体验。</p>
+            </div>
+            <div class="bento-item">
+                <span class="icon-lg">🔬</span>
+                <h3>AI for Science</h3>
+                <p>探索 AI 在药物发现、材料科学、气候预测等领域的应用，推动人工智能从消费互联网走向更广阔的科学前沿。</p>
+            </div>
+            <div class="bento-item">
+                <span class="icon-lg">🎙️</span>
+                <h3>豆包大模型 (Doubao)</h3>
+                <p>字节跳动自研的通用大语言模型系列，涵盖语言理解、代码生成、多模态理解等能力。通过豆包 App 和 API 对外开放，持续迭代升级，致力于让 AI 技术惠及每一个人。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== Footer ===== -->
+<footer>
+    <div class="container">
+        <p>本页面仅供学习参考，数据来源于公开信息。</p>
+        <p style="margin-top: 6px;">
+            <a href="https://www.bytedance.com" target="_blank" rel="noopener">ByteDance.com</a>
+            &nbsp;·&nbsp; © 2026 ByteDance Introduction
+        </p>
+    </div>
+</footer>
+
+<!-- ===== Script ===== -->
+<script>
+    // Nav scroll effect
+    const nav = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+        nav.classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    // Smooth intersection observer animations
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.product-card, .value-card, .global-card, .bento-item, .tl-item').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+        el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+        observer.observe(el);
+    });
+</script>
+
+</body>
+</html>

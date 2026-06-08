@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude - AI 助手介绍</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .card {
+            max-width: 700px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 3rem;
+            animation: cardIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(40px) scale(0.96);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 2rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #d4a5ff, #7c3aed);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .logo-text {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: white;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-sub {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            margin-top: 2px;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.75);
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
+            padding-left: 0.5rem;
+            border-left: 3px solid #7c3aed;
+            padding-left: 1rem;
+        }
+
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            color: #d4a5ff;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+        }
+
+        .trait {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 1rem 1.2rem;
+            transition: all 0.2s ease;
+        }
+
+        .trait:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(124, 58, 237, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .trait-name {
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .trait-desc {
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .stats {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            padding: 1.2rem 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 2rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .stat-number {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .footer {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        @media (max-width: 500px) {
+            .card { padding: 1.5rem; }
+            .grid { grid-template-columns: 1fr; }
+            .logo-text { font-size: 1.4rem; }
+            .stats { flex-direction: column; gap: 0.8rem; }
+            .stat-item { display: flex; align-items: center; gap: 0.8rem; text-align: left; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">
+            <div class="logo-icon">C</div>
+            <div>
+                <div class="logo-text">Claude</div>
+                <div class="logo-sub">by Anthropic</div>
+            </div>
+        </div>
+
+        <div class="tagline">
+            一个温暖的 AI 助手，擅长编程、写作、分析和创造性思考。<br>
+            乐于助人，认真细致，追求真正有用的答案。
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-number">200K</div>
+                <div class="stat-label">上下文窗口</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">多语言</div>
+                <div class="stat-label">编程 & 自然语言</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">实时</div>
+                <div class="stat-label">联网搜索</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">核心能力</div>
+            <div class="grid">
+                <div class="trait">
+                    <div class="trait-name">💻 编程</div>
+                    <div class="trait-desc">TypeScript、Python、Go、Rust、C++ 等主流语言</div>
+                </div>
+                <div class="trait">
+                    <div class="trait-name">📝 写作</div>
+                    <div class="trait-desc">文章、文案、报告、创意故事</div>
+                </div>
+                <div class="trait">
+                    <div class="trait-name">📊 分析</div>
+                    <div class="trait-desc">数据解读、逻辑推理、决策辅助</div>
+                </div>
+                <div class="trait">
+                    <div class="trait-name">🎨 创意</div>
+                    <div class="trait-desc">头脑风暴、方案设计、视觉构思</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">我的原则</div>
+            <div class="grid">
+                <div class="trait">
+                    <div class="trait-name">诚实</div>
+                    <div class="trait-desc">不确定时会坦诚告知，不编造答案</div>
+                </div>
+                <div class="trait">
+                    <div class="trait-name">细致</div>
+                    <div class="trait-desc">认真理解需求，追求高质量输出</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            由 Anthropic 构建 · Claude Sonnet 4.6 · 2026
+        </div>
+    </div>
+</body>
+</html>

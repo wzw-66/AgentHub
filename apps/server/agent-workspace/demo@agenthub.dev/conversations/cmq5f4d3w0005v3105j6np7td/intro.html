@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自我介绍</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 48px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+
+    .avatar {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 40px;
+      color: #fff;
+      font-weight: bold;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .title {
+      text-align: center;
+      color: #667eea;
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+
+    .section {
+      margin-bottom: 28px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #f0f0f5;
+    }
+
+    .skills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .skill-tag {
+      background: #f0f0f5;
+      color: #333;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 14px;
+      color: #555;
+    }
+
+    .contact-item .label {
+      color: #999;
+      min-width: 50px;
+    }
+
+    .bio {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="avatar">T</div>
+    <h1>Test User</h1>
+    <p class="title">全栈开发者</p>
+
+    <div class="section">
+      <p class="bio">热爱编程，专注于 Web 开发和 Python 后端。喜欢探索新技术，追求简洁优雅的代码风格。</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">技能</div>
+      <div class="skills">
+        <span class="skill-tag">Python</span>
+        <span class="skill-tag">JavaScript</span>
+        <span class="skill-tag">TypeScript</span>
+        <span class="skill-tag">React</span>
+        <span class="skill-tag">Node.js</span>
+        <span class="skill-tag">Fastify</span>
+        <span class="skill-tag">PostgreSQL</span>
+        <span class="skill-tag">Docker</span>
+        <span class="skill-tag">Git</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">联系方式</div>
+      <div class="contact-item">
+        <span class="label">邮箱</span>
+        <span>testuser@example.com</span>
+      </div>
+      <div class="contact-item">
+        <span class="label">GitHub</span>
+        <span>github.com/testuser</span>
+      </div>
+      <div class="contact-item">
+        <span class="label">微信</span>
+        <span>testuser_wechat</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

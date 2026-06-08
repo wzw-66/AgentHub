@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude AI - 介绍</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a12;
+            min-height: 100vh;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+
+        /* 背景粒子效果 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(100, 70, 200, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(200, 120, 80, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(70, 100, 200, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .card {
+            position: relative;
+            z-index: 1;
+            max-width: 800px;
+            width: 100%;
+            background: linear-gradient(135deg,
+                rgba(30, 28, 45, 0.95) 0%,
+                rgba(20, 18, 35, 0.95) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 28px;
+            padding: 3rem;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+            animation: cardIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(40px) scale(0.97);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* 头部区域 */
+        .header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #d4a574 0%, #b8835a 50%, #a06a48 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.4rem;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 8px 32px rgba(196, 122, 90, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .logo::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+            animation: shimmer 4s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: translateX(-100%) rotate(25deg); }
+            50% { transform: translateX(100%) rotate(25deg); }
+        }
+
+        .header-text h1 {
+            font-size: 2.6rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.3rem;
+        }
+
+        .header-text .subtitle {
+            font-size: 1.05rem;
+            color: #8888aa;
+            font-weight: 400;
+        }
+
+        .header-text .subtitle span {
+            color: #d4a574;
+        }
+
+        /* 标签栏 */
+        .badge-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .badge {
+            padding: 0.3rem 0.9rem;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: #aaaac0;
+            transition: all 0.2s;
+        }
+
+        .badge:hover {
+            background: rgba(212, 165, 116, 0.12);
+            border-color: rgba(212, 165, 116, 0.25);
+            color: #d4a574;
+        }
+
+        .badge.highlight {
+            background: rgba(212, 165, 116, 0.12);
+            border-color: rgba(212, 165, 116, 0.2);
+            color: #d4a574;
+        }
+
+        /* 区块 */
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #d4a574;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            letter-spacing: 0.3px;
+        }
+
+        .section h2::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 16px;
+            background: #d4a574;
+            border-radius: 2px;
+        }
+
+        .section p {
+            line-height: 1.9;
+            color: #b0b0c8;
+            font-size: 0.95rem;
+        }
+
+        /* 能力网格 */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .tag {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 1rem 1.1rem;
+            transition: all 0.25s ease;
+            cursor: default;
+        }
+
+        .tag:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(212, 165, 116, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .tag .label {
+            display: block;
+            font-size: 0.82rem;
+            color: #d4a574;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            letter-spacing: 0.3px;
+        }
+
+        .tag .desc {
+            font-size: 0.88rem;
+            color: #9999b0;
+            line-height: 1.5;
+        }
+
+        /* 特点列表 */
+        .feature-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem 1.5rem;
+        }
+
+        .feature-list li {
+            list-style: none;
+            font-size: 0.92rem;
+            color: #b0b0c8;
+            line-height: 1.6;
+            padding-left: 1.2rem;
+            position: relative;
+        }
+
+        .feature-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #d4a574;
+            font-weight: 600;
+        }
+
+        /* 版本信息条 */
+        .version-bar {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            padding: 1rem 1.2rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-top: 1.5rem;
+        }
+
+        .version-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #8888a5;
+        }
+
+        .version-item strong {
+            color: #c0c0d8;
+            font-weight: 500;
+        }
+
+        .version-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .version-dot.gold { background: #d4a574; }
+        .version-dot.green { background: #6bc47a; }
+        .version-dot.blue { background: #6a8fc4; }
+
+        /* 底部 */
+        .footer {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            text-align: center;
+            font-size: 0.82rem;
+            color: #666680;
+        }
+
+        .footer a {
+            color: #d4a574;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer a:hover {
+            color: #e8c090;
+        }
+
+        /* 响应式 */
+        @media (max-width: 640px) {
+            body { padding: 1rem; }
+            .card { padding: 1.8rem 1.5rem; border-radius: 20px; }
+            .header { flex-direction: column; align-items: center; text-align: center; }
+            .header-text h1 { font-size: 2rem; }
+            .grid, .feature-list { grid-template-columns: 1fr; }
+            .version-bar { flex-direction: column; gap: 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <!-- 头部 -->
+        <div class="header">
+            <div class="logo">C</div>
+            <div class="header-text">
+                <h1>Claude</h1>
+                <p class="subtitle">由 <span>Anthropic</span> 创造的 AI 助手</p>
+            </div>
+        </div>
+
+        <!-- 标签 -->
+        <div class="badge-bar">
+            <span class="badge highlight">友善 · 睿智 · 可靠</span>
+            <span class="badge">最新模型: Claude Sonnet 4.6</span>
+            <span class="badge">200K 上下文</span>
+            <span class="badge">多语言支持</span>
+        </div>
+
+        <!-- 关于我 -->
+        <div class="section">
+            <h2>关于我</h2>
+            <p>
+                我是 Claude，Anthropic 构建的 AI 助手。我的使命是通过深入、自然的对话，
+                帮助人们解决问题、激发创造力、完成复杂任务。我注重<strong style="color:#d0d0e8;">诚实与安全</strong>，
+                当我不知道时会直接告诉你，而不是编造答案。我持续进化，不断变得更强。
+            </p>
+        </div>
+
+        <!-- 核心能力 -->
+        <div class="section">
+            <h2>核心能力</h2>
+            <div class="grid">
+                <div class="tag">
+                    <span class="label">编程开发</span>
+                    <span class="desc">多语言编程、代码审查、调试、架构设计</span>
+                </div>
+                <div class="tag">
+                    <span class="label">写作创作</span>
+                    <span class="desc">文章、文案、故事、创意内容撰写与润色</span>
+                </div>
+                <div class="tag">
+                    <span class="label">数据分析</span>
+                    <span class="desc">数据处理、逻辑推理、可视化、决策支持</span>
+                </div>
+                <div class="tag">
+                    <span class="label">文档处理</span>
+                    <span class="desc">读取 PDF、Word、图片、代码库分析</span>
+                </div>
+                <div class="tag">
+                    <span class="label">深度对话</span>
+                    <span class="desc">超长上下文理解、多轮交互、记忆能力</span>
+                </div>
+                <div class="tag">
+                    <span class="label">工具集成</span>
+                    <span class="desc">联网搜索、代码执行、API 调用、图像识别</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 特点 -->
+        <div class="section">
+            <h2>特点</h2>
+            <ul class="feature-list">
+                <li>回答力求准确全面，思考深入</li>
+                <li>态度友善，乐于帮助用户学习成长</li>
+                <li>安全性优先，拒绝有害请求</li>
+                <li>支持超长上下文（最高 200K tokens）</li>
+                <li>支持图片理解和文件上传</li>
+                <li>支持联网搜索获取实时信息</li>
+            </ul>
+        </div>
+
+        <!-- 版本信息 -->
+        <div class="version-bar">
+            <span class="version-item">
+                <span class="version-dot gold"></span>
+                <strong>模型版本:</strong> Claude 4 系列 (Sonnet / Opus / Haiku)
+            </span>
+            <span class="version-item">
+                <span class="version-dot green"></span>
+                <strong>上下文窗口:</strong> 最高 200K tokens
+            </span>
+            <span class="version-item">
+                <span class="version-dot blue"></span>
+                <strong>知识截止:</strong> 2025 年
+            </span>
+        </div>
+
+        <!-- 底部 -->
+        <div class="footer">
+            <p>由 <a href="https://anthropic.com" target="_blank" rel="noopener">Anthropic</a> 研发制造 · 致力于构建安全、有益的 AI 系统</p>
+        </div>
+    </div>
+</body>
+</html>
