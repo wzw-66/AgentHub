@@ -699,16 +699,6 @@ export default function ChatPanel({
                     opacity: 0,
                     animation: "msgIn 0.35s ease forwards",
                   }}
-              >
-                <div
-                  key={sm.id}
-                  className="flex gap-2.5"
-                  style={{
-                    maxWidth: "88%",
-                    alignSelf: "flex-start",
-                    opacity: 0,
-                    animation: "msgIn 0.35s ease forwards",
-                  }}
                 >
                   <div
                     className="flex-shrink-0 flex items-center justify-center text-white font-medium"
