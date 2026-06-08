@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useChat } from "@/lib/chat-context";
 import { useI18n } from "@/lib/i18n";
 import CreateAgentModal from "./CreateAgentModal";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 interface SidebarProps {
   activeConversationId: string | null;
@@ -333,6 +334,7 @@ export default function Sidebar({ activeConversationId, onSelectConversation }: 
               {user?.username || "User"}
             </div>
           </div>
+          <ThemeSwitcher />
           <button
             onClick={() => { logout(); window.location.href = "/login"; }}
             className="rounded transition-colors flex-shrink-0"

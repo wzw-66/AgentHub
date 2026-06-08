@@ -2,25 +2,46 @@
 
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { useChat } from "@/lib/chat-context";
+import GroupSection from "./GroupSection";
 
 interface RightPanelProps {
   content?: { type: string; id: string } | null;
   onClose?: () => void;
+  conversationId?: string | null;
 }
 
 type TabKey = "preview" | "debate" | "branch" | "versions";
 
 const PANEL_TABS: { key: TabKey; labelKey: string }[] = [
-  { key: "preview", labelKey: "preview" },
-  { key: "debate", labelKey: "debate" },
-  { key: "branch", labelKey: "branch" },
-  { key: "versions", labelKey: "versions" },
+  { key: "preview", labelKey: "预览" },
+  { key: "debate", labelKey: "辩论" },
+  { key: "branch", labelKey: "分支" },
+  { key: "versions", labelKey: "版本" },
 ];
 
+// ─── Agent color palette ────────────────────────────────────────────────
+const AGENT_PALETTE = [
+  "#1a1a2e", "#b8860b", "#2b8a6b", "#7c3aed", "#c93a3a",
+  "#2563eb", "#c2410c", "#059669", "#6d28d9", "#be185d",
+];
+
+function getAgentColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+  }
+  return AGENT_PALETTE[Math.abs(hash) % AGENT_PALETTE.length]!;
+}
 
 // ─── Component ─────────────────────────────────────────────────────────
 
-export default function RightPanel({ onClose: _onClose }: RightPanelProps) {
+export default function RightPanel({ onClose: _onClose, conversationId }: RightPanelProps) {
+  const { conversations, contacts } = useChat();
+  const activeConversation = conversations.find((c) => c.id === conversationId);
+  const isGroupChat = activeConversation?.type === "group";
+  const convContactIds = activeConversation?.contactIds ?? [];
+  const convMembers = (contacts || []).filter((c) => convContactIds.includes(c.id));
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
 
@@ -87,6 +108,21 @@ export default function RightPanel({ onClose: _onClose }: RightPanelProps) {
         className="flex-1 overflow-y-auto flex flex-col"
         style={{ padding: "18px", gap: "14px" }}
       >
+        {/* Group members section (group chats only) */}
+        {isGroupChat && convMembers.length > 0 && (
+          <GroupSection
+            members={convMembers.map((m) => ({
+              id: m.id,
+              name: m.name,
+              avatar: (m.name ?? "?")[0]?.toUpperCase() ?? "?",
+              color: getAgentColor(m.id),
+              role: m.provider,
+            }))}
+            onRemoveMember={() => {}}
+            onAddMember={() => {}}
+          />
+        )}
+
         {/* Preview Tab */}
         {activeTab === "preview" && (
           <>

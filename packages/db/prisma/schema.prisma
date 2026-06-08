@@ -32,6 +32,10 @@ enum MessageType {
   Diff
   Preview
   Artifact
+  Deploy
+  Hesitate
+  Debate
+  Alert
 }
 
 enum ArtifactType {

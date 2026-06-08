@@ -65,7 +65,7 @@ export default function ChatPage() {
         </div>
 
         {/* Right Panel */}
-        {rightPanelContent && (
+        {(rightPanelContent || activeConversationId) && (
           <div
             className="flex-shrink-0 animate-fade-in-up"
             style={{
@@ -76,6 +76,7 @@ export default function ChatPage() {
             <RightPanel
               content={rightPanelContent}
               onClose={() => setRightPanelContent(null)}
+              conversationId={activeConversationId}
             />
           </div>
         )}

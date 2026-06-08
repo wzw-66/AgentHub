@@ -31,6 +31,10 @@ describe("MessageType", () => {
     expect(MessageType.Diff).toBe("diff");
     expect(MessageType.Preview).toBe("preview");
     expect(MessageType.Artifact).toBe("artifact");
+    expect(MessageType.Deploy).toBe("deploy");
+    expect(MessageType.Hesitate).toBe("hesitate");
+    expect(MessageType.Debate).toBe("debate");
+    expect(MessageType.Alert).toBe("alert");
   });
 });
 

@@ -15,12 +15,15 @@ const mockSendMessage = vi.fn();
 // Default mock return value for useChat — swapped per describe block
 let mockUseChat = () => ({
   conversations: [{ id: "conv-1", title: "测试对话", type: "single" as const, ownerId: "user-1", createdAt: new Date(), updatedAt: new Date() }],
+  contacts: [],
   agents: [],
   isLoadingConversations: false,
   isLoadingMessages: false,
   isLoadingAgents: false,
+  isLoadingContacts: false,
   messages: [] as Message[],
-  streamingMessage: null as Record<string, unknown> | null,
+  streamingMessages: new Map(),
+  streamError: null,
   typingAgents: new Map(),
   activeConversationId: "conv-1",
   setActiveConversation: vi.fn(),
@@ -31,6 +34,11 @@ let mockUseChat = () => ({
   setTypingAgent: vi.fn(),
   appendMessageChunk: vi.fn(),
   finalizeMessage: vi.fn(),
+  setStreamError: vi.fn(),
+  setMessages: vi.fn(),
+  replaceMessage: vi.fn(),
+  togglePinConversation: vi.fn(),
+  toggleArchiveConversation: vi.fn(),
 });
 
 vi.mock("@/lib/chat-context", () => ({
@@ -38,23 +46,6 @@ vi.mock("@/lib/chat-context", () => ({
 }));
 
 vi.mock("@agenthub/ui", () => ({
-  MessageBubble: ({
-    message,
-    variant,
-    children,
-  }: {
-    message: { content: string; senderType: string };
-    variant: string;
-    children: React.ReactNode;
-  }) => (
-    <div
-      data-testid="message-bubble"
-      data-variant={variant}
-      data-content={message.content}
-    >
-      {children}
-    </div>
-  ),
   CodeBlock: ({ code }: { code: string }) => (
     <div data-testid="code-block">{code}</div>
   ),
@@ -66,6 +57,37 @@ vi.mock("@/components/MentionPopup", () => ({
 
 vi.mock("@/components/TypingIndicator", () => ({
   default: () => <div data-testid="typing-indicator" />,
+}));
+
+vi.mock("@/lib/i18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, Record<string, string>> = {
+        chat: { inputPlaceholder: "输入消息...", loadingMessages: "加载中...", emptySelect: "请选择对话", emptyMessages: "暂无消息" },
+        common: { cancel: "取消", save: "保存", delete: "删除", confirm: "确认", loading: "加载中...", edit: "编辑" },
+      };
+      const keys = key.split(".");
+      return keys.reduce((obj: Record<string, string>, k: string) => obj?.[k] ?? key, translations as unknown as Record<string, string>);
+    },
+    locale: "zh",
+    setLocale: vi.fn(),
+  }),
+}));
+
+vi.mock("@/components/DeployCard", () => ({
+  default: () => <div data-testid="deploy-card" />,
+}));
+
+vi.mock("@/components/HesitateBubble", () => ({
+  default: () => <div data-testid="hesitate-bubble" />,
+}));
+
+vi.mock("@/components/DebateTable", () => ({
+  default: () => <div data-testid="debate-table" />,
+}));
+
+vi.mock("@/components/SilentAlertCard", () => ({
+  default: () => <div data-testid="silent-alert-card" />,
 }));
 
 import ChatPanel from "@/components/ChatPanel";
@@ -117,7 +139,7 @@ describe("ChatPanel - message rendering", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [userMessage, contactMessage, systemMessage],
-      streamingMessage: null,
+      streamingMessages: new Map(),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -180,7 +202,7 @@ describe("ChatPanel - message rendering", () => {
       conversations: [{ id: "conv-1", title: "测试对话", type: "single" as const, ownerId: "user-1", createdAt: new Date(), updatedAt: new Date() }],
       agents: [], isLoadingConversations: false,
       isLoadingMessages: false, isLoadingAgents: false,
-      messages: [], streamingMessage: null,
+      messages: [], streamingMessages: new Map(),
       typingAgents: new Map(), activeConversationId: "conv-1",
       setActiveConversation: vi.fn(), fetchConversations: vi.fn(),
       fetchMessages: vi.fn(), sendMessage: mockSendMessage,
@@ -197,7 +219,7 @@ describe("ChatPanel - message rendering", () => {
       conversations: [{ id: "conv-1", title: "测试对话", type: "single" as const, ownerId: "user-1", createdAt: new Date(), updatedAt: new Date() }],
       agents: [], isLoadingConversations: false,
       isLoadingMessages: true, isLoadingAgents: false,
-      messages: [], streamingMessage: null,
+      messages: [], streamingMessages: new Map(),
       typingAgents: new Map(), activeConversationId: "conv-1",
       setActiveConversation: vi.fn(), fetchConversations: vi.fn(),
       fetchMessages: vi.fn(), sendMessage: mockSendMessage,
@@ -222,7 +244,7 @@ describe("ChatPanel - streaming messages", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [],
-      streamingMessage: {
+      streamingMessages: new Map([["stream-1", {
         id: "stream-1",
         conversationId: "conv-1",
         content: "正在思考",
@@ -232,7 +254,7 @@ describe("ChatPanel - streaming messages", () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         isStreaming: true,
-      },
+      }]]),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -281,7 +303,7 @@ describe("ChatPanel - message sending", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [],
-      streamingMessage: null,
+      streamingMessages: new Map(),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -432,7 +454,7 @@ describe("ChatPanel - code blocks", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [codeMessage],
-      streamingMessage: null,
+      streamingMessages: new Map(),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -501,7 +523,7 @@ describe("ChatPanel - full chain integration", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [],
-      streamingMessage: null,
+      streamingMessages: new Map(),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -524,7 +546,7 @@ describe("ChatPanel - full chain integration", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [fullUserMessage],
-      streamingMessage: null,
+      streamingMessages: new Map(),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -547,7 +569,7 @@ describe("ChatPanel - full chain integration", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [fullUserMessage],
-      streamingMessage: fullStreamMessage,
+      streamingMessages: new Map([["msg-stream", fullStreamMessage]]),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),
@@ -570,7 +592,7 @@ describe("ChatPanel - full chain integration", () => {
       isLoadingMessages: false,
       isLoadingAgents: false,
       messages: [fullUserMessage, fullAgentMessage],
-      streamingMessage: null,
+      streamingMessages: new Map(),
       typingAgents: new Map(),
       activeConversationId: "conv-1",
       setActiveConversation: vi.fn(),

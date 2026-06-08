@@ -27,6 +27,22 @@ vi.mock("@/lib/auth-context", () => ({
   }),
 }));
 
+vi.mock("@/lib/i18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, Record<string, string>> = {
+        chat: { searchPlaceholder: "搜索...", emptyConversations: "暂无对话", logout: "退出", selectAgent: "选择 Agent", inputPlaceholder: "输入消息...", loadingMessages: "加载中...", emptySelect: "请选择对话", emptyMessages: "暂无消息" },
+        common: { cancel: "取消", save: "保存", delete: "删除", confirm: "确认", loading: "加载中..." },
+        rightPanel: { collaborate: "协作" },
+      };
+      const keys = key.split(".");
+      return keys.reduce((obj: Record<string, string>, k: string) => obj?.[k] ?? key, translations as unknown as Record<string, string>);
+    },
+    locale: "zh",
+    setLocale: vi.fn(),
+  }),
+}));
+
 type Conv = Conversation;
 
 const mockCreateConversation = vi.fn();
@@ -93,9 +109,6 @@ vi.mock("@/lib/chat-context", () => {
 vi.mock("@agenthub/ui", () => ({
   AgentAvatar: ({ name }: { name: string }) => (
     <div data-testid="agent-avatar">{name}</div>
-  ),
-  MessageBubble: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="message-bubble">{children}</div>
   ),
   CodeBlock: ({ code, language }: { code: string; language: string }) => (
     <div data-testid="code-block">{language}: {code}</div>

@@ -8,6 +8,11 @@ import { api } from "@/lib/api-client";
 import type { Message } from "@agenthub/shared";
 import TypingIndicator from "./TypingIndicator";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import MentionPopup from "./MentionPopup";
+import DeployCard from "./DeployCard";
+import HesitateBubble from "./HesitateBubble";
+import DebateTable from "./DebateTable";
+import SilentAlertCard from "./SilentAlertCard";
 
 // ─── Agent color generator ──────────────────────────────────────────────
 
@@ -30,7 +35,33 @@ function getAgentColor(agentId?: string): string {
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 function MessageContent({ message }: { message: Message }) {
-  return <MarkdownRenderer content={message.content} />;
+  switch (message.type) {
+    case "deploy":
+      return <DeployCard url={message.content} status="running" />;
+    case "hesitate":
+      return (
+        <HesitateBubble
+          agentName={message.senderId}
+          color="var(--accent)"
+          risks={[]}
+          options={[{ id: "continue", label: "继续", primary: true }]}
+          onSelect={() => {}}
+        />
+      );
+    case "debate":
+      return <DebateTable columns={[]} rows={[]} conclusion={message.content} />;
+    case "alert":
+      return (
+        <SilentAlertCard
+          severity="medium"
+          description={message.content}
+          filePath={message.senderId}
+          suggestion=""
+        />
+      );
+    default:
+      return <MarkdownRenderer content={message.content} />;
+  }
 }
 
 // ─── Component ─────────────────────────────────────────────────────────
@@ -717,28 +748,18 @@ export default function ChatPanel({
           }}
         >
           {mentionState && (
-            <div
-              className="absolute bottom-full left-0 mb-1 w-48 rounded-lg border p-1 shadow-lg z-10"
-              style={{ background: "var(--bg-app)", borderColor: "var(--border)" }}
-            >
-              {(contacts || [])
+            <MentionPopup
+              isOpen={true}
+              agents={(contacts || [])
                 .filter((a) => a.name.toLowerCase().includes(mentionState.query))
                 .slice(0, 5)
-                .map((agent, i) => (
-                  <button
-                    key={agent.id}
-                    className="flex items-center gap-2 w-full rounded px-2 py-1.5 text-xs text-left transition-colors"
-                    style={{
-                      color: "var(--text-primary)",
-                      background: i === mentionSelectedIndex ? "var(--bg-hover)" : "transparent",
-                    }}
-                    onClick={() => handleMentionSelect(agent.name)}
-                    onMouseEnter={() => setMentionSelectedIndex(i)}
-                  >
-                    {agent.name}
-                  </button>
-                ))}
-            </div>
+                .map((a) => ({ id: a.id, name: a.name }))}
+              selectedIndex={mentionSelectedIndex}
+              onSelect={(agentId) => {
+                const agent = contacts?.find((a) => a.id === agentId);
+                if (agent) handleMentionSelect(agent.name);
+              }}
+            />
           )}
 
           <textarea

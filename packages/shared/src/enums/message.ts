@@ -4,4 +4,8 @@ export enum MessageType {
   Diff = "diff",
   Preview = "preview",
   Artifact = "artifact",
+  Deploy = "deploy",
+  Hesitate = "hesitate",
+  Debate = "debate",
+  Alert = "alert",
 }

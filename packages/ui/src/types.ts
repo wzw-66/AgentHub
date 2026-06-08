@@ -1,21 +1,9 @@
-import type { ReactNode } from "react";
-import type { Message, Artifact } from "@agenthub/shared";
-
 // ─── AgentAvatar ───────────────────────────────────────────
 export interface AgentAvatarProps {
   name: string;
   avatarUrl?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
-}
-
-// ─── MessageBubble ─────────────────────────────────────────
-export interface MessageBubbleProps {
-  message: Message;
-  variant: "user" | "contact" | "system";
-  children?: ReactNode;
-  className?: string;
-  parentMessage?: Message | null;
 }
 
 // ─── CodeBlock ─────────────────────────────────────────────
@@ -25,27 +13,4 @@ export interface CodeBlockProps {
   showLineNumbers?: boolean;
   maxHeight?: string;
   className?: string;
-}
-
-// ─── DiffCard ──────────────────────────────────────────────
-export interface DiffCardProps {
-  diff: string;
-  title?: string;
-  className?: string;
-  onApply?: (diff: string) => void;
-}
-
-// ─── PreviewCard ───────────────────────────────────────────
-export interface PreviewCardProps {
-  url: string;
-  title?: string;
-  className?: string;
-}
-
-// ─── ArtifactCard ──────────────────────────────────────────
-export interface ArtifactCardProps {
-  artifact: Artifact;
-  className?: string;
-  onPreview?: (artifact: Artifact) => void;
-  onFullscreen?: (artifact: Artifact) => void;
 }
