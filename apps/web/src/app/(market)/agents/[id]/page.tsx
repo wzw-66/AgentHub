@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AgentDetailContent from "@/components/AgentDetailContent";
 import EditAgentModal from "@/components/EditAgentModal";
+import PublishAgentModal from "@/components/PublishAgentModal";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRipple } from "@/hooks/useRipple";
@@ -37,6 +38,7 @@ export default function AgentDetailPage() {
   const [isContact, setIsContact] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const { addRipple: addRippleChat, renderRipples: renderRipplesChat } = useRipple();
 
@@ -78,9 +80,16 @@ export default function AgentDetailPage() {
   }
 
   async function handleAddContact() {
+    if (!agent) return;
     setActionLoading("contact");
     try {
-      await api.post("/api/contacts/create", { agentId: id });
+      await api.post("/api/contacts/create", {
+        name: agent.name,
+        provider: agent.provider,
+        model: agent.model ?? undefined,
+        systemPrompt: agent.systemPrompt ?? undefined,
+        config: agent.config ?? undefined,
+      });
       setIsContact(true);
     } catch { /* silent */ }
     finally { setActionLoading(null); }
@@ -183,6 +192,13 @@ export default function AgentDetailPage() {
             {actionLoading === "chat" ? t("agentDetail").initializing : t("agentDetail").startChat}
           </button>
           <button
+            onClick={() => setShowPublishModal(true)}
+            disabled={actionLoading !== null}
+            className="btn-ghost flex-1 rounded-lg py-2.5 text-xs font-medium disabled:opacity-40"
+          >
+            发布到市场
+          </button>
+          <button
             onClick={handleAddContact}
             disabled={isContact || actionLoading !== null}
             className="btn-ghost flex-1 rounded-lg py-2.5 text-xs font-medium disabled:opacity-40"
@@ -232,6 +248,13 @@ export default function AgentDetailPage() {
             setShowEditModal(false);
             fetchAgent();
           }}
+        />
+      )}
+      {showPublishModal && agent && (
+        <PublishAgentModal
+          agent={{ id: agent.id, name: agent.name, provider: agent.provider, model: agent.model }}
+          onClose={() => setShowPublishModal(false)}
+          onPublished={() => setShowPublishModal(false)}
         />
       )}
     </div>

@@ -19,6 +19,8 @@ interface MarketAgent {
   creator?: { name: string };
 }
 
+type FilterMode = "browse" | "mine";
+
 const PROVIDER_FILTERS = ["All", "Claude", "OpenCode", "Custom"] as const;
 
 export default function MarketBrowsePage() {
@@ -30,6 +32,8 @@ export default function MarketBrowsePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeProvider, setActiveProvider] = useState<string>("All");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<FilterMode>("browse");
+  const [unpublishing, setUnpublishing] = useState<string | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -57,9 +61,38 @@ export default function MarketBrowsePage() {
     }
   }, [debouncedQuery, activeProvider, t]);
 
+  const fetchMyListings = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<MarketAgent[]>("/api/market/my-listings");
+      setAgents(data);
+    } catch {
+      setError(t("agentMarket").failedToLoad);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => {
-    fetchMarket();
-  }, [fetchMarket]);
+    if (filterMode === "browse") {
+      fetchMarket();
+    } else {
+      fetchMyListings();
+    }
+  }, [filterMode, fetchMarket, fetchMyListings]);
+
+  async function handleUnpublish(id: string) {
+    setUnpublishing(id);
+    try {
+      await api.delete(`/api/market/${id}/unpublish`);
+      setAgents((prev) => prev.filter((a) => a.id !== id));
+    } catch {
+      // silent
+    } finally {
+      setUnpublishing(null);
+    }
+  }
 
   return (
     <div className="relative z-10 flex min-h-screen flex-col" style={{ backgroundColor: "var(--theme-bg-primary)" }}>
@@ -90,33 +123,59 @@ export default function MarketBrowsePage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {/* Search + Filters */}
-        <div className="mb-6 space-y-3">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t("agentMarket").searchMarket}
-            className="w-full rounded-xl border bg-transparent px-3.5 py-2 font-mono text-xs tracking-wider"
-            style={{ borderColor: "var(--theme-border)", color: "var(--theme-text-primary)" }}
-          />
-          <div className="flex gap-2">
-            {PROVIDER_FILTERS.map((provider) => (
-              <button
-                key={provider}
-                onClick={() => setActiveProvider(provider)}
-                className="rounded-lg px-3 py-1.5 font-mono text-xs tracking-wider transition-all"
-                style={{
-                  backgroundColor: activeProvider === provider ? "var(--theme-accent)" : "transparent",
-                  color: activeProvider === provider ? "var(--theme-text-inverse)" : "var(--theme-text-muted)",
-                  border: activeProvider === provider ? "none" : "1px solid var(--theme-border-light)",
-                }}
-              >
-                {provider === "All" ? t("agentMarket").allProviders : provider.toUpperCase()}
-              </button>
-            ))}
-          </div>
+        {/* Mode tabs */}
+        <div className="mb-6 flex gap-6">
+          <button
+            onClick={() => setFilterMode("browse")}
+            className="pb-1 text-xs font-semibold transition-colors"
+            style={{
+              color: filterMode === "browse" ? "var(--theme-accent)" : "var(--theme-text-dim)",
+              borderBottom: filterMode === "browse" ? "2px solid var(--theme-accent)" : "2px solid transparent",
+            }}
+          >
+            {t("agentMarket").marketTab || "市场"}
+          </button>
+          <button
+            onClick={() => setFilterMode("mine")}
+            className="pb-1 text-xs transition-colors"
+            style={{
+              color: filterMode === "mine" ? "var(--theme-accent)" : "var(--theme-text-dim)",
+              borderBottom: filterMode === "mine" ? "2px solid var(--theme-accent)" : "2px solid transparent",
+            }}
+          >
+            我的发布
+          </button>
         </div>
+
+        {/* Search + Filters (browse mode only) */}
+        {filterMode === "browse" && (
+          <div className="mb-6 space-y-3">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("agentMarket").searchMarket}
+              className="w-full rounded-xl border bg-transparent px-3.5 py-2 font-mono text-xs tracking-wider"
+              style={{ borderColor: "var(--theme-border)", color: "var(--theme-text-primary)" }}
+            />
+            <div className="flex gap-2">
+              {PROVIDER_FILTERS.map((provider) => (
+                <button
+                  key={provider}
+                  onClick={() => setActiveProvider(provider)}
+                  className="rounded-lg px-3 py-1.5 font-mono text-xs tracking-wider transition-all"
+                  style={{
+                    backgroundColor: activeProvider === provider ? "var(--theme-accent)" : "transparent",
+                    color: activeProvider === provider ? "var(--theme-text-inverse)" : "var(--theme-text-muted)",
+                    border: activeProvider === provider ? "none" : "1px solid var(--theme-border-light)",
+                  }}
+                >
+                  {provider === "All" ? t("agentMarket").allProviders : provider.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Loading */}
         {isLoading && (
@@ -147,7 +206,7 @@ export default function MarketBrowsePage() {
               [{t("common").error}] {error}
             </div>
             <button
-              onClick={fetchMarket}
+              onClick={filterMode === "browse" ? fetchMarket : fetchMyListings}
               className="rounded-lg border px-4 py-2 font-mono text-xs tracking-wider transition-colors"
               style={{ borderColor: "var(--theme-border-light)", color: "var(--theme-text-secondary)" }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--theme-accent)"; }}
@@ -162,11 +221,13 @@ export default function MarketBrowsePage() {
         {!isLoading && !error && agents.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20">
             <p className="mb-4 font-mono text-xs tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-              {searchQuery || activeProvider !== "All"
-                ? t("agentMarket").noMatch
-                : t("agentMarket").marketEmpty}
+              {filterMode === "mine"
+                ? "还没有发布过 Agent"
+                : (searchQuery || activeProvider !== "All")
+                  ? t("agentMarket").noMatch
+                  : t("agentMarket").marketEmpty}
             </p>
-            {!searchQuery && activeProvider === "All" && (
+            {filterMode === "browse" && !searchQuery && activeProvider === "All" && (
               <button
                 onClick={() => router.push("/agents")}
                 className="rounded-lg border px-4 py-2 font-mono text-xs font-bold tracking-wider"
@@ -190,8 +251,8 @@ export default function MarketBrowsePage() {
           </div>
         )}
 
-        {/* List */}
-        {!isLoading && !error && agents.length > 0 && (
+        {/* List (browse) */}
+        {!isLoading && !error && agents.length > 0 && filterMode === "browse" && (
           <div className="space-y-2">
             {agents.map((agent) => (
               <MarketAgentCard
@@ -199,6 +260,32 @@ export default function MarketBrowsePage() {
                 agent={agent}
                 onClick={(id) => router.push(`/market/${id}`)}
               />
+            ))}
+          </div>
+        )}
+
+        {/* List (my listings) */}
+        {!isLoading && !error && agents.length > 0 && filterMode === "mine" && (
+          <div className="space-y-2">
+            {agents.map((agent) => (
+              <div key={agent.id}>
+                <MarketAgentCard
+                  agent={agent}
+                  onClick={(id) => router.push(`/market/${id}`)}
+                />
+                <div className="flex justify-end mt-1 pr-2">
+                  <button
+                    onClick={() => handleUnpublish(agent.id)}
+                    disabled={unpublishing === agent.id}
+                    className="rounded px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50"
+                    style={{ color: "var(--theme-danger)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
+                  >
+                    {unpublishing === agent.id ? "取消中..." : "取消发布"}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}

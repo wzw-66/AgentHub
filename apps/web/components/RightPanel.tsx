@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useChat } from "@/lib/chat-context";
+import { api } from "@/lib/api-client";
 import GroupSection from "./GroupSection";
 
 interface RightPanelProps {
@@ -36,7 +37,15 @@ function getAgentColor(id: string): string {
 
 // ─── Component ─────────────────────────────────────────────────────────
 
-export default function RightPanel({ onClose: _onClose, conversationId }: RightPanelProps) {
+interface ArtifactDetail {
+  id: string;
+  content: string | null;
+  previewUrl: string | null;
+  type: string;
+  status?: string;
+}
+
+export default function RightPanel({ content, onClose: _onClose, conversationId }: RightPanelProps) {
   const { conversations, contacts } = useChat();
   const activeConversation = conversations.find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
@@ -44,6 +53,28 @@ export default function RightPanel({ onClose: _onClose, conversationId }: RightP
   const convMembers = (contacts || []).filter((c) => convContactIds.includes(c.id));
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
+  const [artifactData, setArtifactData] = useState<ArtifactDetail | null>(null);
+  const [artifactLoading, setArtifactLoading] = useState(false);
+
+  // Fetch artifact detail when content changes to an artifact
+  useEffect(() => {
+    if (content?.type === "artifact") {
+      setArtifactLoading(true);
+      api
+        .get<ArtifactDetail>(`/api/artifacts/${content.id}/detail`)
+        .then((data) => {
+          setArtifactData(data);
+          setArtifactLoading(false);
+          setActiveTab("preview");
+        })
+        .catch(() => {
+          setArtifactData(null);
+          setArtifactLoading(false);
+        });
+    } else {
+      setArtifactData(null);
+    }
+  }, [content]);
 
   return (
     <div
@@ -126,24 +157,81 @@ export default function RightPanel({ onClose: _onClose, conversationId }: RightP
         {/* Preview Tab */}
         {activeTab === "preview" && (
           <>
-            <div
-              className="flex items-center justify-center"
-              style={{
-                background: "var(--bg-app)",
-                border: "1px solid var(--border-light)",
-                borderRadius: "var(--radius-md)",
-                height: "170px",
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>
-                  暂无预览内容
-                </div>
-                <div style={{ color: "var(--text-tertiary)", fontSize: "10px", marginTop: "4px", opacity: 0.7 }}>
-                  发送代码后在此处实时预览
+            {artifactData ? (
+              <div
+                className="flex flex-col overflow-hidden"
+                style={{ minHeight: "200px", borderRadius: "var(--radius-md)" }}
+              >
+                <div
+                  className="flex-1 overflow-hidden rounded-lg"
+                  style={{ border: "1px solid var(--border-light)" }}
+                >
+                  {artifactData.previewUrl ? (
+                    <iframe
+                      className="h-full w-full border-0"
+                      src={artifactData.previewUrl}
+                      title="Artifact Preview"
+                      sandbox="allow-scripts"
+                      style={{
+                        backgroundColor: "#fff",
+                        minHeight: "300px",
+                      }}
+                    />
+                  ) : artifactData.type === "html" ? (
+                    <iframe
+                      className="h-full w-full border-0"
+                      srcDoc={artifactData.content ?? ""}
+                      title="Artifact Preview"
+                      sandbox="allow-scripts"
+                      style={{
+                        backgroundColor: "#fff",
+                        minHeight: "300px",
+                      }}
+                    />
+                  ) : (
+                    <pre
+                      className="whitespace-pre-wrap font-mono text-xs leading-relaxed"
+                      style={{
+                        color: "var(--text-primary)",
+                        padding: "12px",
+                        maxHeight: "400px",
+                        overflow: "auto",
+                      }}
+                    >
+                      {artifactData.content ?? "No content"}
+                    </pre>
+                  )}
                 </div>
               </div>
-            </div>
+            ) : artifactLoading ? (
+              <div
+                className="flex items-center justify-center"
+                style={{ padding: "40px 0" }}
+              >
+                <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  Loading...
+                </span>
+              </div>
+            ) : (
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  background: "var(--bg-app)",
+                  border: "1px solid var(--border-light)",
+                  borderRadius: "var(--radius-md)",
+                  height: "170px",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>
+                    暂无预览内容
+                  </div>
+                  <div style={{ color: "var(--text-tertiary)", fontSize: "10px", marginTop: "4px", opacity: 0.7 }}>
+                    发送代码后在此处实时预览
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div>
               <div

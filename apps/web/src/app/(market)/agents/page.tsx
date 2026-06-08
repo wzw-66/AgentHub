@@ -107,6 +107,15 @@ export default function AgentListPage() {
           >
             {t("agentMarket").marketTab}
           </button>
+          <button
+            onClick={() => router.push("/credentials")}
+            className="font-mono text-xs tracking-wider pb-1 transition-colors"
+            style={{ color: "var(--theme-text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--theme-text-secondary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--theme-text-muted)"; }}
+          >
+            凭据
+          </button>
         </div>
 
         {/* Loading */}

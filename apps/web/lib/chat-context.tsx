@@ -48,6 +48,7 @@ interface ChatContextValue {
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isLoadingContacts: boolean;
+  fetchContacts: () => Promise<void>;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: string, cursor?: string) => Promise<Message[]>;
@@ -107,6 +108,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // Silently fail - user can retry
     } finally {
       setIsLoadingConversations(false);
+    }
+  }, []);
+
+  const fetchContacts = useCallback(async () => {
+    setIsLoadingContacts(true);
+    try {
+      const data = await api.get<ContactInfo[]>("/api/contacts/list");
+      setContacts(data);
+    } catch {
+      // API not available yet
+    } finally {
+      setIsLoadingContacts(false);
     }
   }, []);
 
@@ -279,19 +292,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setIsLoadingContacts(false);
       return;
     }
-    async function loadContacts() {
-      setIsLoadingContacts(true);
-      try {
-        const data = await api.get<ContactInfo[]>("/api/contacts/list");
-        setContacts(data);
-      } catch {
-        // API not available yet
-      } finally {
-        setIsLoadingContacts(false);
-      }
-    }
-    loadContacts();
-  }, [isAuthenticated]);
+    fetchContacts();
+  }, [isAuthenticated, fetchContacts]);
 
   // ─── Load conversations when authenticated ────────────────────
   useEffect(() => {
@@ -372,6 +374,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isLoadingConversations,
         isLoadingMessages,
         isLoadingContacts,
+        fetchContacts,
         setActiveConversation: setActiveConversationId,
         fetchConversations,
         fetchMessages,

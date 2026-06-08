@@ -13,6 +13,9 @@ import DeployCard from "./DeployCard";
 import HesitateBubble from "./HesitateBubble";
 import DebateTable from "./DebateTable";
 import SilentAlertCard from "./SilentAlertCard";
+import DiffCard from "./DiffCard";
+import ArtifactCardComponent from "./ArtifactCard";
+import ArtifactPreviewModal from "./ArtifactPreviewModal";
 
 // ─── Agent color generator ──────────────────────────────────────────────
 
@@ -34,7 +37,13 @@ function getAgentColor(agentId?: string): string {
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-function MessageContent({ message }: { message: Message }) {
+function MessageContent({
+  message,
+  onShowArtifact,
+}: {
+  message: Message;
+  onShowArtifact?: (artifactId: string) => void;
+}) {
   switch (message.type) {
     case "deploy":
       return <DeployCard url={message.content} status="running" />;
@@ -59,6 +68,38 @@ function MessageContent({ message }: { message: Message }) {
           suggestion=""
         />
       );
+    case "diff":
+      return <DiffCard content={message.content} />;
+    case "artifact": {
+      const firstArtifact = (message as Message & { artifacts?: Array<{ id: string }> }).artifacts?.[0];
+      return (
+        <ArtifactCardComponent
+          content={message.content}
+          title={firstArtifact?.id ? `Artifact #${firstArtifact.id.slice(0, 8)}` : "Artifact"}
+          onPreview={firstArtifact && onShowArtifact ? () => onShowArtifact(firstArtifact.id) : undefined}
+        />
+      );
+    }
+    case "preview":
+      return (
+        <div
+          className="rounded-lg overflow-hidden text-xs"
+          style={{ border: "1px solid var(--border-light)" }}
+        >
+          <div
+            className="flex items-center gap-2 px-3 py-2 font-medium"
+            style={{ background: "var(--bg-sidebar)", borderBottom: "1px solid var(--border-light)", color: "var(--text-primary)" }}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="var(--accent)" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <span>链接预览</span>
+          </div>
+          <div className="px-3 py-2 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            <MarkdownRenderer content={message.content} />
+          </div>
+        </div>
+      );
     default:
       return <MarkdownRenderer content={message.content} />;
   }
@@ -68,7 +109,7 @@ function MessageContent({ message }: { message: Message }) {
 
 export default function ChatPanel({
   conversationId,
-  onShowArtifact: _onShowArtifact,
+  onShowArtifact,
   onShowAgent: _onShowAgent,
 }: {
   conversationId: string | null;
@@ -76,8 +117,7 @@ export default function ChatPanel({
   onShowAgent?: (id: string) => void;
 }) {
   const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages } = useChat();
-  // Get the first active streaming message for single-agent conversations
-  const streamingMessage = streamingMessages.size > 0 ? [...streamingMessages.values()][0] ?? null : null;
+  const allStreamingMessages = [...streamingMessages.values()];
   const { user } = useAuth();
   const { t } = useI18n();
   const [input, setInput] = useState("");
@@ -88,6 +128,38 @@ export default function ChatPanel({
   const [mentionState, setMentionState] = useState<{ atIndex: number; query: string } | null>(null);
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+  // ─── File attachment handler ─────────────────────────────────────
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAttachmentError(null);
+
+    if (file.size > MAX_FILE_SIZE) {
+      setAttachmentError(`文件超过 5MB 限制 (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const markdownImage = `![${file.name}](${dataUrl})`;
+      setInput((prev) => (prev ? `${prev}\n${markdownImage}` : markdownImage));
+      setAttachmentError(null);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    };
+    reader.onerror = () => {
+      setAttachmentError("文件读取失败");
+    };
+    reader.readAsDataURL(file);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   // ─── Message edit / delete state ─────────────────────────────────
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
@@ -96,6 +168,13 @@ export default function ChatPanel({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   // ─── Reply state ────────────────────────────────────────────────
+  const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(null);
+
+  function handleShowArtifact(artifactId: string) {
+    setPreviewArtifactId(artifactId);
+    onShowArtifact?.(artifactId);
+  }
+
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const replyTargetMessage = replyTargetId
     ? messages.find((m) => m.id === replyTargetId) ?? null
@@ -118,7 +197,7 @@ export default function ChatPanel({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingMessage, scrollToBottom]);
+  }, [messages, allStreamingMessages, scrollToBottom]);
 
   // ─── @mention detection ─────────────────────────────────────────
   useEffect(() => {
@@ -183,6 +262,31 @@ export default function ChatPanel({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  }
+
+  // ─── Message action handlers ──────────────────────────────────
+  async function handleRegenerate(messageId: string) {
+    if (!conversationId) return;
+    try {
+      setStreamError(null);
+      await api.post(
+        `/api/conversations/${conversationId}/messages/${messageId}/regenerate`,
+      );
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string };
+      setStreamError(apiErr.message || "Regeneration failed");
+    }
+  }
+
+  async function handlePin(messageId: string) {
+    if (!conversationId) return;
+    try {
+      await api.post(
+        `/api/conversations/${conversationId}/messages/${messageId}/pin`,
+      );
+    } catch {
+      // silent
     }
   }
 
@@ -354,7 +458,7 @@ export default function ChatPanel({
               {t("chat").loadingMessages}
             </span>
           </div>
-        ) : messages.length === 0 && !streamingMessage ? (
+        ) : messages.length === 0 && allStreamingMessages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
               {t("chat").emptyMessages}
@@ -439,12 +543,12 @@ export default function ChatPanel({
                       >
                         {variant === "contact" && (
                           <>
-                            <button title="Fork" onClick={() => {}}>
+                            <button title="Fork" onClick={() => handlePin(msg.id)}>
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2" />
                               </svg>
                             </button>
-                            <button title="重新生成" onClick={() => {}}>
+                            <button title="重新生成" onClick={() => handleRegenerate(msg.id)}>
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                               </svg>
@@ -530,7 +634,7 @@ export default function ChatPanel({
                           </div>
                         </div>
                       ) : (
-                        <MessageContent message={msg} />
+                        <MessageContent message={msg} onShowArtifact={handleShowArtifact} />
                       )}
                     </div>
 
@@ -599,9 +703,10 @@ export default function ChatPanel({
               );
             })}
 
-            {/* Streaming message */}
-            {streamingMessage && (
+            {/* Streaming messages (supporting multiple agents) */}
+            {allStreamingMessages.map((sm) => (
               <div
+                key={sm.id}
                 className="flex gap-2.5"
                 style={{
                   maxWidth: "88%",
@@ -616,19 +721,19 @@ export default function ChatPanel({
                     width: "28px",
                     height: "28px",
                     borderRadius: "50%",
-                    background: getAgentColor(streamingMessage.senderId),
+                    background: getAgentColor(sm.senderId),
                     fontSize: "10px",
                     marginTop: "4px",
                   }}
                 >
-                  {(contacts?.find((c) => c.id === streamingMessage.senderId)?.name ?? streamingMessage.senderId ?? "?")[0]?.toUpperCase()}
+                  {(contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "?")[0]?.toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <div
                     className="flex items-center gap-1 mb-1"
                     style={{ fontSize: "10px", color: "var(--text-secondary)", fontWeight: 500 }}
                   >
-                    {contacts?.find((c) => c.id === streamingMessage.senderId)?.name ?? streamingMessage.senderId}
+                    {contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId}
                   </div>
                   <div
                     style={{
@@ -644,13 +749,13 @@ export default function ChatPanel({
                     }}
                   >
                     <span>
-                      {streamingMessage.content}
+                      {sm.content}
                       <span className="streaming-cursor" />
                     </span>
                   </div>
                 </div>
               </div>
-            )}
+            ))}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -674,15 +779,13 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Typing Indicator — only when actively streaming */}
-      {streamingMessage && (
+      {/* Typing Indicator — show for all actively streaming agents */}
+      {allStreamingMessages.length > 0 && (
         <TypingIndicator
-          agents={[
-            {
-              name: contacts?.find((c) => c.id === streamingMessage.senderId)?.name ?? streamingMessage.senderId ?? "Agent",
-              color: getAgentColor(streamingMessage.senderId),
-            },
-          ]}
+          agents={allStreamingMessages.map((sm) => ({
+            name: contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "Agent",
+            color: getAgentColor(sm.senderId),
+          }))}
         />
       )}
 
@@ -724,6 +827,24 @@ export default function ChatPanel({
           </div>
         )}
 
+        {/* Attachment error */}
+        {attachmentError && (
+          <div
+            className="mb-2 px-3 py-2 rounded-lg flex items-center gap-2"
+            style={{
+              animation: "msgIn 0.35s ease forwards",
+              background: "rgba(201,58,58,0.08)",
+              border: "1px solid rgba(201,58,58,0.2)",
+              color: "var(--red)",
+            }}
+          >
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <span className="text-xs">{attachmentError}</span>
+          </div>
+        )}
+
         {/* Input box */}
         <div
           className="flex items-end gap-2"
@@ -761,6 +882,36 @@ export default function ChatPanel({
               }}
             />
           )}
+
+          {/* Attachment button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-shrink-0 flex items-center justify-center border-none cursor-pointer"
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "var(--radius-sm)",
+              background: "none",
+              color: "var(--text-tertiary)",
+              fontSize: "14px",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--accent-light)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "none"; }}
+            title="上传文件 (最大 5MB)"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf,.txt,.md,.json,.csv"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
 
           <textarea
             ref={textareaRef}
@@ -800,6 +951,13 @@ export default function ChatPanel({
         </div>
 
       </div>
+
+      {previewArtifactId && (
+        <ArtifactPreviewModal
+          artifactId={previewArtifactId}
+          onClose={() => setPreviewArtifactId(null)}
+        />
+      )}
     </div>
   );
 }
