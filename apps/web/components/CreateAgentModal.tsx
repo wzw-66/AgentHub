@@ -2,11 +2,6 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api-client";
-import { useI18n } from "@/lib/i18n";
-import { useRipple } from "@/hooks/useRipple";
-
-type AgentProvider = "Claude" | "OpenCode" | "Custom";
-
 interface CreateAgentModalProps {
   onClose: () => void;
   onCreated: () => void;
@@ -24,9 +19,6 @@ export default function CreateAgentModal({ onClose, onCreated }: CreateAgentModa
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const { addRipple, renderRipples } = useRipple();
 
   const isCustom = provider === "Custom";
 

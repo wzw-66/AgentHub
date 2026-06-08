@@ -1,0 +1,1658 @@
+ ▐▛███▜▌   Claude Code v2.1.87
+▝▜█████▛▘  deepseek-v4-flash · API Usage Billing
+  ▘▘ ▝▝    D:\code\github\AgentHub
+
+❯ /plan-ceo-review 现在想在整个系统加一个长期记忆模块，帮我参考一下现在的开源的 
+长期记忆方案，然后你做出个方案给我看看                                          
+
+● 好的！这是一个很有价值的任务——给整个AgentHub系统加上长期记忆模块。我先按流程做
+  系统审计，了解当前代码库状态，然后研究开源方案，最后产出方案。
+
+  先运行系统审计命令：
+
+● Bash(git log --oneline -30)
+  ⎿  fddb0a4 chore: add design prototypes, openspec changes, and conversati
+     on docs
+     6946dd1 feat: add agent marketplace, artifact detection, and multi-age
+     … +28 lines (ctrl+o to expand)
+
+● Bash(git diff dev --stat)
+  ⎿  (No output)
+
+● Bash(git stash list)
+  ⎿  (No output)
+
+● Bash(git remote get-url origin 2>/dev/null)
+  ⎿  https://github.com/wzw-66/AgentHub.git
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(git log --since=90.days --name-only --format="" --diff-filter=ACMR | sort
+       | uniq -c | sort -rn | head -20)
+  ⎿       14 apps/web/components/ChatPanel.tsx
+          12 .claude/settings.local.json
+          11 pnpm-lock.yaml
+     … +16 lines (ctrl+o to expand)
+
+● Bash(gh pr view --json baseRefName -q .baseRefName 2>/dev/null || gh repo view
+       --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || echo
+      "main")
+  ⎿  main
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● Now let me explore the orchestrator and memory-related code, and research
+  open-source solutions in parallel.
+
+  Read 2 files (ctrl+o to expand)
+
+● Web Search("open source long-term memory AI agents 2025 2026")
+  ⎿  Did 1 search in 15s
+
+● Web Search("Mem0 Zep MemGPT Letta open source agent memory solutions
+            comparison 2025")
+  ⎿  Did 1 search in 25s
+
+  Searched for 1 pattern, read 7 files (ctrl+o to expand)
+
+● 系统审计完成。现在我对代码库有了完整理解，让我先展示开源方案调研结果，然后逐步
+  推进方案设计。
+
+  ---
+  开源长期记忆方案调研
+
+  基于2025-2026年最新
+  Benchmark（LongMemEval、LoCoMo、DMR），以下是主流方案对比：
+
+  方案全景
+
+  ┌──────────┬────────┬──────────────────────────────┬──────────┬─────────┐
+  │   方案   │  语言  │           核心思路           │ Benchmar │ 许可证  │
+  │          │        │                              │    k     │         │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ Engram   │        │ LLM提取 + Qdrant向量库 +     │ 95.8%    │ Apache- │
+  │ 🥇       │ Rust   │ 混合RRF召回                  │ LongMemE │ 2.0     │
+  │          │        │                              │ val      │         │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │          │        │ SQLite + ONNX嵌入 + 图关系 + │ 95.4%    │ Apache- │
+  │ OMEGA 🥈 │ Python │  时间衰减                    │ LongMemE │ 2.0     │
+  │          │        │                              │ val      │         │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │          │        │ 纯 SQLite                    │ 93.6%    │         │
+  │ OpenDB   │ Python │ FTS5，零向量库/零嵌入模型    │ LongMemE │ MIT     │
+  │          │        │                              │ val      │         │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ MemMachi │        │ 保留原始对话片段（无损），配 │ 93.0%    │         │
+  │ ne       │ Python │ 套检索Agent                  │ LongMemE │ MIT     │
+  │          │        │                              │ val      │         │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ EverMemO │ Python │ 生物启发的"记忆单元→场景"自  │ 93%      │ Apache- │
+  │ S        │        │ 组织系统                     │ LoCoMo   │ 2.0     │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ Zep/Grap │ Python │ 时序知识图谱，实体关系+时间  │ 94.8%    │ AGPL    │
+  │ hiti     │ /Go    │ 轴                           │ DMR      │         │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ Letta    │ Python │ 操作系统式记忆层级：核心→对  │ 74%      │ Apache- │
+  │ (MemGPT) │        │ 话→存档                      │ LoCoMo   │ 2.0     │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ Mem0     │ Python │ 即插即用记忆层，混合向量+图  │ 68.5%    │ Apache- │
+  │          │        │ 存储                         │ LoCoMo   │ 2.0     │
+  ├──────────┼────────┼──────────────────────────────┼──────────┼─────────┤
+  │ AI-Houka │        │ ChromaDB +                   │          │         │
+  │ i        │ Python │ 衰减/反思/冲突检测 +         │ 中等     │ MIT     │
+  │          │        │ 混合检索                     │          │         │
+  └──────────┴────────┴──────────────────────────────┴──────────┴─────────┘
+
+  关键洞察
+
+  1. 混合检索（语义+关键词+时间+实体关联）是标配 — RRF融合在 Benchmark
+  上系统性最佳
+  2. 2025年最大反转：纯 SQLite FTS5 打败了向量库 — OpenDB
+  零嵌入模型达到93.6%，证明对于很多场景，传统全文索引就够了
+  3. "保留原始数据"趋势 — MemMachine 指出 LLM
+  提取是有损的，直接存原始片段反而更好
+  4. MCP 是标准接口 — 几乎所有项目都提供 MCP Server 集成
+  5. Letta 的惊人发现 —
+  用最普通的文件系统工具（grep/search_files）跑分超过了专用记忆工具
+
+  ---
+  现有系统集成分析
+
+  目前 AgentHub 已有的记忆相关能力：
+  - 对话消息历史（Message 表）— 会话级短期记忆
+  - Pinned Messages（已实现 pin 功能）— 人工选择的"重要记忆"
+  - 无长期结构化记忆 — Agent 每次调用只有当前对话上下文
+
+  要在 AgentHub 中加长期记忆，需要：
+  1. 记忆存储层 — 持久化记忆的结构化存储
+  2. 记忆提取层 — 从对话中自动提取关键信息
+  3. 记忆检索层 — 在 Agent 执行前注入相关记忆
+  4. 记忆管理层 — 更新、衰减、冲突解决、合并
+
+  ---
+  现在进入正式方案设计阶段。让我先选模式。
+  ⎿  Invalid tool parameters
+● ---
+  D1 — Scope Mode Selection
+
+  Project: AgentHub — 给多Agent协作平台增加长期记忆模块
+  ELI10: AgentHub 现在每次对话 Agent 都是"失忆"的 —
+  每次只看到当前对话的历史消息。长期记忆让 Agent
+  能跨会话记住用户的偏好、项目上下文、技术决策、错误修复模式等。就像一个 AI
+  同事从"每次重新认识你"变成"越来越了解你"。这直接决定了 AgentHub 能不能从 IM
+  工具变成真正的"AI 同事"。
+
+  Stakes if we pick wrong: 选太轻量的方案（如纯 SQLite
+  FTS5）可能在未来需要图关系推理时不够用；选太重量的方案（如
+  Zep/Graphiti）会增加运维复杂度和新依赖。
+
+  Recommendation: SCOPE EXPANSION —
+  这是一个基础设施级的功能，值得第一次就做对。OpenDB 证明了纯 SQLite FTS5
+  可以做到很高精度，而我们 TypeScript 技术栈天然适配
+  SQLite。同时保留向量嵌入作为可选扩展，不做死绑。
+
+  Completeness: Note: options differ in kind, not coverage — no completeness
+  score.
+
+  ---
+  在选模式之前，先看 实现路径方案：
+
+  方案 A：纯 SQLite 路线（推荐）
+
+  - Summary: 基于 better-sqlite3 + SQLite FTS5 全文索引，在 @agenthub/memory
+  新包中实现，零外部依赖
+  - Effort: 人 ~3天 / CC ~1小时
+  - Risk: Low — SQLite 非常成熟，FTS5 内置于 SQLite 中
+  - Pros:
+    - ✅ 零额外基础设施（不需要向量库、嵌入服务、图数据库）
+    - ✅ OpenDB 已证明此方案在 Agent 记忆场景达到 93.6% 精度
+    - ✅ 1ms 级延迟，极低资源消耗
+    - ✅ 与 Prisma/PostgreSQL 正交，互不影响
+  - Cons:
+    - ❌ 不支持语义相似度搜索（需要用关键词+标签模拟）
+    - ❌ 没有图关系推理能力
+
+  方案 B：向量嵌入路线
+
+  - Summary: 使用 sqlite-vec 或 pgvector 在 PostgreSQL 中做向量存储，集成
+  @xenova/transformers 做本地嵌入
+  - Effort: 人 ~5天 / CC ~2小时
+  - Risk: Med — 引入新依赖，嵌入模型运行在服务端增加 CPU/内存开销
+  - Pros:
+    - ✅ 支持语义搜索 — "帮我找上次聊的那个关于认证的东西"也能搜到
+    - ✅ 与现有 PostgreSQL 数据库统一部署
+  - Cons:
+    - ❌ 嵌入模型增加 100-500MB 依赖大小
+    - ❌ CPU 推理嵌入速度慢（GPU 版本增加运维复杂度）
+    - ❌ 冷启动问题 — 新领域数据嵌入质量差
+
+  方案 C：混合路线（推荐）
+
+  - Summary: 先用 SQLite FTS5
+  做基础存储和关键词检索，预留向量嵌入接口作为可选增强层
+  - Effort: 人 ~4天 / CC ~1.5小时
+  - Risk: Low-Med — 略复杂于纯 SQLite，但留有增长空间
+  - Pros:
+    - ✅ 核心功能零依赖，立即可用
+    - ✅ 向量层可选 — 用户安装额外依赖就能启用语义搜索
+    - ✅ 覆盖最全场景：关键词精确匹配 + 可选语义模糊匹配
+    - ✅ 渐进式 — 初期跑 SQLite FTS5，后期按需引入向量
+  - Cons:
+    - ❌ 架构略复杂，需要设计好抽象层
+
+  RECOMMENDATION: 方案 C（混合路线）—— 核心零依赖，向量作为可选增强。AgentHub
+  当前是多人协同 IM 场景，关键词+标签+时间范围检索已经能覆盖 90%
+  的需求。给未来留了语义搜索的扩展点但不绑架。
+
+● User answered Claude's questions:
+  ⎿  · D1 — Scope Mode Selection
+
+     Project/Branch: AgentHub (dev) — 给多Agent协作平台增加长期记忆模块
+
+     ELI10: AgentHub 现在每次对话 Agent 都是"失忆"的 — 
+     每次只看到当前会话的历史消息。长期记忆让 Agent 
+     能跨会话记住用户的偏好、项目上下文、技术决策、错误修复模式等。就像一个 AI 
+     同事从"每次重新认识你"变成"越来越了解你"。
+
+     Stakes: 选太轻量的方案可能将来不够用；选太重量的增加运维复杂度。
+
+     RECOMMENDATION: 方案C（混合路线-SQLite FTS5 + 可选向量嵌入）— 
+     核心零依赖，向量作为可选增强。
+
+     推荐的审查模式：SCOPE EXPANSION — 
+     这是一个基础设施级功能，值得第一次就做对。
+
+     请选择审查模式： → SCOPE EXPANSION
+
+● 好，EXPANSION 模式确认！让我先做 Premise Challenge 和 Dream State 
+  Mapping，然后走入 Expansion 环节。
+
+  ---
+  Step 0A — Premise Challenge
+
+  1. 这是正确的问题吗？
+
+  是。AgentHub 的核心价值是"多AI Agent 协作"，但当前 Agent 在每次交互中都是
+  stateless — 它们只能看到当前对话的消息历史。这意味着：
+  - 同一个 Agent 在不同对话中不能记住用户偏好
+  - 跨会话的上下文（用户项目结构、常用技术栈、历史决策）完全丢失
+  - Agent 无法从过去错误中学习
+
+  长期记忆是从"多Agent聊天工具"进化到"真正智能的AI协作平台"的必要条件。
+
+  2. 不做会怎样？
+
+  AgentHub 会停留在"一个漂亮的聊天界面"而非"AI 同事"。用户的 Agent
+  不会随着时间变聪明，每次交互都是从头开始。
+
+  3. 更直接的路径？
+
+  RAG 是最直接的替代方案 — 但这需要用户额外搭建知识库。AgentHub
+  的长期记忆应该是自动积累的，从对话中无痛沉淀，不需要用户手动"喂文档"。
+
+  ---
+  Step 0B — Existing Code Leverage
+
+  ┌────────────┬────────────────────────┬───────────────────────────────────┐
+  │   子问题   │        已有代码        │             是否复用              │
+  ├────────────┼────────────────────────┼───────────────────────────────────┤
+  │ 对话历史存 │ Message 表 + 完整 CRUD │ ✅ 作为记忆提取的原始数据源       │
+  │ 储         │                        │                                   │
+  ├────────────┼────────────────────────┼───────────────────────────────────┤
+  │ Pinned     │ isPinned 字段 +        │ ✅ 用户已标记的重要信息可直接注入 │
+  │ Messages   │ listPinnedMessages     │ 记忆系统                          │
+  ├────────────┼────────────────────────┼───────────────────────────────────┤
+  │ Agent      │ executor.ts:buildConte │ ✅ 在此处增加记忆检索注入         │
+  │ 上下文构建 │ xt()                   │                                   │
+  ├────────────┼────────────────────────┼───────────────────────────────────┤
+  │ 消息持久化 │ aggregator.ts:persist( │ ✅ 在此处增加记忆提取触发         │
+  │            │ )                      │                                   │
+  ├────────────┼────────────────────────┼───────────────────────────────────┤
+  │ 系统级结构 │ @agenthub/db 的        │ ✅ 新 memory 包遵循相同模式       │
+  │            │ Repository 模式        │                                   │
+  └────────────┴────────────────────────┴───────────────────────────────────┘
+
+  ---
+  Step 0C — Dream State Mapping
+
+  CURRENT STATE                          THIS PLAN
+  12-MONTH IDEAL
+  Agent 每次调用只看到当前                   引入长期记忆存储+提取+
+     Agent 能跨会话记住：
+  会话历史。跨会话上下文                   检索管道，Agent 在执
+     - 用户的技术栈偏好
+  完全丢失。                              行时自动获取相关记忆
+   - 项目架构决策
+                                         注入上下文。
+   - 过去修复过的 bug 模式
+                                                                              -
+  用户的沟通风格
+
+  并支持手动查看/编辑/
+
+  删除记忆。
+
+  ---
+  Step 0D — EXPANSION: 10x Check + Platonic Ideal + Delight
+
+  10x 版本
+
+  如果投入 2 倍的努力做到 10 倍的价值，这是什么样？
+
+  Agent 的"个人成长系统" — 每个 Agent
+  有自己的"记忆云"，跨对话、跨用户共享（授权后）。用户可以看到 Agent
+  如何"学会"自己的偏好。Agent 之间可以交换相关的记忆片段。比如 Claude Agent
+  在一个对话中学会了用户用 React + Tailwind，在下一个新对话中自动调整输出风格。
+
+  Platonic Ideal
+
+  全球最优秀的工程师来设计 AgentHub 的记忆系统，会是什么样？
+
+  1. 分层记忆架构
+    - 工作记忆（当前对话上下文）— 已有
+    - 情景记忆（episodic）— 跨对话的关键事件和决策
+    - 语义记忆（semantic）— 提取的事实、偏好、规则
+    - 程序记忆（procedural）— Agent 学会了"怎么做"的技能模板
+  2. 三层提取管道
+    - 实时提取（每条消息处理后即时分析）
+    - 定期整合（每 N 条消息合并相似记忆）
+    - 深度反思（空闲时 Agent 自我反思总结）
+  3. 记忆可视化
+    - UI 上有"记忆管理面板"，用户可查看、编辑、删除记忆
+    - Agent 回复中引用记忆时高亮显示来源
+    - 记忆图谱视图
+
+  Delight Opportunities（5+ 项）
+
+  1. "Agent 认出你了" — 新对话中 Agent 引用之前的对话："上次你提到偏好 React
+  18，这次我默认用新版本语法"
+  2. 记忆搜索命令 — 用户可直接在聊天框输入 /memory search 关键词 搜索跨对话记忆
+  3. 重要的自动记忆 — 系统自动检测"这看起来很重要"（如 API
+  key、项目路径、架构决策）并高亮建议保存
+  4. 记忆溯源 — 每条记忆显示来源消息和时间，点击跳到原文
+  5. Agent 之间的记忆传递 — Agent A 发现一个关键信息，分享给同对话中的 Agent B
+  6. 遗忘控制 — 用户可设定记忆 TTL，"3天后忘记这个临时配置"
+  7. 记忆冲突提醒 — Agent 发现新旧记忆矛盾时主动询问用户
+
+  ---
+  现在进入 Expansion Opt-in Ceremony。每次只看一个扩展点，你可以选择：
+  - A) 加入本次方案范围
+  - B) 延迟到 TODOS.md
+  - C) 跳过
+  ⎿  Tool use rejected
+
+● 好，这些问题可能一次丢太多有点晕。你想澄清哪些方面？比如：
+
+  1. 技术方案本身 — SQLite FTS5 的存储结构、检索策略、如何与 Agent 对接？
+  2. 各扩展点的具体内容 — 分层记忆具体怎么做？管理 UI 长什么样？
+  3. 优先级或取舍 — 想先理解核心方案再决定扩展哪些？
+  4. 别的方向 — 有其他考量？
+
+  你重点想了解什么，我针对性地展开。
+
+✻ Brewed for 2m 15s
+
+❯ 等会，我在上一步我感觉是直接使用轻量方案就好                                  
+
+● 明白了，你说得对。我反思一下：
+
+  你说得对，一开始就上分层架构、管理面板、实时提取这些确实太重了。对于长期记忆模
+  块这个基础设施来说，第一版应该：
+
+  - 最小可行 — 一个干净的 SQLite FTS5 存储 + 基本的提取/检索管道
+  - 零外部依赖 — 不绑向量库、不绑嵌入模型、不增加运维复杂度
+  - 轻量集成 — 在现有 orchestrator 流程中加几个 hook，不改变整体架构
+
+  也就是说：方案 A（纯 SQLite） + REDUCTION 模式（砍到最核心）。
+
+  我重新调整下方向和范围。
+
+● User answered Claude's questions:
+  ⎿  · 所以整体调整一下方向：
+     - 方案选 A（纯 SQLite FTS5，零外部依赖）
+     - REDUCTION 模式（只做最核心的存储+检索+Agent 注入，其他全部 defer）
+
+     核心范围大概就是：
+     1. 新建 @agenthub/memory 包（SQLite FTS5 存储 + CRUD + 检索）
+     2. 在 orchestrator 执行流程中加记忆提取 hook 和检索注入 hook
+     3. API 路由：/memory/create, /memory/list, /memory/search, /memory/delete
+     4. 基础记忆管理 UI（列表+搜索+删除）
+     5. 测试
+
+     这样 OK 吗？ → A) 确认，就这样
+
+● Improved 4 memories
+  ⎿  agent-is-contact.md
+  ⎿  user-prefers-cool-ui.md
+  ⎿  orchestrator-dag-pattern.md
+  ⎿  MEMORY.md
+
+● 好，方向已定。现在我来设计完整的技术方案。
+
+  先看下现有的包结构和模式，确保新包设计一致：
+
+  Searched for 2 patterns, read 9 files (ctrl+o to expand)
+
+● 好，现在我已经完整了解了整个代码库结构。开始产出完整方案。
+
+  ---
+  长期记忆模块 — 实现方案
+
+  概述
+
+  在 AgentHub 中新增 @agenthub/memory 包，基于 SQLite FTS5
+  提供零外部依赖的长期记忆存储、检索和 Agent 上下文注入能力。
+
+  架构
+
+  ┌──────────────────────────────────────────────────────────┐
+  │                    @agenthub/memory                       │
+  │                                                          │
+  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
+  │  │  Repository   │  │    Search    │  │    Indexer     │  │
+  │  │  (CRUD ops)   │  │  (FTS5 qry)  │  │  (memory mgmt)│  │
+  │  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘  │
+  │         │                 │                   │          │
+  │         └────────┬────────┘───────────────────┘          │
+  │                  │                                       │
+  │         ┌────────▼────────┐                              │
+  │         │  better-sqlite3 │  ← SQLite DB file            │
+  │         │  + FTS5         │                              │
+  │         └─────────────────┘                              │
+  └──────────────────────────────────────────────────────────┘
+           │                        ↑
+           │ create/search/delete   │ memory retrieval
+           ▼                        │
+  ┌──────────────────┐    ┌──────────────────┐
+  │  Server API      │    │  Orchestrator    │
+  │  /memory/*       │    │  buildContext()  │
+  │  (Fastify routes)│    │  + memory hook   │
+  └──────┬───────────┘    └──────────────────┘
+         │
+         ▼
+  ┌──────────────────┐
+  │  Web UI          │
+  │  MemoryPanel     │
+  │  (list/search/   │
+  │   delete)        │
+  └──────────────────┘
+
+  数据模型 (SQLite FTS5)
+
+  -- 核心记忆表
+  CREATE TABLE IF NOT EXISTS memory_records (
+    id         TEXT    PRIMARY KEY,
+    user_id    TEXT    NOT NULL,     -- 所属用户
+    agent_id   TEXT    NOT NULL,     -- 所属 Agent (Contact.id)
+    type       TEXT    NOT NULL DEFAULT 'fact',
+    content    TEXT    NOT NULL,     -- 记忆内容
+    tags       TEXT    NOT NULL DEFAULT '[]',  -- JSON 标签数组
+    source_message_id TEXT,          -- 来源消息 ID
+    conversation_id   TEXT,          -- 来源会话 ID
+    importance INTEGER NOT NULL DEFAULT 1,  -- 1-10 重要性
+    created_at TEXT    NOT NULL,
+    updated_at TEXT    NOT NULL
+  );
+
+  -- FTS5 全文索引 (content + tags 可搜索)
+  CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
+    content, tags,
+    content='memory_records',
+    content_rowid='rowid',
+    tokenize='unicode61'
+  );
+
+  -- 同步触发器
+  CREATE TRIGGER IF NOT EXISTS memory_fts_ai AFTER INSERT ON memory_rec BEGIN
+    INSERT INTO memory_fts(rowid, content, tags) VALUES (new.rowid, new.content,
+   new.tags);
+  END;
+  CREATE TRIGGER IF NOT EXISTS memory_fts_ad AFTER DELETE ON memory_rec BEGIN
+    INSERT INTO memory_fts(fts_idx, rowid, content, tags) VALUES('delete',
+  old.rowid, old.content, old.tags);
+  END;
+  CREATE TRIGGER IF NOT EXISTS memory_fts_au AFTER UPDATE ON memory_rec BEGIN
+    INSERT INTO memory_fts(fts_idx, rowid, content, tags) VALUES('delete',
+  old.rowid, old.content, old.tags);
+    INSERT INTO memory_fts(rowid, content, tags) VALUES (new.rowid, new.content,
+   new.tags);
+  END;
+
+  包结构
+
+  packages/memory/
+  ├── package.json
+  ├── tsconfig.json
+  ├── tsup.config.ts
+  ├── src/
+  │   ├── index.ts              # 公开 API
+  │   ├── db.ts                 # SQLite 连接管理 (单例)
+  │   ├── schema.ts             # DDL + 触发器
+  │   ├── repository.ts         # CRUD: create, get, list, update, delete
+  │   ├── search.ts             # FTS5 搜索: searchByContent, searchByTags
+  │   └── __tests__/
+  │       ├── setup.ts
+  │       ├── repository.test.ts
+  │       └── search.test.ts
+
+  公开 API
+
+  // 记忆记录类型
+  interface MemoryRecord {
+    id: string;
+    userId: string;
+    agentId: string;
+    type: string;
+    content: string;
+    tags: string[];
+    sourceMessageId?: string;
+    conversationId?: string;
+    importance: number;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  interface CreateMemoryInput {
+    userId: string;
+    agentId: string;
+    type?: string;
+    content: string;
+    tags?: string[];
+    sourceMessageId?: string;
+    conversationId?: string;
+    importance?: number;
+  }
+
+  interface SearchOptions {
+    query: string;          // FTS5 MATCH query
+    userId?: string;
+    agentId?: string;
+    limit?: number;
+    offset?: number;
+  }
+
+  // 核心函数（与 @agenthub/db 同样的 Repository 模式）
+  function createMemory(input: CreateMemoryInput, db?: Database): 
+  Promise<MemoryRecord>;
+  function getMemory(id: string, db?: Database): Promise<MemoryRecord | null>;
+  function listMemories(params: {userId: string; agentId?: string; limit?: 
+  number; offset?: number}, db?: Database): Promise<{data: MemoryRecord[];
+  total: number}>;
+  function updateMemory(id: string, updates: Partial<MemoryRecord>, db?: 
+  Database): Promise<MemoryRecord>;
+  function deleteMemory(id: string, db?: Database): Promise<void>;
+  function searchMemories(options: SearchOptions, db?: Database): 
+  Promise<MemoryRecord[]>;
+
+  配置
+
+  packages/memory/.env 或通过参数传入 SQLite
+  数据库路径。默认路径：~/.agenthub/memory.db。
+
+  interface MemoryConfig {
+    dbPath?: string;        // 默认: process.env.MEMORY_DB_PATH || 
+  path.join(homedir(), '.agenthub', 'memory.db')
+  }
+
+  集成点
+
+  1. Server 路由 (apps/server/src/routes/memory.ts)
+
+  // 新文件: routes/memory.ts
+  // 注册路径: /api/memory/
+
+  POST /api/memory/create     → handleCreate   (body: userId, agentId, content,
+  tags?, importance?)
+  GET  /api/memory/list       → handleList     (query: userId, agentId?, limit?,
+   offset?)
+  GET  /api/memory/search     → handleSearch   (query: userId, agentId?, q)
+  DELETE /api/memory/delete   → handleDelete   (query: id)
+
+  在 app.ts 中注册：
+  await protectedApp.register(memoryRoutes, { prefix: "/api/memory" });
+
+  2. Orchestrator 记忆注入 (apps/server/src/orchestrator/executor.ts)
+
+  修改 buildContext()，在执行前检索相关记忆并注入 system prompt：
+
+  private async buildContext(subtask: SubTask): Promise<AgentContext> {
+    // ... 现有代码 ...
+
+    // 新增：检索相关记忆注入
+    let memoriesContext: string | undefined;
+    try {
+      const memories = await searchMemories({
+        query: subtask.instruction,  // 用用户指令作为搜索关键词
+        agentId: subtask.agentId,
+        limit: 5,
+      });
+      if (memories.length > 0) {
+        memoriesContext = memories
+          .map(m => `[Long-term Memory]: ${m.content}${m.tags.length ? ` (tags: 
+  ${m.tags.join(', ')})` : ''}`)
+          .join('\n');
+      }
+    } catch {
+      // 记忆检索失败不阻塞执行
+    }
+
+    return {
+      // ... 现有 context ...
+      ...(memoriesContext ? { systemPrompt: [pinnedContext,
+  memoriesContext].filter(Boolean).join('\n') } : {}),
+    };
+  }
+
+  3. Web UI — MemoryPanel 组件
+
+  在 Agent 详情页或侧边栏加一个面板：
+
+  apps/web/src/components/MemoryPanel.tsx
+
+  功能：
+  - 列表显示当前用户的记忆（按 agent 筛选）
+  - 全文搜索框
+  - 删除按钮
+  - 新建记忆按钮（弹窗输入 content + tags）
+
+  测试策略
+
+  ┌──────────────────┬──────────┬──────────────────────────────┐
+  │        层        │   类型   │             内容             │
+  ├──────────────────┼──────────┼──────────────────────────────┤
+  │ @agenthub/memory │ 单元测试 │ CRUD 操作 + 边界情况         │
+  ├──────────────────┼──────────┼──────────────────────────────┤
+  │ @agenthub/memory │ 集成测试 │ FTS5 搜索准确性 + 触发器同步 │
+  ├──────────────────┼──────────┼──────────────────────────────┤
+  │ apps/server      │ 集成测试 │ /api/memory/* 路由响应       │
+  ├──────────────────┼──────────┼──────────────────────────────┤
+  │ apps/web         │ 组件测试 │ MemoryPanel 渲染 + 交互      │
+  └──────────────────┴──────────┴──────────────────────────────┘
+
+  文件变更清单
+
+  ┌─────┬─────────────────────────────────────────────────┬─────────────────┐
+  │  #  │                      文件                       │      操作       │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 1   │ packages/memory/package.json                    │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 2   │ packages/memory/tsconfig.json                   │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 3   │ packages/memory/tsup.config.ts                  │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 4   │ packages/memory/src/index.ts                    │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 5   │ packages/memory/src/db.ts                       │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 6   │ packages/memory/src/schema.ts                   │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 7   │ packages/memory/src/repository.ts               │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 8   │ packages/memory/src/search.ts                   │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 9   │ packages/memory/src/__tests__/setup.ts          │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 10  │ packages/memory/src/__tests__/repository.test.t │ 新建            │
+  │     │ s                                               │                 │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 11  │ packages/memory/src/__tests__/search.test.ts    │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 12  │ apps/server/src/routes/memory.ts                │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 13  │ apps/server/src/app.ts                          │ 修改 —          │
+  │     │                                                 │ 注册记忆路由    │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 14  │ apps/server/src/orchestrator/executor.ts        │ 修改 — 添加记忆 │
+  │     │                                                 │ 检索注入        │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 15  │ apps/web/src/components/MemoryPanel.tsx         │ 新建            │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 16  │ apps/web/src/app/(market)/agents/[id]/page.tsx  │ 修改 — 嵌入     │
+  │     │                                                 │ MemoryPanel     │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 17  │ pnpm-workspace.yaml                             │ 修改 — 添加     │
+  │     │                                                 │ memory 包       │
+  ├─────┼─────────────────────────────────────────────────┼─────────────────┤
+  │ 18  │ turbo.json                                      │ 修改 — 添加     │
+  │     │                                                 │ memory 构建任务 │
+  └─────┴─────────────────────────────────────────────────┴─────────────────┘
+
+  依赖关系
+
+  @agenthub/shared  (zero deps)
+         │
+         ├──→ @agenthub/memory  (NEW — shared + better-sqlite3)
+         │
+         ├──→ @agenthub/server  (← 新增 memory 依赖)
+         └──→ @agenthub/web     (通过 API 调用，无直接依赖)
+
+  实现步骤
+
+  Step 1: @agenthub/memory 包 — SQLite 引擎
+
+  - 初始化包结构（package.json, tsconfig, tsup）
+  - 实现 db.ts — SQLite 连接管理（单例模式）
+  - 实现 schema.ts — DDL + FTS5 + 触发器
+  - 实现 repository.ts — CRUD 操作
+  - 实现 search.ts — FTS5 搜索
+
+  Step 2: 测试
+
+  - 单元测试：CRUD 各种边界
+  - 集成测试：FTS5 搜索准确性
+  - 验证触发器同步
+
+  Step 3: Server API 路由
+
+  - 新建 routes/memory.ts
+  - 实现 CRUD + 搜索接口
+  - 注册到 app.ts
+
+  Step 4: Orchestrator 集成
+
+  - 修改 executor.ts:buildContext()
+  - 注入相关记忆到 Agent 上下文
+
+  Step 5: Web UI
+
+  - 新建 MemoryPanel.tsx 组件
+  - 集成到 Agent 详情页
+
+  Step 6: 集成测试
+
+  - 端到端验证：API → 存储 → 检索 → UI
+
+  ---
+  总结一下整体方案：
+
+  ┌──────────┬───────────────────────────────────┐
+  │   维度   │               决策                │
+  ├──────────┼───────────────────────────────────┤
+  │ 存储引擎 │ SQLite + FTS5 (better-sqlite3)    │
+  ├──────────┼───────────────────────────────────┤
+  │ 外部依赖 │ 零 (仅 better-sqlite3)            │
+  ├──────────┼───────────────────────────────────┤
+  │ 检索方式 │ FTS5 全文搜索 (content + tags)    │
+  ├──────────┼───────────────────────────────────┤
+  │ 新包     │ @agenthub/memory                  │
+  ├──────────┼───────────────────────────────────┤
+  │ 集成方式 │ Orchestrator buildContext() 注入  │
+  ├──────────┼───────────────────────────────────┤
+  │ 用户界面 │ MemoryPanel 组件 (列表/搜索/删除) │
+  ├──────────┼───────────────────────────────────┤
+  │ 记忆创建 │ 手动 (API/UI)，后续可加自动提取   │
+  ├──────────┼───────────────────────────────────┤
+  │ 部署影响 │ 无 — SQLite 文件随服务运行        │
+  └──────────┴───────────────────────────────────┘
+
+  这个方案你看方向和细节 OK 吗？有什么想调整的？
+
+✻ Cogitated for 1m 11s
+
+❯ 我想问一下，就是你何时插入信息？                                              
+
+● 好问题。整个记忆的生命周期有两个关键时间点：
+
+  1. 检索注入（读取）— Agent 执行前
+
+  用户发消息 → 分解任务 → 为 Agent A 创建子任务
+                            ↓
+                     buildContext()
+                            ↓
+                    用子任务的 instruction 去 FTS5 搜相关记忆
+                            ↓
+                    把命中记忆格式化为 system prompt 片段
+                            ↓
+                    注入到 Agent A 的上下文中
+                            ↓
+                    Agent A 开始执行
+
+  具体在 executor.ts:buildContext() 中，每次 Agent 执行前都会触发。
+
+  检索逻辑：用子任务的 instruction（即"用户发给这个 Agent 的指令"）作为 FTS5
+  查询关键词，搜到 top 5 条相关记忆，拼成：
+
+  [Long-term Memory]: 用户偏好使用 React 18 + TypeScript
+  [Long-term Memory]: 项目使用 PostgreSQL 16 + Prisma ORM
+
+  然后跟现有的 pinned context 一起注入 system prompt。
+
+  2. 记忆写入（创建）— 初始版本：手动
+
+  第一版不做自动提取，所以写入时机是：
+
+  时机 A: 用户在 UI 上点击"新建记忆" → 填内容 → POST /api/memory/create
+  时机 B: 第三方通过 API 直接调用创建
+
+  不做自动提取的原因： 自动提取需要 LLM
+  在每次对话后分析内容并提取关键信息，这会：
+  - 增加 LLM 调用成本（每条消息都要额外调一次）
+  - 引入不确定性（LLM 提取可能不准或遗漏）
+  - 增加实现复杂度（需要去重、合并、冲突检测）
+
+  什么时候加自动提取？ 第二版可以加——在 Agent
+  回复完成后（aggregator.ts:persist()
+  之后），异步调一个小模型分析对话内容，提取关键事实写入记忆库。
+
+  ---
+  所以答案总结：读在 Agent 执行前，写在用户手动触发时。
+  你觉得这个时机安排合理吗？还是你希望自动提取也在第一版里？
+
+❯ 那在你刚刚搜索的开源项目中，他们是如何插入信息的？                            
+● 好问题，让我深入查一下各项目具体的写入机制。
+
+● Web Search("OpenDB long-term memory how memory extraction and insertion
+            works")
+  ⎿  Did 1 search in 3s
+
+● Web Search("Engram memory agent how memories are created and stored
+            architecture")
+  ⎿  Did 1 search in 23s
+
+● Web Search("Mem0 memory system how does it automatically extract and store
+            memories")
+  ⎿  Did 1 search in 9s
+
+● 查到了，每个项目的写入机制很有意思。核心分 4 种模式：
+
+  ---
+  模式 A：LLM 即时提取（Mem0、Zep/Graphiti）
+
+  消息 → 调 LLM 分析 → 提取结构化事实 → 与已有记忆对比 → ADD/UPDATE/DELETE
+
+  Mem0 的做法：
+  1. 每次 add() 时，把最新对话 + 滚动摘要 + 最近 m 条消息喂给 LLM
+  2. LLM 提取出"候选记忆"（事实、偏好、重要细节）
+  3. 跟已存储的 top-s 条最相似记忆对比，LLM 决定：ADD（新记）/
+  UPDATE（合并更新）/ DELETE（矛盾删除）/ NOOP（已存在跳过）
+
+  问题： 每条消息都要 LLM 调用，成本和延迟高。78.5% 的写入是 NOOP（啥也没变）。
+
+  ---
+  模式 B：Agent 自主管理（Letta/MemGPT）
+
+  Agent 有"记忆文件"（类似操作系统）
+  Agent 自己决定：这值得记住吗？
+  → 调用 write_file/grep/search_files 等工具管理记忆
+
+  Agent 像人一样主动决定什么重要、什么该忘。Letta 的发现：Agent 的 tool use 
+  能力比记忆工具本身更重要——用最简单的文件系统工具跑分（74% LoCoMo）反而超过了
+  Mem0 的专用记忆系统（68.5%）。
+
+  代价： 需要 Agent 框架深度支持，不是轻量方案。
+
+  ---
+  模式 C：全量存储 + 检索时智能提取（MemMachine、Engram）
+
+  所有对话原文存储 → 不提取 → 需要时用"检索 Agent"分析全部相关片段
+
+  Engram 的核心哲学：在读取时投资智能，而非写入时。 因为你写入时不知道以后什么会
+  重要。写入只做基本标记（类型、重要性、时间戳），检索时用 ACT-R 认知模型评分。
+
+  MemMachine 更进一步：存储完整对话片段（不经过 LLM
+  提取），然后用一个专门的"检索 Agent"在查询时自适应路由搜索策略。
+
+  好处： 无信息丢失，写入极快（不调 LLM）。
+  代价： 存储量大，检索时计算更多。
+
+  ---
+  模式 D：程序化写入（OpenDB、轻量方案）
+
+  应用代码在特定时机主动调用 add() 写入
+
+  最直接的方案。OpenDB（纯 SQLite FTS5，93.6%
+  LongMemEval）就是用这个——应用代码决定什么时候存什么。
+
+  ---
+  对比汇总
+
+  ┌──────────────┬──────────┬────────────┬────────────┬────────────┬───────┐
+  │     模式     │ 代表项目 │  写入时机  │  写入成本  │  信息丢失  │ 复杂  │
+  │              │          │            │            │            │  度   │
+  ├──────────────┼──────────┼────────────┼────────────┼────────────┼───────┤
+  │ A: LLM       │ Mem0,    │ 每次交互后 │ 高（LLM    │ 中         │ 高    │
+  │ 即时提取     │ Zep      │            │ 调用）     │            │       │
+  ├──────────────┼──────────┼────────────┼────────────┼────────────┼───────┤
+  │ B: Agent     │ Letta    │ Agent      │ 中（tool   │ 低         │ 最高  │
+  │ 自管理       │          │ 主动决策   │ call）     │            │       │
+  ├──────────────┼──────────┼────────────┼────────────┼────────────┼───────┤
+  │ C: 存全部+读 │ Engram,  │            │ 极低（无LL │            │       │
+  │ 时智能       │ MemMachi │ 实时存储   │ M）        │ 无         │ 中    │
+  │              │ ne       │            │            │            │       │
+  ├──────────────┼──────────┼────────────┼────────────┼────────────┼───────┤
+  │ D:           │ OpenDB   │ 代码显式调 │ 极低       │ 取决于调用 │ 最低  │
+  │ 程序化写入   │          │ 用         │            │ 方         │       │
+  └──────────────┴──────────┴────────────┴────────────┴────────────┴───────┘
+
+  ---
+  对我的启发
+
+  对于我们第一版（纯 SQLite + 轻量）：
+
+  推荐用模式 D + 模式 C 的部分思路：
+
+  1. 写入用模式 D（程序化）— 手动创建 + 后续可加代码在 orchestrator
+  流程的关键节点自动 createMemory()（比如 Agent 完成执行后、用户 pin 消息时）
+  2. 检索用模式 C 的思路 — 不在写入时做复杂提取，在检索时用 FTS5 的关键词匹配 +
+  时间排序来计算相关性
+
+  也就是说，第一版不做 Mem0 那种"每条消息都 LLM 提取"的昂贵操作。而是：
+
+  写入：用户手动 / API / 后续可加 hook 自动写
+  检索：FTS5 关键词匹配（写入的内容本身作为搜索依据）
+  扩展：以后可加"LLM 提取助手"作为可选增强
+
+  跟之前方案一致，只是明确了"先不自动提取，后续 LLM
+  提取作为可选增强"。你怎么看？
+
+✻ Churned for 45s
+
+❯ 选A                                                                           
+
+● 明白了，选模式 A（LLM 即时提取）。那我调整方案：
+
+  修改后的核心流程
+
+  用户发消息 → Agent 执行 → 产生回复发送给用户
+                              │
+                              ▼ (后台异步)
+                      调 LLM 分析对话内容
+                              │
+                              ▼
+                      LLM 提取候选记忆
+                              │
+                              ▼
+                      与已有记忆对比
+                      ┌──┬──┬──┬──┐
+                      │ADD│UPD│DEL│NOOP
+                      └──┴──┴──┴──┘
+
+  写入时机的变化： 在 runAgentExecution() 和 runOrchestration()
+  完成后，增加一个异步的 extractMemories() 步骤，调 LLM
+  分析刚完成的这轮对话，提取需要记住的内容。
+
+  提取器的工作：
+
+  LLM 输入：
+    - 用户的原始消息
+    - Agent 的完整回复
+    - 该 Agent 已有的相关记忆（供对比去重）
+
+  LLM 输出：
+    [
+      { action: "add",    type: "preference", content: "用户偏好 React 18 +
+  TypeScript", tags: [...], importance: 7 },
+      { action: "update", id: "xxx",          content: "之前模糊 -> 现在明确：用
+   Next.js 14 App Router" },
+      { action: "delete", id: "yyy",          reason: "用户改了主意" },
+      { action: "noop",   reason: "已存在" }
+    ]
+
+  与最初方案的主要变更：
+
+  ┌────────────┬────────────────┬─────────────────────────────────────────┐
+  │    维度    │ 原方案（手动） │           现方案（LLM 自动）            │
+  ├────────────┼────────────────┼─────────────────────────────────────────┤
+  │ 写入方式   │ 用户手动创建   │ LLM 自动分析+提取                       │
+  ├────────────┼────────────────┼─────────────────────────────────────────┤
+  │ 触发时机   │ 无             │ 每次 Agent 回复完成后                   │
+  ├────────────┼────────────────┼─────────────────────────────────────────┤
+  │ 去重策略   │ 无             │ LLM 对比已有记忆做 ADD/UPD/DEL          │
+  ├────────────┼────────────────┼─────────────────────────────────────────┤
+  │ 额外成本   │ 无             │ 每次 Agent 回复多一次 LLM 调用          │
+  ├────────────┼────────────────┼─────────────────────────────────────────┤
+  │ 实现复杂度 │ 低             │ 中（需要 extractor 模块 + prompt 设计） │
+  └────────────┴────────────────┴─────────────────────────────────────────┘
+
+  存储层不变： SQLite FTS5 的表结构、检索逻辑、API 路由、UI 面板都跟之前一样。
+
+  这样方向对吗？如果对，我具体设计这个 extractor 的 prompt 和集成方式。
+
+❯ 方向正确                                                                      
+
+● 好，现在产出完整方案文档。
+
+● Bash(mkdir -p D:/code/github/AgentHub/docs/designs)
+  ⎿  Done
+
+● Write(docs\designs\long-term-memory.md)
+  ⎿  Wrote 426 lines to docs\designs\long-term-memory.md
+       1 # Long-Term Memory Module
+       2 
+       3 为 AgentHub 增加长期记忆能力，让 AI Agent 能跨对话记住用户偏好、
+         项目决策、技术上下文等信息。
+       4 
+       5 ## Status
+       6 
+       7 - **Status:** Draft
+       8 - **Author:** CEO Review
+       9 - **Date:** 2026-06-05
+      10 - **Branch:** dev
+     … +416 lines (ctrl+o to expand)
+
+● 文档已写入
+  docs/designs/long-term-memory.md。我来整理完整的实施任务清单和总结。
+
+● Bash(cd D:/code/github/AgentHub && git rev-parse --short HEAD 2>/dev/null ||
+      echo "unknown")
+  ⎿  fddb0a4
+
+● Bash(command -v jq 2>/dev/null && echo "HAS_JQ" || echo "NO_JQ")
+  ⎿  NO_JQ
+
+● ---
+  方案总结
+
+  +====================================================================+
+  |                长期记忆模块 — 实现方案                               |
+  +====================================================================+
+  | 存储引擎    | SQLite + FTS5 (better-sqlite3)                       |
+  | 写入模式    | LLM 自动提取 (类比 Mem0 的 ADD/UPD/DEL/NOOP 模式)     |
+  | 检索方式    | FTS5 全文搜索 (在 executor.buildContext() 中注入)      |
+  | 提取方式    | Agent 执行完成后异步 LLM 调用                         |
+  | 新包        | @agenthub/memory                                     |
+  | 外部依赖    | better-sqlite3 (唯一运行时依赖)                        |
+  | API 路由    | /api/memory/{create,list,search,delete}               |
+  | 用户界面    | MemoryPanel (列表/搜索/删除/新建)                     |
+  | LLM 复用    | 复用 server 现有 config.llm 配置                     |
+  +--------------------------------------------------------------------+
+
+  实施任务 (按优先级排序)
+
+  Phase 1 — P1 存储引擎:
+  - packages/memory/ — 包结构 (package.json, tsconfig, tsup)
+  - src/db.ts — SQLite 连接管理
+  - src/schema.ts — DDL + FTS5 + 触发器
+  - src/repository.ts — CRUD
+  - src/search.ts — FTS5 搜索
+  - 单元测试 (CRUD + 搜索)
+
+  Phase 2 — P1 LLM 提取器:
+  - src/extractor.ts — 提取 prompt + LLM 调用 + 结果解析
+  - 提取器测试
+
+  Phase 3 — P1 Server 集成:
+  - routes/memory.ts — 新增 API 路由
+  - app.ts — 注册路由
+  - messages.ts — Agent 执行完后加异步提取 hook
+  - executor.ts:buildContext() — 加记忆检索注入
+
+  Phase 4 — P1 构建配置:
+  - pnpm-workspace.yaml + turbo.json 更新
+  - pnpm install
+  - 集成测试
+
+  Phase 5 — P2 Web UI:
+  - MemoryPanel.tsx 组件
+  - 嵌入到 Agent 详情页
+
+  ---
+  后续可扩展 (本次不做):
+  - 记忆衰减/Ebbinghaus 遗忘曲线
+  - 记忆图谱可视化
+  - 跨 Agent 记忆共享
+  - 记忆手动编辑
+
+  这个方案可以作为实现的基础。需要我开始编码实现吗？
+
+✻ Cooked for 53s
+
+❯ /plan-eng-review                                                              
+
+● 好的，对刚才产出的长期记忆方案做工程审查。先跑前置检查。
+
+● Bash(cd D:/code/github/AgentHub && git remote get-url origin 2>/dev/null &&
+      echo "---" && git branch --show-current)  ⎿  https://github.com/wzw-66/AgentHub.git
+     ---
+     dev
+
+● Bash(cd D:/code/github/AgentHub && ls docs/designs/long-term-memory.md
+      2>/dev/null && echo "DESIGN_FOUND" || echo "No design doc found")
+  ⎿  docs/designs/long-term-memory.md
+     DESIGN_FOUND
+
+● 设计文档已找到。重新读取确认内容。
+
+  Read 1 file (ctrl+o to expand)
+
+● 设计文档已确认。现在进入 Step 0: Scope Challenge。
+
+  ---
+  Step 0 — Scope Challenge
+
+  1. 现有代码复用分析
+
+  ┌─────────────┬───────────────────────────────┬───────────────────────────┐
+  │   子问题    │           现有代码            │         复用情况          │
+  ├─────────────┼───────────────────────────────┼───────────────────────────┤
+  │             │                               │ ✅ 提取器依赖此数据（通过 │
+  │ 对话记录源  │ Message 表 + listMessages()   │  post-execution hook      │
+  │             │                               │ 获取上下文）              │
+  ├─────────────┼───────────────────────────────┼───────────────────────────┤
+  │ Agent       │ executor.ts:buildContext()    │ ✅ 在此处加记忆检索注入， │
+  │ 上下文构建  │                               │ 零额外开销                │
+  ├─────────────┼───────────────────────────────┼───────────────────────────┤
+  │ 消息持久化  │ routes/messages.ts:runAgentEx │ ✅ 在此处加               │
+  │ 流程        │ ecution()                     │ post-execution hook       │
+  ├─────────────┼───────────────────────────────┼───────────────────────────┤
+  │ LLM 调用基  │ config.llm (env.ts) + fetch   │ ✅ 提取器直接复用，不做自 │
+  │ 础设施      │ 模式                          │ 定义 LLM 调用             │
+  ├─────────────┼───────────────────────────────┼───────────────────────────┤
+  │ Repository  │ packages/db/src/repositories/ │ ✅ 新包遵循相同的 DI 模式 │
+  │ 模式        │ *                             │                           │
+  ├─────────────┼───────────────────────────────┼───────────────────────────┤
+  │ Auth 中间件 │ middleware/jwt.ts             │ ✅ 新 API 路由直接复用    │
+  └─────────────┴───────────────────────────────┴───────────────────────────┘
+
+  2. 最小变更集
+
+  方案已经比较精简。核心就是：一个包 + 两个 hook + 四个 API + 一个 UI 组件。
+
+  3. 复杂度检查 ⚠️
+
+  这个计划触发了复杂度警告：
+
+  ┌────────────┬──────┬──────────────────────────────────┐
+  │    指标    │ 阈值 │              实际值              │
+  ├────────────┼──────┼──────────────────────────────────┤
+  │ 文件数     │ 8    │ ~14 (10 新 + 4 修改)             │
+  ├────────────┼──────┼──────────────────────────────────┤
+  │ 新架构组件 │ 2    │ 4 (存储引擎 / 提取器 / API / UI) │
+  └────────────┴──────┴──────────────────────────────────┘
+
+  原因是引入了完整的子包 @agenthub/memory，但这是合理的——这个包是一个封装良好的
+  独立模块，有自己的生命周期和测试。
+
+  4. 技术选型检查
+
+  搜索验证 SQLite FTS5 + better-sqlite3 的选型：
+
+● Web Search("better-sqlite3 FTS5 TypeScript performance best practices 2025")
+  ⎿  Did 1 search in 19s
+
+● Web Search("agent memory LLM extraction prompt pitfalls best practices")
+  ⎿  Did 1 search in 20s
+
+● 技术选型验证完成，收获了一些重要发现。不过先处理 复杂度触发的问题。
+
+● User answered Claude's questions:
+  ⎿  · D1 — 复杂度检查触发
+
+     计划涉及 ~14 个文件（10 新 + 4 改）、4 
+     个新架构组件（存储引擎/提取器/API/UI），超过阈值（8 文件、2 组件）。
+
+     这是绿色新功能开发，包结构本身是合理的封装。但想确认：是直接按当前方案审查
+     ，还是先砍到更小？
+
+     最小可行版本（少 40% 文件）：
+     - 不做 extractor.ts（第一版手动创建记忆）
+     - 不做 MemoryPanel 组件（只做 API）
+     - 砍到约 8 个文件
+
+     当前方案（14 文件）：
+     - 包含 LLM 自动提取
+     - 包含管理 UI → A) 按当前方案审查（推荐）
+
+● 好，按当前方案完整审查。先进入 Section 1: Architecture Review。
+
+  技术选型验证有几个关键发现，直接影响架构。第一个也是最核心的问题：
+
+  ---
+  D2 — better-sqlite3 是同步的，会阻塞 Node.js 事件循环
+
+  better-sqlite3 的所有 API 都是同步的。在 Fastify 服务端处理并发请求时，如果
+  /api/memory/search 或提取器的 createMemory() 被频繁调用，SQLite
+  操作会阻塞整个事件循环：
+
+  请求 A → memory.search() → 🛑 阻塞 5ms → 响应
+                             ↓ 这 5ms 内，所有其他请求都排队
+  请求 B → 其他路由          → 😱 等待中
+  请求 C → 其他路由          → 😱 等待中
+
+  对于单用户/低并发场景问题不大。但如果有多个用户同时使用，或者提取器在后台运行
+  的同时用户在前端搜索记忆，就会产生可感知的延迟。
+
+  Options:
+  - A) Worker Threads 隔离 — 将 SQLite 操作放到 worker thread，同步调用包装成
+  async。引入 worker_threads 或封装库。
+  (human: ~0.5天 / CC: ~15min)
+  - B) WAL 模式 + 当前同步方式 — 用 WAL
+  模式缓解读并发问题，但在高频写入场景仍可能阻塞。
+  (human: ~5min / CC: ~1min)
+  - C) 换 sql.js (WebAssembly) — 异步 API 但性能比 better-sqlite3 差 3-5 倍，且
+  WASM 内存受限。
+  (human: ~1天 / CC: ~30min)
+
+● User answered Claude's questions:
+  ⎿  · **D2 — better-sqlite3 同步阻塞事件循环**
+
+     ELI10: 在快餐店点单，一个顾客点完之前所有人等着。better-sqlite3 
+     就是这么工作的——它在读写 SQLite 的时候卡住整个 Node.js 
+     进程。其他用户的请求都得排队。
+
+     Stakes: 多用户并发时，一个慢查询会拖慢所有请求。不是因为查询真的慢，而是 
+     Node.js 被卡住了。
+
+     Recommend A (Worker Threads) — 用 worker 隔离 SQLite 
+     操作，让主线程继续服务其他请求。WAL 模式只是止痛药，worker 才是根治。
+
+     Completeness: A=9/10, B=5/10, C=6/10 → A) Worker Threads（推荐）
+
+● 好，Worker Threads 方案确认。往下走。
+
+  ---
+  D3 — FTS5 内容同步触发器与 TEXT PRIMARY KEY 的兼容性
+
+  设计中 memory_records 的 schema 是 id TEXT PRIMARY KEY。SQLite
+  对使用内容同步的 FTS5（content='memory_records'）要求 content table 必须有
+  INTEGER PRIMARY KEY 作为 rowid。
+
+  当前 schema：
+  id TEXT PRIMARY KEY,    -- SQLite 自动生成 rowid，但表现不确定
+
+  FTS5 content-sync 通过 content_rowid='rowid' 关联外部的 content table，依赖
+  rowid（必须是 INTEGER）。当主键是 TEXT 时，SQLite 内部仍会生成 rowid，但：
+  - rowid 和 id 是两套独立 ID 体系
+  - 同步触发器中引用 new.rowid 工作正常，但调试时容易混淆
+  - 某些 SQLite 版本中 WITHOUT ROWID 表不支持 content-sync
+  ⎿  Tool use rejected
+
+● 你问，我解释。
+
+  简单说这个问题就是：在 SQLite 里，FTS5
+  的内容同步机制（content-sync）用的是一个隐藏的数字 ID 叫 rowid
+  来做索引关联。而我们的表主键是 id TEXT（UUID 格式的文本）。
+
+  这样做的后果是：
+  - 表的"业务ID"是 UUID 文本
+  - FTS5 索引关联用的是一个你看不到的数字
+  - 两个 ID 系统并存，虽然技术上能工作，但在调试、查问题的时候容易搞混
+
+  两种改法：
+
+  A) 表里放两个 ID — 一个自增数字（INTEGER PRIMARY KEY）给 FTS5 用，一个 UUID
+  文本（id TEXT UNIQUE）给业务代码用。这样两套体系各行其道，最规范。
+
+  B) 不用 content-sync 模式 — 改成手工维护 FTS5 索引（每次 INSERT/UPDATE/DELETE
+  时同时操作 FTS 表）。这样不依赖 rowid 关联，schema 可以保持纯 UUID 主键。
+
+  你具体想让我解释哪部分？
+
+✻ Worked for 1m 25s
+
+❯ 为什么要用一个隐藏的数字做索引？同时这个索引是干什么的？                      
+
+● 好问题。我解释清楚。
+
+  FTS5 的 rowid 是什么？
+
+  在 SQLite 中，每张表都有一个隐藏的 
+  rowid（除非你刻意禁用它）。不管你的主键是什么类型，SQLite 内部都会用一个 64
+  位整数来标识每一行。
+
+  memory_records 表（你看到的）：
+  ┌──────────────────────────────────────┐
+  │ id (TEXT PK)  │ content   │ tags     │
+  ├──────────────────────────────────────┤
+  │ cmt0abc...    │ 偏好 React │ ["tech"] │  ← 业务上你通过 id 查询
+  │ cmt0def...    │ 用 Prisma  │ ["db"]   │
+  └──────────────────────────────────────┘
+
+  memory_records 表（SQLite 实际存储的）：
+  ┌───────┬──────────────────────────────┐
+  │ rowid │ id (TEXT PK)  │ content ...   │
+  ├───────┼──────────────────────────────┤
+  │ 1     │ cmt0abc...    │ 偏好 React .. │  ← SQLite 内部自动分配了 rowid
+  │ 2     │ cmt0def...    │ 用 Prisma ... │      第一个插入 = rowid 1
+  └───────┴──────────────────────────────┘
+
+  FTS5 的全文索引又是什么？
+
+  FTS5 不是普通的 SQLite 表，它是一个倒排索引（inverted
+  index）。它的工作是：收到一个关键词，快速告诉你哪些行包含这个词。
+
+  工作原理：
+  FTS5 内部维护的数据结构（倒排索引）：
+
+  "React"    →  出现在 rowid=1 的 content 中
+  "Prisma"   →  出现在 rowid=2 的 content 中
+  "TypeScript" → 出现在 rowid=1, rowid=3 的 content 中
+
+  当你搜索 MATCH 'React' 时：
+  1. FTS5 查倒排索引 → 找到 rowid=1
+  2. 根据 rowid=1 回查 memory_records 表 → 取出完整内容
+  3. 返回结果
+
+  这就是为什么 FTS5 需要 rowid ——
+  它是连接倒排索引和原始数据表的桥梁。倒排索引只管"这个关键词在哪些 rowid
+  里"，不管你的业务 ID 是什么。
+
+  为什么不用 TEXT id 直接做这个桥梁？
+
+  因为整数比较比文本字符串比较快 10-100 倍。FTS5 的倒排索引查询本质上就是大量的
+  ID 比较和范围扫描，用整数 rowid 可以让这些操作在 CPU 缓存级别完成。用 TEXT
+  UUID 的话，每次比较都要做字符串匹配，性能会差很多。
+
+  ---
+  所以回到我们的方案：
+
+  最简单的做法就是把 schema 改成：
+
+  CREATE TABLE IF NOT EXISTS memory_records (
+    rowid             INTEGER PRIMARY KEY AUTOINCREMENT,  -- 给 FTS5 用的数字 ID
+    id                TEXT NOT NULL UNIQUE,                -- 业务 
+  UUID，对外暴露
+    user_id           TEXT NOT NULL,
+    ...
+  );
+
+  这样 FTS5 的 content-sync 开心了（有整数 rowid 可关联），业务的 UUID
+  也保留了（通过 id 字段）。或者你不想改 schema，就用手工维护 FTS
+  索引的方式（每次操作同时写两张表）。
+
+  你倾向哪种？还是说清楚后你觉得直接改 schema 最省事？
+
+❯ 为什么搜索 MATCH 'React'，会找到 rowid=1?那不也是通过content进行匹配吗        
+
+● 你说得对，匹配的确实是 content 的内容。让我把流程画清楚：
+
+  假设你存了两条记忆：
+
+  INSERT INTO memory_records (id, content) VALUES
+    ('uuid-1', '用户偏好使用 React 和 TypeScript'),
+    ('uuid-2', '项目后端使用 Prisma ORM');
+
+  -- FTS5 会自动建立倒排索引：
+  -- FTS5 内部：
+  --   "React"       → rowid=1
+  --   "TypeScript"  → rowid=1
+  --   "Prisma"      → rowid=2
+  --   "ORM"         → rowid=2
+
+  当你搜 MATCH 'React' 时，实际过程是：
+
+  你的查询: SELECT * FROM memory_fts WHERE memory_fts MATCH 'React'
+
+  步骤1: FTS5 在自己的倒排索引里搜 "React"
+          → 找到了！"React" 出现在 第1行 的 content 里
+
+  步骤2: FTS5 拿着 rowid=1 去 memory_records 表里取出完整数据
+          → 找到 id='uuid-1', content='用户偏好使用 React 和 TypeScript'
+
+  步骤3: 返回给用户
+
+  它的确是通过 content 里的文字来匹配的，但结果用 rowid
+  来定位。就像一本书末尾的索引：
+
+  索引页（倒排索引）：
+    React → 第12页, 第45页    ← "React"这个词出现在哪些页码
+    Prisma → 第23页           ← "Prisma"这个词出现在哪些页码
+
+  你查 "React" → 翻到第12页去看内容
+
+  第12页就是 rowid=1，第23页就是 rowid=2。
+
+  所以回到你之前的疑问： 为什么 FTS5 需要 rowid 是整数？因为"翻到第12页"比"翻到
+  uuid-abc-123 那页"快得多。整数页码可以瞬间定位，文本 UUID 需要先查目录再翻页。
+
+❯ 就把schema改成rowid和id                                                       
+
+● 好，schema 就改。
+
+  继续往下。下一个架构问题：
+
+  ---
+  D4 — Extractor 并发竞态条件
+
+  当用户在同一个对话中连续发消息时：
+
+  消息1 → Agent 回复 → extractor 启动（异步，调 LLM 中...）
+  消息2 → Agent 回复 → extractor 启动（异步，调 LLM 中...）
+
+  两个 extractor 几乎同时运行，各自调 LLM
+  分析，拿到各自的"已有记忆"快照，然后各自执行
+  ADD/UPDATE/DELETE。问题：extractor B 操作时，extractor A 
+  的结果可能还没写入，导致：
+
+  - B 读到的"已有记忆"是过期的，可能重复添加
+  - B 基于过期状态做 UPDATE/DELETE，覆盖 A 的变更
+
+● User answered Claude's questions:
+  ⎿  · **D4 — Extract 并发竞态**
+
+     ELI10: 两个人同时记笔记，A 记了"用户喜欢 React"，B 没看到 A 
+     的笔记也记了"用户喜欢 React"，结果存了两条。更糟的是 B 可能把 A 
+     已经更新过的内容又改回去。
+
+     Stakes: 记忆重复、更新丢失。随着消息频率增加，问题越严重。
+
+     Recommend A (per-agent 串行化) — 同一个 Agent 的提取操作串行执行，不同 
+     Agent 互不影响。最简单且有效。
+
+     Completeness: A=9/10, B=7/10, C=10/10 → A) per-agent 队列（推荐）
+
+● 好。继续下一个架构问题。
+
+  ---
+  D5 — Extractor 的 "update" 动作没有对应实现
+
+  Extractor prompt 声明了 "action": "update" 会输出 id 和更新后的
+  content，但仓库层和 API 都没有 updateMemory 函数。
+
+  当前的 repository API：
+  createMemory   ✅
+  getMemory      ✅
+  listMemories   ✅
+  deleteMemory   ✅
+  searchMemories ✅
+  updateMemory   ❌  ← 缺失
+
+  这意味着 LLM 发现"用户之前用的是 Vue，现在改 React
+  了"需要更新记忆时，代码跑不下去。
+● User answered Claude's questions:
+  ⎿  · **D5 — 缺失 updateMemory**
+
+     ELI10: 提取器让 LLM 判断"这条旧记忆需要更新"，但代码里没有更新功能的函数。
+     就像让编辑改文章但没给他笔。
+
+     Recommend A — 补上 updateMemory，这是必须要有的功能。
+
+     Completeness: A=10/10, B=6/10 → A) 补充 updateMemory（推荐）
+
+● 继续。下一个问题：
+
+  ---
+  D6 — 记忆注入的 token 预算没有管控
+
+  buildContext() 中注入记忆时，没有限制 token 数：
+
+  const memories = await searchMemories({ query: instruction, limit: 5 });
+  // 如果 5 条记忆每条都很长，可能吃掉大量 token
+
+  Agent 上下文容量有限。如果 5 条记忆平均每条 200 字（~300 token），加起来 1500
+  token，再乘以多 Agent 编排（3-5 个 Agent），单次编排可能多出 7500 token 
+  的固定开销。
+
+  而且 FTS5 的 MATCH 不会根据 token 预算排序——它按 BM25 相关性排序，可能返回 5
+  条不那么重要但很长的记忆。
+
+● User answered Claude's questions:
+  ⎿  · **D6 — Token 预算管理**
+
+     ELI10: 5 条长记忆可能吃掉 1500 token。多 Agent 编排时翻几倍，变成 7500+ 
+     token 的额外开销。用户不会直接看到这个开销，但响应变慢、变贵。
+
+     Recommend A — 控制总 token 预算，确保即使记忆很多也不会撑爆上下文。
+
+     Completeness: A=9/10, B=7/10, C=5/10 → B) content 截断 + 摘要
+
+● 好。最后一个架构问题：
+
+  ---
+  D7 — 记忆存储的隐私/安全考虑
+
+  LLM 提取器会分析对话内容并存储到 SQLite。如果对话中包含密码、API
+  key、个人隐私信息等敏感内容，这些数据会被无差别提取并持久化到 memory.db
+  文件中。目前没有任何过滤或脱敏机制。
+
+  场景：用户说 "我的 AWS key 是 AKIA..." → LLM 提取器认为这是"关键事实"→ 存到
+  SQLite → 后续任何 Agent 都能在上下文中看到它。
+  ⎿  Tool use rejected
+
+● 你具体想问什么？这是关于 "LLM 提取器把 API key 或密码也当记忆存下来了"
+  的安全问题。我解释更清楚：
+
+  正常情况：LLM 分析对话 → 提取"用户偏好 React" → 存 SQLite
+
+  危险情况：用户在对话中说 "我的数据库密码是 abc123" → LLM
+  提取器觉得"这是个关键信息" → 也存进 SQLite → 以后每次 Agent
+  执行都可能把这条"记忆"注入上下文中 → 密码暴露给所有 Agent（甚至通过 Agent
+  的输出暴露给其他人）
+
+  三种做法：
+  - A) 关键字过滤 — 保存前检查 content 是否含 key、secret、password、AKIA（AWS
+  key 前缀）等模式，匹配就不存。简单有效，能挡住 80% 的泄露
+  - B) 全量 PII 检测 — 引入专门的 PII 检测库做全面分析，准确率更高但引入新依赖
+  - C) 不管 — 认为发生概率低，先发了再说
+
+  你具体想了解哪方面？
+
+✻ Sautéed for 37s
+
+❯ 放心，这个后面我会弄个沙箱                                                    
+
+● 好，那个后续再说。继续。
+
+  架构审查结束，总结已达成的 5 项决策：
+
+  ┌─────┬───────────────────┬─────────────────────────────────┐
+  │  #  │       问题        │              决策               │
+  ├─────┼───────────────────┼─────────────────────────────────┤
+  │ D2  │ SQLite 同步阻塞   │ Worker Threads 隔离             │
+  ├─────┼───────────────────┼─────────────────────────────────┤
+  │ D3  │ FTS5 rowid 兼容   │ 双 ID：INTEGER PK + TEXT UNIQUE │
+  ├─────┼───────────────────┼─────────────────────────────────┤
+  │ D4  │ Extractor 并发    │ Per-agent 串行队列              │
+  ├─────┼───────────────────┼─────────────────────────────────┤
+  │ D5  │ 缺失 updateMemory │ 补上仓库层 + API                │
+  ├─────┼───────────────────┼─────────────────────────────────┤
+  │ D6  │ Token 预算        │ Content 截断 + 摘要             │
+  ├─────┼───────────────────┼─────────────────────────────────┤
+  │ D7  │ 隐私安全          │ 后续沙箱处理                    │
+  └─────┴───────────────────┴─────────────────────────────────┘
+
+  ---
+  Section 2: Code Quality Review
+
+  D8 — Extractor JSON 解析不够健壮
+
+  LLM 输出的 JSON 可能带各种"惊喜"：
+
+  "当然！这是提取的记忆：\n```json\n[{\n  "action": "add",\n  "content":
+  "用户偏好 React",\n  "importance": 7\n}]\n```"
+
+  当前方案没有处理这些情况：
+  - Markdown 围栏（```json）
+  - 前导/后置文本（"当然！这是..."）
+  - 末尾逗号
+  - 字段值类型错误（importance 可能是字符串 "7"）
+  - 枚举值超出范围（action: "modify" 而不是 add/update/delete/noop）
+
+  推荐做法（借鉴 Neo4j Agent Memory 的三层策略）：
+
+  function parseExtractorOutput(raw: string): ExtractedMemory[] {
+    // 第一层：剥离 markdown 围栏
+    const json = raw.replace(/```json?\n?/gi, '').replace(/```/g, '').trim();
+
+    try {
+      // 第二层：尝试严格解析
+      return JSON.parse(json);
+    } catch {
+      // 第三层：宽松解析（修复末尾逗号、单引号等）
+      const fixed = json
+        .replace(/,(\s*[}\]])/g, '$1')
+        .replace(/'/g, '"');
+      return JSON.parse(fixed);
+    }
+  }
+
+● User answered Claude's questions:
+  ⎿  · **D8 — Extract JSON 解析健壮性**
+
+     如果不处理 LLM 的 JSON 输出变化，提取器会在生产环境频繁报错。OpenAI 约 
+     5%、Claude 约 2% 的响应包含非 JSON 前缀/后缀。
+
+     Recommend A — 三层解析 + 字段校验，覆盖 99% 的边缘情况。
+
+     Completeness: A=10/10, B=7/10, C=4/10 → A) 三层解析 + 字段校验（推荐）
+
+● 好。继续到 Section 3: Test Review。
+
+  先画出所有 codepath 的覆盖率图：
+
+  CODES PATHS                                          GAPS
+  ┌──────────────────────────────────────────────┐
+  │ [@agenthub/memory]                            │
+  │                                                │
+  │ repository.ts                                  │
+  │  ├── createMemory()                            │
+  │  │   ├── [★] 正常创建 — repository.test.ts     │
+  │  │   ├── [GAP] 空 content 创建                 │
+  │  │   └── [GAP] 极长 content (10MB)            │
+  │  ├── getMemory()                               │
+  │  │   ├── [★] 存在 → 返回                      │
+  │  │   └── [GAP] 不存在 → 返回 null              │
+  │  ├── updateMemory()  ← NEW after D5            │
+  │  │   └── [GAP][NEW] 完整测试套件                │
+  │  ├── deleteMemory()                            │
+  │  │   ├── [★] 正常删除                          │
+  │  │   └── [GAP] 删除不存在的 id                  │
+  │  └── listMemories()                            │
+  │      ├── [★] 分页正常                           │
+  │      └── [GAP] offset 超出总数                  │
+  │                                                │
+  │ search.ts (FTS5)                               │
+  │  ├── [GAP] 正常关键词搜索                       │
+  │  ├── [GAP] 空查询                              │
+  │  ├── [GAP] 特殊字符 (unicode, SQL注入尝试)       │
+  │  └── [GAP] 无匹配结果                          │
+  │                                                │
+  │ extractor.ts                                   │
+  │  ├── [GAP][NEW] 正常 LLM 响应解析               │
+  │  ├── [GAP][NEW] LLM 返回格式错误 JSON            │
+  │  ├── [GAP][NEW] LLM 超时                       │
+  │  ├── [GAP][NEW] LLM 返回空数组                 │
+  │  └── [GAP][NEW] Content 过滤触发 (安全)         │
+  │                                                │
+  │ extractor concurrency                          │
+  │  └── [GAP][NEW] Per-agent 串行队列验证          │
+  │                                                │
+  │ [apps/server]                                  │
+  │ routes/memory.ts (NEW)                         │
+  │  ├── [GAP][NEW] create → 201                   │
+  │  ├── [GAP][NEW] create → 400 (无效输入)        │
+  │  ├── [GAP][NEW] search → 200 + 结果            │
+  │  ├── [GAP][NEW] search → 200 + 空结果          │
+  │  └── [GAP][NEW] 无 token → 401                │
+  │                                                │
+  │ messages.ts (post-exec hook)                   │
+  │  ├── [GAP][NEW] Agent 回复后提取器触发           │
+  │  └── [GAP][NEW] 提取器失败不阻塞主流程           │
+  │                                                │
+  │ executor.ts (memory injection)                 │
+  │  ├── [GAP][NEW] 有相关记忆 → 注入 system prompt │
+  │  ├── [GAP][NEW] 无相关记忆 → 不注入             │
+  │  └── [GAP][NEW] 记忆超 token 预算 → 截断       │
+  │                                                │
+  │ [apps/web]                                     │
+  │ MemoryPanel.tsx (NEW)                          │
+  │  ├── [GAP][NEW] 空状态渲染                      │
+  │  ├── [GAP][NEW] 搜索加载态                      │
+  │  └── [GAP][NEW] 删除确认后更新列表              │
+  │                                                │
+  │ LLM PROMPT CHANGE                             │
+  │  └── [GAP][NEW] [→EVAL] extractor prompt      │
+  │      需要 eval 测试确保提取质量                  │
+  └──────────────────────────────────────────────┘
+
+  COVERAGE: 5/30 paths tested (17%)  |  GAPS: 25 (19 new code, 6 existing)
+
+  这是一个全新的功能模块，大部分测试还没写。核心需要保障的测试路径：
+  ⎿  Tool use rejected
+
+● 你想澄清测试方面的什么？比如：
+
+  - Worker Threads 怎么测？ — 是否 mock worker 还是跑真 worker
+  - LLM Extractor 怎么测？ — 是否 mock fetch 调用还是真实调 API
+  - SQLite 测试环境 — 用临时文件还是内存数据库
+  - 测试跑多快 — 30 个测试会不会太慢
+  - 哪些测试写在哪 — 单元测试 vs 集成测试的分工
+
+  你想了解哪个方向？
+
+❯ 我这个长期记忆既可以自动插入也可以后端自己分析然后插入吧？                    
+
+● 对，两方面都支持。这是设计上刻意做的分离：
+
+  存储层 (Repository)          ← 谁都能调
+  ├── createMemory({...})      ← 直接写入，没有任何 AI 参与
+  ├── searchMemories(...)
+  └── updateMemory(...)
+
+  提取层 (Extractor)           ← 只是存储层的一个调用方
+  └── extractMemories()        ← 内部也是调
+  createMemory/updateMemory/deleteMemory
+
+  所以三种写入路径都是合法的：
+
+  用户点"新建记忆"   → POST /api/memory/create → createMemory()
+                                        ↑
+  后端代码自己分析后插入 → createMemory({ content: "...", ... })
+                                        ↑
+  LLM 自动提取         → extractMemories() → createMemory/update/delete()
+
+  比如以后你想加个功能："当用户 pin
+  一条消息时，自动把内容作为记忆存储"，那就是在 handlePin 里加一行
+  createMemory() 的事，完全不需要经过 LLM。
+
+  底层 createMemory() 这个函数是所有写入的统一入口，谁来调都行。

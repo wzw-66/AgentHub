@@ -24,9 +24,13 @@ export default function PublishAgentModal({ agent, onClose, onPublished }: Publi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addRipple, renderRipples } = useRipple();
 
+  const providerLabels: Record<string, string> = {
+    claude: "Claude",
+    opencode: "OpenCode",
+    custom: "自定义",
+  };
   const providerLabel = (provider: string): string => {
-    const labels = t("agentInfo").providerLabels;
-    return labels[provider as keyof typeof labels] || provider.toUpperCase();
+    return providerLabels[provider.toLowerCase()] || provider.toUpperCase();
   };
 
   async function handleSubmit(e: React.FormEvent) {

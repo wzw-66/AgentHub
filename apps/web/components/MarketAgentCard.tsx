@@ -23,9 +23,13 @@ interface MarketAgentCardProps {
 export default function MarketAgentCard({ agent, onClick }: MarketAgentCardProps) {
   const { t } = useI18n();
 
+  const providerLabels: Record<string, string> = {
+    claude: "Claude",
+    opencode: "OpenCode",
+    custom: "自定义",
+  };
   const providerLabel = (provider: string): string => {
-    const labels = t("agentInfo").providerLabels;
-    return labels[provider as keyof typeof labels] || provider.toUpperCase();
+    return providerLabels[provider.toLowerCase()] || provider.toUpperCase();
   };
 
   return (
