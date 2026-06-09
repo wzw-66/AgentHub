@@ -278,6 +278,8 @@ export default function Sidebar({ activeConversationId, onSelectConversation }: 
         >
           <AgentManageView
             contacts={contacts}
+            createConversation={createConversation}
+            onSelectConversation={onSelectConversation}
             onRefresh={fetchContacts}
             onBack={() => setSidebarView("chats")}
           />

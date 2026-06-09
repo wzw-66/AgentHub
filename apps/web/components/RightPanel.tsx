@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useChat } from "@/lib/chat-context";
 import { api } from "@/lib/api-client";
@@ -59,6 +59,64 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
+  // ─── Pinned messages state ────────────────────────────────────────────
+  interface PinnedMessage {
+    id: string;
+    content: string;
+    senderId: string;
+    createdAt: string;
+  }
+  const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
+  const fetchPinnedRef = useRef(0);
+
+  // Fetch pinned messages helper
+  const fetchPinned = useCallback(async (convId: string) => {
+    const tick = ++fetchPinnedRef.current;
+    try {
+      const data = await api.get<PinnedMessage[]>(
+        `/api/conversations/${convId}/messages/pinned/list`,
+      );
+      if (tick === fetchPinnedRef.current) {
+        setPinnedMessages(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      if (tick === fetchPinnedRef.current) setPinnedMessages([]);
+    }
+  }, []);
+
+  // Fetch pinned messages on conversation change + auto-poll every 5s + immediate on pin event
+  useEffect(() => {
+    if (!conversationId) { setPinnedMessages([]); return; }
+    fetchPinned(conversationId);
+    const interval = setInterval(() => fetchPinned(conversationId!), 5000);
+
+    // Immediate refresh when a message is pinned/unpinned from ChatPanel
+    function onPinnedChanged(e: Event) {
+      const evt = e as CustomEvent<{ conversationId: string }>;
+      if (evt.detail?.conversationId === conversationId) {
+        fetchPinned(conversationId);
+      }
+    }
+    window.addEventListener("pinned-messages-changed", onPinnedChanged);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("pinned-messages-changed", onPinnedChanged);
+    };
+  }, [conversationId, fetchPinned]);
+
+  async function handleUnpinMessage(messageId: string) {
+    if (!conversationId) return;
+    try {
+      await api.post(
+        `/api/conversations/${conversationId}/messages/${messageId}/pin`,
+      );
+      setPinnedMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } catch {
+      // silently fail
+    }
+  }
 
   async function handleRemoveMember(memberId: string) {
     if (!conversationId) return;
@@ -173,6 +231,63 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
           })}
         </div>
       </div>
+
+      {/* Pinned messages section — always visible above tabs */}
+      {pinnedMessages.length > 0 && (
+        <div
+          className="flex flex-col flex-shrink-0"
+          style={{
+            borderBottom: "1px solid var(--border-light)",
+          }}
+        >
+          <div
+            className="flex items-center gap-1.5 px-4 py-2"
+            style={{
+              fontSize: "10px",
+              color: "var(--text-tertiary)",
+              fontWeight: 500,
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--accent)">
+              <path d="M16 4v12l4 4V4a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-4V4h8z" />
+            </svg>
+            固定消息
+            <span style={{ color: "var(--accent)", fontSize: "10px" }}>{pinnedMessages.length}</span>
+          </div>
+          <div className="flex flex-col px-3 pb-2 gap-1">
+            {pinnedMessages.slice(0, 5).map((pm) => (
+              <div
+                key={pm.id}
+                className="flex items-start gap-2 px-2.5 py-1.5 rounded group"
+                style={{
+                  background: "var(--bg-app)",
+                  border: "1px solid var(--border-light)",
+                  fontSize: "11px",
+                }}
+              >
+                <span className="flex-1 leading-relaxed line-clamp-1" style={{ color: "var(--text-secondary)", wordBreak: "break-all" }}>
+                  {pm.content.slice(0, 80)}{pm.content.length > 80 ? "..." : ""}
+                </span>
+                <button
+                  onClick={() => handleUnpinMessage(pm.id)}
+                  className="flex-shrink-0 flex items-center justify-center rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  style={{ color: "var(--text-tertiary)", background: "none", border: "none" }}
+                  title="取消固定"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {pinnedMessages.length > 5 && (
+              <div style={{ fontSize: "10px", color: "var(--text-tertiary)", textAlign: "center", padding: "2px 0" }}>
+                +{pinnedMessages.length - 5} 条更多...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tab Content */}
       <div

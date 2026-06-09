@@ -315,7 +315,7 @@ export default function ChatPanel({
   onShowAgent?: (id: string) => void;
   onToggleRightPanel?: () => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap, pendingInteraction, respondToInteraction, cancelInteraction } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap, pendingInteraction, respondToInteraction, cancelInteraction, togglePinMessage } = useChat();
   const allStreamingMessages = [...streamingMessages.values()];
   const { user } = useAuth();
   const { t } = useI18n();
@@ -414,6 +414,17 @@ export default function ChatPanel({
     }
     return ids;
   }, [messages, isGroupChat]);
+
+  /** Sender IDs of messages being regenerated — used to suppress duplicate streaming entries. */
+  const regeneratingSenders = useMemo(() => {
+    if (regeneratingIds.size === 0) return new Set<string>();
+    const senders = new Set<string>();
+    for (const id of regeneratingIds) {
+      const msg = messages.find(m => m.id === id);
+      if (msg) senders.add(msg.senderId);
+    }
+    return senders;
+  }, [regeneratingIds, messages]);
 
   // ─── Auto-scroll ────────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
@@ -797,6 +808,7 @@ export default function ChatPanel({
                         letterSpacing: "-0.01em",
                         overflowWrap: "anywhere",
                         wordBreak: "break-all",
+                        position: msg.isPinned ? "relative" as const : undefined,
                         ...(variant === "user"
                           ? {
                               background: "var(--bg-user)",
@@ -816,10 +828,31 @@ export default function ChatPanel({
                               background: "var(--bg-msg-agent)",
                               color: "var(--text-primary)",
                               borderRadius: "4px 16px 16px 16px",
-                              border: "1px solid var(--border-light)",
+                              border: msg.isPinned ? "1px solid var(--accent)" : "1px solid var(--border-light)",
                             }),
                       }}
                     >
+                      {msg.isPinned && (
+                        <div
+                          className="flex items-center justify-center"
+                          style={{
+                            position: "absolute",
+                            top: "-6px",
+                            right: "-6px",
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "50%",
+                            background: "var(--accent)",
+                            color: "#fff",
+                            zIndex: 2,
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                          }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16 4v12l4 4V4a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-4V4h8z" />
+                          </svg>
+                        </div>
+                      )}
                       {isEditing ? (
                         <div className="flex flex-col gap-2">
                           <textarea
@@ -856,14 +889,25 @@ export default function ChatPanel({
                           </div>
                         </div>
                       ) : regeneratingIds.has(msg.id) ? (
-                        <div className="flex items-center gap-2 py-1" style={{ minHeight: "24px" }}>
-                          <div className="flex items-center gap-1">
-                            {[0, 1, 2].map((i) => (
-                              <span key={i} className="typing-dot" />
-                            ))}
-                          </div>
-                          <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>重新生成中...</span>
-                        </div>
+                        (() => {
+                          const sm = allStreamingMessages.find(sm => sm.senderId === msg.senderId);
+                          return sm ? (
+                            <MessageContent
+                              message={{ ...msg, content: sm.content }}
+                              onShowArtifact={handleShowArtifact}
+                              streaming
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 py-1" style={{ minHeight: "24px" }}>
+                              <div className="flex items-center gap-1">
+                                {[0, 1, 2].map((i) => (
+                                  <span key={i} className="typing-dot" />
+                                ))}
+                              </div>
+                              <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>重新生成中...</span>
+                            </div>
+                          );
+                        })()
                       ) : (
                         <MessageContent message={msg} onShowArtifact={handleShowArtifact} />
                       )}
@@ -882,6 +926,22 @@ export default function ChatPanel({
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
+                        </button>
+
+                        {/* Pin/Unpin — all non-system messages */}
+                        <button
+                          title={msg.isPinned ? "取消固定" : "固定消息"}
+                          onClick={() => togglePinMessage(conversationId!, msg.id, !!msg.isPinned)}
+                        >
+                          {msg.isPinned ? (
+                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: "var(--accent)" }}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 4v12l4 4V4a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-4V4h8z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 4v12l4 4V4a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-4V4h8z" />
+                            </svg>
+                          )}
                         </button>
 
                         {/* Reply — all non-system messages */}
@@ -920,7 +980,7 @@ export default function ChatPanel({
             })}
 
             {/* Streaming messages (supporting multiple agents) */}
-            {allStreamingMessages.map((sm, smIdx) => {
+            {allStreamingMessages.filter(sm => !regeneratingSenders.has(sm.senderId)).map((sm, smIdx) => {
               const toolStatus = toolStatusMap.get(sm.senderId);
               const streamMarginTop = smIdx === 0 ? (messages.length > 0 ? "8px" : "0px") : "8px";
               return (

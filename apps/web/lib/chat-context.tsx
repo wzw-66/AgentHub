@@ -79,6 +79,8 @@ interface ChatContextValue {
   finalizeMessage: (messageId?: string, agentId?: string) => void;
   setStreamError: (error: string | null) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
+  /** Toggle pin status for a message */
+  togglePinMessage: (conversationId: string, messageId: string, isPinned: boolean) => Promise<void>;
   /** Send a response to a pending agent interaction */
   respondToInteraction: (response: string) => void;
   /** Cancel a pending agent interaction */
@@ -325,6 +327,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const togglePinMessage = useCallback(
+    async (conversationId: string, messageId: string, isPinned: boolean) => {
+      await api.post(
+        `/api/conversations/${conversationId}/messages/${messageId}/pin`,
+      );
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, isPinned: !isPinned } : m,
+        ),
+      );
+      // Notify other components (e.g. RightPanel) to refresh pinned list
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("pinned-messages-changed", { detail: { conversationId } }));
+      }
+    },
+    [],
+  );
+
   const toggleArchiveConversation = useCallback(
     async (conversationId: string, isArchived: boolean) => {
       await api.patch(`/api/conversations/${conversationId}/update`, {
@@ -473,7 +493,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setTypingAgent,
         appendMessageChunk,
         finalizeMessage,
-        replaceMessage,        togglePinConversation,        toggleArchiveConversation,        setStreamError,
+        replaceMessage,        togglePinConversation,        togglePinMessage,        toggleArchiveConversation,        setStreamError,
         setMessages,
         respondToInteraction,
         cancelInteraction,

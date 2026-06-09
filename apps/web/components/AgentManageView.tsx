@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { api } from "@/lib/api-client";
+import type { Conversation } from "@agenthub/shared";
 import EditAgentModal from "./EditAgentModal";
 
 interface AgentInfo {
@@ -16,6 +17,8 @@ interface AgentInfo {
 
 interface AgentManageViewProps {
   contacts: AgentInfo[];
+  createConversation: (title: string, type: "single" | "group", contactIds: string[]) => Promise<Conversation>;
+  onSelectConversation: (id: string) => void;
   onRefresh: () => void;
   onBack: () => void;
 }
@@ -42,10 +45,38 @@ function getProviderIcon(provider: string): string {
   }
 }
 
-export default function AgentManageView({ contacts, onRefresh, onBack }: AgentManageViewProps) {
+export default function AgentManageView({
+  contacts,
+  createConversation,
+  onSelectConversation,
+  onRefresh,
+  onBack,
+}: AgentManageViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingAgent, setEditingAgent] = useState<AgentInfo | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  async function handleStartChat(agentId: string) {
+    try {
+      const existing = await api.get<{ conversation: { id: string } | null }>(
+        `/api/conversations/find-by-agent/${agentId}`,
+      );
+      if (existing.conversation?.id) {
+        onSelectConversation(existing.conversation.id);
+        onBack();
+        return;
+      }
+    } catch {
+      // fall through to create
+    }
+    const agent = contacts.find((a) => a.id === agentId);
+    const title = agent?.name ?? "新对话";
+    const conv = await createConversation(title, "single", [agentId]);
+    if (conv?.id) {
+      onSelectConversation(conv.id);
+      onBack();
+    }
+  }
 
   const filteredContacts = useMemo(
     () => contacts.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase())),
@@ -136,21 +167,29 @@ export default function AgentManageView({ contacts, onRefresh, onBack }: AgentMa
                 }}
               >
                 <div className="flex items-start gap-3">
-                  {/* Avatar */}
-                  <span
-                    className="flex items-center justify-center text-white font-medium rounded-full flex-shrink-0"
+                  {/* Avatar — click to start chat */}
+                  <button
+                    onClick={() => handleStartChat(agent.id)}
+                    className="flex items-center justify-center text-white font-medium rounded-full flex-shrink-0 cursor-pointer transition-transform hover:scale-110"
                     style={{
                       width: "36px",
                       height: "36px",
                       background: getAgentColor(agent.name),
                       fontSize: "12px",
+                      border: "none",
                     }}
+                    title={`与 ${agent.name} 开始对话`}
                   >
                     {agent.name[0]?.toUpperCase() ?? "?"}
-                  </span>
+                  </button>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
+                  {/* Info — click to start chat */}
+                  <button
+                    onClick={() => handleStartChat(agent.id)}
+                    className="flex-1 min-w-0 text-left cursor-pointer"
+                    style={{ background: "none", border: "none", padding: 0 }}
+                    title={`与 ${agent.name} 开始对话`}
+                  >
                     <div className="flex items-center gap-1.5">
                       <span
                         className="truncate font-medium"
@@ -197,7 +236,7 @@ export default function AgentManageView({ contacts, onRefresh, onBack }: AgentMa
                         ))}
                       </div>
                     )}
-                  </div>
+                  </button>
 
                   {/* Actions */}
                   {!isDeleteConfirm ? (

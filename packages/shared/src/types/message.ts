@@ -10,6 +10,7 @@ export interface Message {
   type: MessageType;
   content: string;
   parentId?: string;
+  isPinned?: boolean;
   artifacts?: Artifact[];
   createdAt: string;
   updatedAt: string;

@@ -464,7 +464,7 @@ const AGENT_EXECUTION_TIMEOUT_MS = 300_000;
  * Prisma uses PascalCase enums (User/Contact/System, Text/Code/etc.)
  * while the shared package uses lowercase enums (user/contact/system, text/code/etc.).
  */
-function mapPrismaMessage(msg: { id: string; conversationId: string; senderType: string; senderId: string; type: string; content: string; parentId?: string | null; createdAt: Date | string; updatedAt: Date | string; artifacts?: unknown[] }): SharedMessage {
+function mapPrismaMessage(msg: { id: string; conversationId: string; senderType: string; senderId: string; type: string; content: string; parentId?: string | null; isPinned?: boolean | null; createdAt: Date | string; updatedAt: Date | string; artifacts?: unknown[] }): SharedMessage {
   return {
     id: msg.id,
     conversationId: msg.conversationId,
@@ -473,13 +473,14 @@ function mapPrismaMessage(msg: { id: string; conversationId: string; senderType:
     type: msg.type.toLowerCase() as SharedMessage["type"],
     content: msg.content,
     parentId: msg.parentId ?? undefined,
+    isPinned: msg.isPinned ?? undefined,
     createdAt: typeof msg.createdAt === "string" ? msg.createdAt : msg.createdAt.toISOString(),
     updatedAt: typeof msg.updatedAt === "string" ? msg.updatedAt : msg.updatedAt.toISOString(),
   };
 }
 
 function mapPrismaMessages(
-  msgs: Array<{ id: string; conversationId: string; senderType: string; senderId: string; type: string; content: string; parentId?: string | null; createdAt: Date | string; updatedAt: Date | string; artifacts?: unknown[] }>,
+  msgs: Array<{ id: string; conversationId: string; senderType: string; senderId: string; type: string; content: string; parentId?: string | null; isPinned?: boolean | null; createdAt: Date | string; updatedAt: Date | string; artifacts?: unknown[] }>,
 ): SharedMessage[] {
   return msgs.map(mapPrismaMessage);
 }
@@ -548,6 +549,19 @@ async function runAgentExecution(
       // Load recent history (last 50 messages) for context
       const historyResult = await listMessages(conversationId, { limit: 50 });
       const historyMessages = mapPrismaMessages(historyResult.data);
+
+      // Inject pinned messages as additional system context
+      let pinnedContext: string | undefined;
+      try {
+        const pinnedMessages = await listPinnedMessages(conversationId);
+        if (pinnedMessages.length > 0) {
+          pinnedContext = pinnedMessages
+            .map((m: { content: string }) => `[Pinned Context]: ${m.content}`)
+            .join("\n");
+        }
+      } catch {
+        // Ignore errors loading pinned messages
+      }
 
       // ── Build AgentHarness with middleware and tools ─────────────
       const harness = new AgentHarness(adapter, {
@@ -621,7 +635,7 @@ async function runAgentExecution(
         message: content,
         history: historyMessages,
         agents: [],
-        systemPrompt: agent.systemPrompt ?? undefined,
+        systemPrompt: [agent.systemPrompt, pinnedContext].filter(Boolean).join("\n\n") || undefined,
         tools: toolDefinitions,
       };
 
