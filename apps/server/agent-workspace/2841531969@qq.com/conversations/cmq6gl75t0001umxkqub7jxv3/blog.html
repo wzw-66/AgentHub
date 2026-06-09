@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的博客</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: #f5f5f5;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 60px 20px;
+            text-align: center;
+        }
+        header h1 { font-size: 32px; font-weight: 700; letter-spacing: 2px; }
+        header p { font-size: 15px; margin-top: 10px; opacity: 0.85; }
+        nav {
+            background: #fff;
+            border-bottom: 1px solid #eee;
+            padding: 14px 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        nav a {
+            color: #555;
+            text-decoration: none;
+            margin: 0 18px;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        nav a:hover { color: #667eea; }
+        main {
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        article {
+            background: #fff;
+            border-radius: 10px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        article:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        article h2 { font-size: 20px; margin-bottom: 8px; }
+        article h2 a { color: #1a1a1a; text-decoration: none; }
+        article h2 a:hover { color: #667eea; }
+        article .meta {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        article .meta .tag {
+            display: inline-block;
+            background: #eef2ff;
+            color: #667eea;
+            font-size: 12px;
+            padding: 1px 10px;
+            border-radius: 10px;
+        }
+        article p { font-size: 15px; color: #555; }
+        article .read-more {
+            display: inline-block;
+            margin-top: 16px;
+            font-size: 14px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        article .read-more:hover { text-decoration: underline; }
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 13px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>我的博客</h1>
+    <p>记录生活，分享思考</p>
+</header>
+
+<nav>
+    <a href="#">首页</a>
+    <a href="#">归档</a>
+    <a href="#">关于</a>
+</nav>
+
+<main>
+    <article>
+        <h2><a href="#">Hello World</a></h2>
+        <div class="meta">
+            <span>2026-06-09</span>
+            <span class="tag">技术</span>
+        </div>
+        <p>这是我的第一篇博客。用最简单的 HTML 和 CSS 搭建了一个干净清爽的博客页面，专注于内容本身。</p>
+        <a href="#" class="read-more">阅读更多 →</a>
+    </article>
+
+    <article>
+        <h2><a href="#">简单之美</a></h2>
+        <div class="meta">
+            <span>2026-06-08</span>
+            <span class="tag">随笔</span>
+        </div>
+        <p>少即是多。好的设计不需要花哨的特效，清晰的排版、舒服的间距、克制的色彩，就足以让阅读成为一种享受。</p>
+        <a href="#" class="read-more">阅读更多 →</a>
+    </article>
+
+    <article>
+        <h2><a href="#">关于 AgentHub</a></h2>
+        <div class="meta">
+            <span>2026-06-07</span>
+            <span class="tag">技术</span>
+        </div>
+        <p>AgentHub 是一个多 Agent 协作平台，以 IM 聊天为核心交互范式。用户可以像用微信一样与各种 AI Agent 对话协作。</p>
+        <a href="#" class="read-more">阅读更多 →</a>
+    </article>
+</main>
+
+<footer>
+    &copy; 2026 我的博客 · Powered by simple HTML
+</footer>
+
+</body>
+</html>
