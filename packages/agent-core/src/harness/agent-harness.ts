@@ -118,6 +118,9 @@ export class AgentHarness {
     glob: "",
     grep: "",
     think: "", // Think is Claude's internal reasoning, no handler needed — skip
+    // AskUserQuestion — handled interactively by the outer loop (runAgentExecution)
+    AskUserQuestion: "",
+    ask_user_question: "",
     // OpenCode tool names
     executeCommand: "execute_command",
     readFile: "read_file",
@@ -183,6 +186,18 @@ export class AgentHarness {
         }
 
         if (chunk.type === ChunkType.ToolCall) {
+          // AskUserQuestion is yielded immediately for interactive handling
+          try {
+            const parsed = JSON.parse(chunk.content) as { name?: string; toolName?: string };
+            const name = parsed.name ?? parsed.toolName ?? "";
+            if (name === "AskUserQuestion" || name === "ask_user_question") {
+              yield chunk;
+              // Don't push to toolCallsInTurn — handled interactively by outer loop
+              // But still add to turnChunks for middleware processing
+              turnChunks.push(chunk);
+              continue;
+            }
+          } catch { /* ignore parse error */ }
           toolCallsInTurn.push(chunk);
         }
 

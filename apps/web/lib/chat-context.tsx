@@ -40,6 +40,12 @@ interface StreamingMessage {
   isStreaming: true;
 }
 
+interface PendingInteraction {
+  prompt: string;
+  options?: { label: string; description: string }[];
+  multiSelect?: boolean;
+}
+
 interface ChatContextValue {
   conversations: Conversation[];
   activeConversationId: string | null;
@@ -50,6 +56,8 @@ interface ChatContextValue {
   typingAgents: Map<string, boolean>;
   /** Per-agent tool call status — shows what tool the agent is currently using */
   toolStatusMap: Map<string, { toolName: string; timestamp: number }>;
+  /** Pending interaction from agent (AskUserQuestion) */
+  pendingInteraction: PendingInteraction | null;
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isLoadingContacts: boolean;
@@ -71,6 +79,10 @@ interface ChatContextValue {
   finalizeMessage: (messageId?: string, agentId?: string) => void;
   setStreamError: (error: string | null) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
+  /** Send a response to a pending agent interaction */
+  respondToInteraction: (response: string) => void;
+  /** Cancel a pending agent interaction */
+  cancelInteraction: () => void;
 }
 
 // ─── Context ───────────────────────────────────────────────────────────
@@ -81,11 +93,13 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
-  const { onEvent } = useWS();
+  const { onEvent, send: wsSend } = useWS();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
+  const activeConvRef = useRef(activeConversationId);
+  activeConvRef.current = activeConversationId;
   const [messages, setMessages] = useState<Message[]>([]);
   const [contacts, setContacts] = useState<ContactInfo[]>([]);
   const [typingAgents, setTypingAgents] = useState<Map<string, boolean>>(
@@ -105,6 +119,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [toolStatusMap, setToolStatusMap] = useState<
     Map<string, { toolName: string; timestamp: number }>
   >(new Map());
+
+  // ─── Pending interaction state ──────────────────────────────────
+  const [pendingInteraction, setPendingInteraction] =
+    useState<PendingInteraction | null>(null);
 
   const fetchConversations = useCallback(async () => {
     setIsLoadingConversations(true);
@@ -267,6 +285,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // ─── Interaction methods ────────────────────────────────────────
+  const respondToInteraction = useCallback(
+    (response: string) => {
+      const convId = activeConvRef.current;
+      if (!convId) return;
+      wsSend({
+        type: "user:interact",
+        payload: { conversationId: convId, response },
+      });
+      setPendingInteraction(null);
+    },
+    [wsSend],
+  );
+
+  const cancelInteraction = useCallback(() => {
+    setPendingInteraction(null);
+    // Optionally send a cancellation to the server
+    const convId = activeConvRef.current;
+    if (convId) {
+      wsSend({
+        type: "user:interact",
+        payload: { conversationId: convId, response: "__cancel__" },
+      });
+    }
+  }, [wsSend]);
+
   const togglePinConversation = useCallback(
     async (conversationId: string, isPinned: boolean) => {
       await api.patch(`/api/conversations/${conversationId}/update`, {
@@ -379,6 +423,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
           break;
         }
+        case "interactive": {
+          const intEvent = event as { prompt?: string; options?: { label: string; description: string }[]; multiSelect?: boolean };
+          if (intEvent.prompt) {
+            setPendingInteraction({
+              prompt: intEvent.prompt,
+              options: intEvent.options,
+              multiSelect: intEvent.multiSelect,
+            });
+          }
+          break;
+        }
       }
     });
 
@@ -405,6 +460,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         contacts,
         typingAgents,
         toolStatusMap,
+        pendingInteraction,
         isLoadingConversations,
         isLoadingMessages,
         isLoadingContacts,
@@ -419,6 +475,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         finalizeMessage,
         replaceMessage,        togglePinConversation,        toggleArchiveConversation,        setStreamError,
         setMessages,
+        respondToInteraction,
+        cancelInteraction,
       }}
     >
       {children}

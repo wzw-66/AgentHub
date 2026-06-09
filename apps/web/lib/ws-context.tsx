@@ -70,13 +70,24 @@ interface ToolStatusEvent {
   agentId: string;
 }
 
-type WSEvent = OnlineStatusEvent | MessageStatusEvent | ChunkEvent | DoneEvent | ErrorEvent | ReplaceEvent | NotificationEvent | ToolStatusEvent;
+interface InteractiveEvent {
+  type: "interactive";
+  toolUseId: string;
+  prompt: string;
+  options?: { label: string; description: string }[];
+  multiSelect?: boolean;
+  agentId: string;
+}
+
+type WSEvent = OnlineStatusEvent | MessageStatusEvent | ChunkEvent | DoneEvent | ErrorEvent | ReplaceEvent | NotificationEvent | ToolStatusEvent | InteractiveEvent;
 
 type WSEventHandler = (event: WSEvent) => void;
 
 interface WSContextValue {
   status: WSConnectionStatus;
   onEvent: (handler: WSEventHandler) => () => void;
+  /** Send a raw message through the WebSocket connection */
+  send: (message: unknown) => void;
 }
 
 // ─── Context ───────────────────────────────────────────────────────────
@@ -124,6 +135,14 @@ export function WSProvider({ children }: { children: ReactNode }) {
     if (pingIntervalRef.current) {
       clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = null;
+    }
+  }, []);
+
+  // ─── Send ───────────────────────────────────────────────────────
+  const send = useCallback((message: unknown): void => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
     }
   }, []);
 
@@ -212,7 +231,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, connect, disconnect]);
 
   return (
-    <WSContext.Provider value={{ status, onEvent }}>
+    <WSContext.Provider value={{ status, onEvent, send }}>
       {children}
     </WSContext.Provider>
   );

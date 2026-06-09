@@ -4,12 +4,14 @@ export type WSClientMessage =
   | { type: "typing:start"; payload: { conversationId: string } }
   | { type: "typing:end"; payload: { conversationId: string } }
   | { type: "message:read"; payload: { conversationId: string; messageId: string } }
+  | { type: "user:interact"; payload: { conversationId: string; response: string } }
   | { type: "ping" };
 
 export type WSServerMessage =
   | { type: "typing:indicator"; payload: { conversationId: string; userId: string; isTyping: boolean } }
   | { type: "status:update"; payload: { userId: string; status: "online" | "offline" } }
   | { type: "notification"; payload: { conversationId: string; senderId: string; preview: string } }
+  | { type: "interactive"; payload: { toolUseId: string; prompt: string; options?: { label: string; description: string }[]; multiSelect?: boolean; agentId: string } }
   | { type: "pong" };
 
 // ─── SSE event types ──────────────────────────────────────────────────
@@ -34,6 +36,15 @@ export type SSEArtifactStatusData = {
   id: string;
   status: "building" | "completed" | "failed";
   title?: string;
+};
+
+export type SSEInteractiveData = {
+  type: "interactive";
+  toolUseId: string;
+  prompt: string;
+  options?: { label: string; description: string }[];
+  multiSelect?: boolean;
+  agentId: string;
 };
 
 // ─── Orchestrator SSE event types ────────────────────────────────────────

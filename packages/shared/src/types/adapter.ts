@@ -6,4 +6,6 @@ export interface AgentAdapter {
   execute(context: AgentContext): AsyncIterable<Chunk>;
   abort(): void;
   healthCheck(): Promise<HealthStatus>;
+  /** Optional: write a text response to the adapter's stdin for interactive execution. */
+  writeStdin?(text: string): void;
 }

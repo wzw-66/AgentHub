@@ -123,9 +123,9 @@ export class ClaudeAdapter implements AgentAdapter {
       windowsHide: true,
     });
 
-    // Close stdin immediately — the CLI doesn't need input (prompt is in -p flag),
-    // and leaving stdin open can cause the process to hang on Windows.
-    this.process.stdin?.end();
+    // Keep stdin open — the adapter may need to write user responses
+    // during interactive execution (AskUserQuestion tool).
+    // Not ending stdin here allows writeStdin() to feed responses to the process.
 
     // Register close handler immediately — ensures exitCode promise
     // is available even if the process exits before the readline loop ends.
@@ -185,6 +185,24 @@ export class ClaudeAdapter implements AgentAdapter {
           // Process may already be dead
         }
       }, 5000);
+    }
+  }
+
+  /**
+   * Write a text response to the subprocess's stdin.
+   * Used for interactive execution (AskUserQuestion tool) — the user's
+   * reply is written as stdin text so Claude receives it as the next
+   * user message.
+   *
+   * Errors during write are silently caught and logged to stderr.
+   */
+  writeStdin(text: string): void {
+    if (!this.process?.stdin) return;
+    try {
+      this.process.stdin.write(text + "\n");
+    } catch (err) {
+      // Stdin may already be closed or the process may have exited
+      process.stderr.write(`[ClaudeAdapter] writeStdin error: ${err}\n`);
     }
   }
 

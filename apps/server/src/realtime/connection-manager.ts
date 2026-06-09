@@ -3,6 +3,16 @@ import type { WebSocket } from "@fastify/websocket";
 import type { AgentAdapter } from "@agenthub/shared";
 import { formatWSMessage } from "./types";
 
+// ─── Types ─────────────────────────────────────────────────────────────
+
+interface PendingInteraction {
+  resolve: (value: string) => void;
+  reject: (err: Error) => void;
+  prompt: string;
+  options?: { label: string; description: string }[];
+  timer: NodeJS.Timeout;
+}
+
 /**
  * Manages all active SSE and WebSocket connections.
  *
@@ -129,5 +139,62 @@ export class ConnectionManager {
   /** Remove an adapter when it completes normally. */
   removeAdapter(conversationId: string): void {
     this.activeAdapters.delete(conversationId);
+  }
+
+  // ─── Pending interaction tracking ────────────────────────────────
+
+  private pendingInteractions = new Map<string, PendingInteraction>();
+
+  /** Default interaction timeout: 120 seconds */
+  private static readonly INTERACTION_TIMEOUT_MS = 120_000;
+
+  /**
+   * Create a pending interaction request for a conversation.
+   * Returns a Promise that resolves when the user responds, or rejects on timeout.
+   * Pushes the interactive prompt to both SSE and WebSocket clients.
+   */
+  createInteraction(
+    convId: string,
+    data: { prompt: string; toolUseId: string; options?: { label: string; description: string }[]; multiSelect?: boolean },
+  ): Promise<string> {
+    // Push interactive event to frontend
+    const eventData = {
+      type: "interactive",
+      toolUseId: data.toolUseId,
+      prompt: data.prompt,
+      options: data.options,
+      multiSelect: data.multiSelect,
+      agentId: "agent",
+    };
+    this.pushToConversation(convId, "interactive", eventData);
+    this.broadcastToConversation(this.getConnectedUserIds(), "interactive", eventData);
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingInteractions.delete(convId);
+        reject(new Error("Interaction timeout"));
+      }, ConnectionManager.INTERACTION_TIMEOUT_MS);
+      this.pendingInteractions.set(convId, { resolve, reject, prompt: data.prompt, options: data.options, timer });
+    });
+  }
+
+  /** Resolve a pending interaction with the user's response text. */
+  resolveInteraction(convId: string, response: string): boolean {
+    const p = this.pendingInteractions.get(convId);
+    if (!p) return false;
+    clearTimeout(p.timer);
+    p.resolve(response);
+    this.pendingInteractions.delete(convId);
+    return true;
+  }
+
+  /** Cancel a pending interaction, rejecting with an error. */
+  cancelInteraction(convId: string): boolean {
+    const p = this.pendingInteractions.get(convId);
+    if (!p) return false;
+    clearTimeout(p.timer);
+    p.reject(new Error("Interaction cancelled"));
+    this.pendingInteractions.delete(convId);
+    return true;
   }
 }

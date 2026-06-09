@@ -68,7 +68,6 @@ describe("ChunkType", () => {
     expect(ChunkType.Text).toBe("text");
     expect(ChunkType.Code).toBe("code");
     expect(ChunkType.ToolCall).toBe("tool_call");
-    expect(ChunkType.Artifact).toBe("artifact");
     expect(ChunkType.Error).toBe("error");
     expect(ChunkType.Done).toBe("done");
   });

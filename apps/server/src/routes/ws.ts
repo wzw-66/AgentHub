@@ -38,6 +38,15 @@ const wsHandlers: Record<string, WSHandler> = {
     // acknowledged — no server-side action needed currently
   },
 
+  "user:interact": (cm, _socket, _userId, payload) => {
+    const data = payload as { conversationId: string; response: string };
+    if (data.response === "__cancel__") {
+      cm.cancelInteraction(data.conversationId);
+    } else {
+      cm.resolveInteraction(data.conversationId, data.response);
+    }
+  },
+
   ping: (_cm, socket, _userId, _payload) => {
     socket.send(formatWSMessage("pong", {}));
   },

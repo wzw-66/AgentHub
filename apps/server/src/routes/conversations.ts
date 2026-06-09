@@ -10,7 +10,7 @@ import {
   findSingleConversationByAgentId,
   findUserById,
 } from "@agenthub/db";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { WORKSPACE_ROOT } from "../config/env.js";
 
@@ -111,7 +111,16 @@ async function handleCreate(
   const workspacePath = `agent-workspace/${safeEmail}/conversations/${conversation.id}`;
 
   try {
-    await mkdir(resolve(WORKSPACE_ROOT, workspacePath), { recursive: true });
+    const workspaceDir = resolve(WORKSPACE_ROOT, workspacePath);
+    await mkdir(workspaceDir, { recursive: true });
+
+    // Create a minimal .git directory to block Claude CLI's upstream
+    // git detection — without it, Claude walks up to the project root,
+    // finds the repo's CLAUDE.md, and reads it even though the
+    // conversation workspace is a subdirectory.
+    const gitDir = resolve(workspaceDir, ".git");
+    await mkdir(gitDir, { recursive: true });
+    await writeFile(resolve(gitDir, "HEAD"), "ref: refs/heads/main\n", "utf-8");
   } catch (err) {
     request.server.log.error({ err }, "Failed to create conversation workspace directory");
     return reply.status(500).send({ error: "Failed to create workspace directory" });

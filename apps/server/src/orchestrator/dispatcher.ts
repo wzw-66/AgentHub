@@ -186,15 +186,6 @@ export class TaskDispatcher {
         });
         break;
 
-      case ChunkType.Artifact:
-        pushSSE("artifact_status", {
-          id: chunk.metadata?.id ?? "",
-          status: chunk.metadata?.status ?? "building",
-          title: chunk.metadata?.title,
-          agentId: sub.agentId,
-        });
-        break;
-
       case ChunkType.Done:
         // Handled separately in dispatchAll after task completion + persistence
         break;

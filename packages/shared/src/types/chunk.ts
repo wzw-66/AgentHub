@@ -24,8 +24,29 @@ export interface ToolDefinition {
 export interface Chunk {
   type: ChunkType;
   content: string;
+  /**
+   * Metadata fields by chunk type:
+   * - ToolCall: `{ toolUseId, toolName, input }`
+   * - Interactive: `{ toolUseId, prompt, options?, multiSelect? }`
+   * - Done: `{ messageId, tokenUsage }`
+   */
   metadata?: Record<string, unknown>;
   timestamp: string;
+}
+
+/**
+ * Chunk data for interactive prompts (AskUserQuestion).
+ * Agent needs user input before continuing execution.
+ */
+export interface InteractiveChunkData {
+  type: "interactive";
+  content: string;
+  metadata: {
+    toolUseId: string;
+    prompt: string;
+    options?: { label: string; description: string }[];
+    multiSelect?: boolean;
+  };
 }
 
 /**

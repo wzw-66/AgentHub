@@ -5,6 +5,7 @@ dist/
 out/
 build/
 *.tsbuildinfo
+# apps/server/agent-workspace/
 
 # Environment
 .env

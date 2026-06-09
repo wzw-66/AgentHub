@@ -1,0 +1,2076 @@
+ ▐▛███▜▌   Claude Code v2.1.87
+▝▜█████▛▘  deepseek-v4-flash · API Usage Billing
+  ▘▘ ▝▝    D:\code\github\AgentHub
+
+❯ /opsx:explore 我感觉添加会话那一块的ui设计不是很好，你点击按钮之后，创建出现  
+在整个软件的下方，不美观。我感觉点击了+这个按钮之后，应该像微信一样直接将agent  
+放在了整个软件左边，等你添加，同时也有搜索框去查找对应的agnet。                 
+
+● 好的，我来看看当前的创建会话交互是怎么实现的，然后一起探讨改进方案。
+
+● Explore(Explore conversation creation UI)
+  ⎿  Done (22 tool uses · 54.2k tokens · 45s)
+  (ctrl+o to expand)
+
+● 好的，我现在完全理解了当前的实现。让我把现状整理一下，然后我们一起探讨设计方向
+  。
+
+  ---
+  当前交互的问题
+
+  现在的流程是：
+
+         点击 [+]
+             ↓
+    ┌─────────────────────┐
+    │   Sidebar (会话列表)  │
+    │                     │
+    │   会话1             │
+    │   会话2             │
+    │   ...              │
+    │                     │
+    │  ┌───────────────┐  │  ← absolute 定位在底部弹出的 Dialog
+    │  │  [单聊] [群聊]  │  │
+    │  │  Agent A       │  │
+    │  │  Agent B       │  │
+    │  │  Agent C       │  │
+    │  │               │  │
+    │  │  创建群聊      │  │
+    │  └───────────────┘  │
+    └─────────────────────┘
+
+  问题所在：
+  1. Dialog 从 sidebar 底部弹起，视觉上像是"贴在了软件底部"，不优雅
+  2. 空间受限 — 只能展示 6 个 agent，没有搜索框，agent 多了根本没法找
+  3. 突兀的弹出层 — 和整体 UI 风格不搭，像临时补丁
+
+  ---
+  你想要的（类微信）
+
+  微信的「添加联系人」是什么体验？
+
+    ┌──────────┬──────────────────┐
+    │  通讯录   │   (内容区)        │
+    │  ● 搜索框  │                  │
+    │           │                  │
+    │  新的朋友  │                  │
+    │  群聊     │                  │
+    │  标签     │                  │
+    │           │                  │
+    │  A        │                  │
+    │  B        │                  │
+    │  C        │                  │
+    │  ...      │                  │
+    └──────────┴──────────────────┘
+
+  点击 "+" → 左边栏切换到「添加 Agent」视图，有搜索框，可以浏览所有可用
+  agent，选中后创建会话。
+
+  ---
+  几个设计方向
+
+  我想到几个方向，和你探讨：
+
+  方案 A：Sidebar 视图切换（最像微信）
+
+  默认状态:                          点击 [+] 后:
+  ┌──────────┬──────────────┐       ┌──────────┬──────────────┐
+  │ 会话列表  │  ChatPanel   │       │ 添加 Agent│  ChatPanel   │
+  │          │              │       │          │              │
+  │ 会话1    │              │       │ 🔍搜索... │              │
+  │ 会话2    │              │       │          │              │
+  │ 会话3    │              │       │ ┌──────┐ │              │
+  │ ...      │              │       │ │AgentA│ │              │
+  │          │              │       │ │AgentB│ │              │
+  │ [+]      │              │       │ │AgentC│ │              │
+  │          │              │       │ │AgentD│ │              │
+  │          │              │       │ │AgentE│ │              │
+  └──────────┴──────────────┘       │ │AgentF│ │              │
+                                    │ └──────┘ │              │
+                                    │  选中: A, C             │
+                                    │  [ ＋ 创建群聊 ]        │
+                                    │          │              │
+                                    └──────────┴──────────────┘
+
+  - Sidebar 在「会话列表」和「添加 Agent」两个视图间切换
+  - 点击 "+" 平滑过渡到 Agent 浏览器
+  - 有搜索框，可以搜索 agent
+  - 点击选中（支持多选），底部显示已选数量和创建按钮
+  - 点击返回箭头或 ESC 回到会话列表
+  - 优点：交互自然，不突兀，空间充足
+  - 优点：和微信肌肉记忆一致，学习成本低
+
+  方案 B：左侧滑出面板
+
+  点击 [+] 后 — 面板从左侧滑出，覆盖 Sidebar + 部分 ChatPanel
+  ┌──────────┬──────────┬───────────┐
+  │  添加Agent│ 会话列表  │           │
+  │          │          │           │
+  │ 🔍搜索...│          │           │
+  │          │          │           │
+  │ Agent A  │          │           │
+  │ Agent B  │          │           │
+  │ Agent C  │          │           │
+  │ Agent D  │          │           │
+  │ Agent E  │          │           │
+  │ Agent F  │          │           │
+  │          │          │           │
+  │ [创建群聊]│          │           │
+  └──────────┴──────────┴───────────┘
+
+  - 类似 macOS Spotlight / 侧边抽屉效果
+  - 覆盖层带半透明 backdrop
+  - 优点：不破坏主布局，视觉上有层次感
+  - 缺点：压缩了 ChatPanel 的空间
+
+  方案 C：在 ChatPanel 区域打开「新建会话」页面
+
+  点击 [+] 后 — ChatPanel 区域变成 Agent 选择器
+  ┌──────────┬──────────────────────────┐
+  │ 会话列表  │  新建会话                   │
+  │          │  ┌──────────────────────┐ │
+  │ 会话1    │  │  🔍 搜索 Agent...    │ │
+  │ 会话2    │  ├──────────────────────┤ │
+  │ 会话3    │  │                      │ │
+  │ ...      │  │  ┌────┐ ┌────┐ ┌───┐│ │
+  │          │  │  │ A  │ │ B  │ │ C ││ │
+  │          │  │  └────┘ └────┘ └───┘│ │
+  │          │  │  ┌────┐ ┌────┐     │ │
+  │          │  │  │ D  │ │ E  │     │ │
+  │          │  │  └────┘ └────┘     │ │
+  │          │  │                    │ │
+  │          │  │  [创建群聊]        │ │
+  │          │  └────────────────────┘ │
+  └──────────┴──────────────────────────┘
+
+  - 把 ChatPanel 当作「页面」来用，类似 web app 的路由
+  - 可以展示网格布局、卡片风格
+  - 优点：视觉空间最大，设计自由度最高
+  - 优点：适合展示 Agent 的详细信息（头像、描述、能力标签）
+  - 缺点：ChatPanel 需要一个「空状态」来承载这个视图
+
+  ---
+  我个人觉得 方案 A（Sidebar 视图切换） 最符合你的描述——"像微信一样直接将 agent
+  放在了整个软件左边"。这也是微信、Telegram 等主流 IM 的通用模式。
+
+  不过想先听听你的直觉：
+  1. 方案 A 的方向是你想要的吗？还是更倾向其他方案？
+  2. 另外想确认一下——你说的「创建出现在整个软件的下方」是指 Dialog 从 Sidebar
+  底部弹出来不太好，还是说创建成功后新会话显示在列表底部不对？
+
+✻ Baked for 1m 16s
+
+❯ A，同时也调整一下，agent的按钮，就是这个按钮可以让你看到你所有创建的agent     
+
+● 明白了！方案 A 确定了，同时还要把「查看/管理所有创建的
+  Agent」的入口也整合进来。
+
+  让我先看看当前 Agent 管理的入口在哪里。
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● 现在我看清了全貌。当前结构：
+
+  ┌──────────────────────┐
+  │ AgentHub         [+]  │  ← "+" 弹出 Dialog 在底部
+  │ 🔍 搜索会话           │
+  │──────────────────────│
+  │ [A][B][C][D]          │  ← 快速联系 pills
+  │──────────────────────│
+  │ 会话列表...            │
+  │                       │
+  │──────────────────────│
+  │ [+ 创建新 Agent]      │  ← 只创建，没有"查看所有Agent"的入口
+  │ 👤 user     🌙 🚪    │
+  └──────────────────────┘
+
+  确实缺一个「查看所有已创建 Agent」的入口。
+
+  ---
+  综合设计方案
+
+  把 Sidebar 改造成 多视图模式，像微信左边栏一样切换上下文：
+
+  视图 1：会话列表（默认）
+
+  ┌─────────────────────────┐
+  │ AgentHub    [+]  [🤖]   │ ← 🤖 新按钮：查看所有 Agent
+  │ 🔍 搜索会话             │
+  │                         │
+  │ [A][B][C][D] 联系 pills │
+  │                         │
+  │ ◎ 会话 1               │
+  │ ◎ 会话 2               │
+  │ ◎ 会话 3               │
+  │ ...                    │
+  │                         │
+  ├─────────────────────────┤
+  │ [+] 创建新 Agent        │
+  │ 👤 user       🌙 🚪    │
+  └─────────────────────────┘
+
+  - 右上角新增 🤖 按钮 → 切换到 Agent 管理视图
+  - 原有的 "+" 按钮行为改变 → 切换到添加 Agent 视图（不再是 Dialog）
+
+  视图 2：添加会话（点击 "+" 后）
+
+  ┌─────────────────────────┐
+  │ ← 会话       + 添加     │ ← 顶部导航：返回 + 标题
+  │ 🔍 搜索 Agent...        │ ← 搜索可用的 Agent
+  │                         │
+  │ [单聊]  [群聊]          │ ← 模式切换
+  │                         │
+  │ ☐  🤖 Agent A          │ ← 可滚动的 Agent 列表
+  │ ☐  🤖 Agent B          │
+  │ ☐  🤖 Agent C          │
+  │ ☐  🤖 Agent D          │
+  │ ☐  🤖 Agent E          │
+  │ ...                    │
+  │                         │
+  │ 已选 2 个 Agent        │
+  │ [ 创建群聊 (2) ]       │
+  └─────────────────────────┘
+
+  - 像微信添加联系人一样：左侧全屏展现所有可用 Agent
+  - 有搜索框专门搜索 Agent
+  - 单聊模式：点击 Agent 直接创建会话并跳转
+  - 群聊模式：勾选多个，底部创建
+  - 左上角 ← 返回会话列表
+
+  视图 3：Agent 管理（点击 "🤖" 后）
+
+  ┌─────────────────────────┐
+  │ ← 会话     我的 Agent   │ ← 顶部导航：返回 + 标题
+  │ 🔍 搜索我的 Agent...    │ ← 搜索已创建的 Agent
+  │                         │
+  │ ┌─────────────────────┐ │
+  │ │ 🤖 Agent A          │ │
+  │ │  能力标签 · 描述    │ │
+  │ │                ✏️ 🗑️│ │ ← 编辑/删除
+  │ └─────────────────────┘ │
+  │ ┌─────────────────────┐ │
+  │ │ 🤖 Agent B          │ │
+  │ │  能力标签 · 描述    │ │
+  │ │                ✏️ 🗑️│ │
+  │ └─────────────────────┘ │
+  │ ...                    │
+  │                         │
+  ├─────────────────────────┤
+  │ [+] 创建新 Agent        │
+  │ 👤 user       🌙 🚪    │
+  └─────────────────────────┘
+
+  - 显示所有你创建的 Agent，每张卡片包含头像、名称、描述、能力标签
+  - 可对每个 Agent 进行编辑、删除操作
+  - 底部保留「创建新 Agent」按钮
+
+  ---
+  视图导航逻辑
+
+      ┌──────────┐ 点击 🤖    ┌──────────────┐
+      │ 会话列表  │ ───────→  │ Agent 管理    │
+      │ (默认)   │ ←───────  │ (浏览/编辑)   │
+      └──────────┘  返回      └──────────────┘
+           │
+     点击 "+" │
+           ↓
+      ┌──────────┐
+      │ 添加Agent│
+      │ (选人建群)│
+      └──────────┘
+
+  三个视图之间通过 header 的按钮和「返回」切换，本质上是 Sidebar 内部的状态机。
+
+  ---
+  你觉得这个方向怎么样？有几个细节想确认：
+
+  1. Header 的 🤖 按钮 — 是用图标（机器人头/列表图标）还是文字"Agent"？
+  2. Agent 管理视图的 Agent 卡片 — 展示哪些信息就够用？名称 + 简短描述 +
+  编辑/删除？
+  3. 添加视图中的 Agent 列表 — 默认展示所有可用
+  Agent（不分页），还是需要支持搜索过滤即可？
+
+✻ Worked for 33s
+
+❯ /opsx:propose                                                                 
+
+● 好的，创建 change proposal。
+
+● Bash(openspec new change "sidebar-multi-view-redesign")
+  ⎿  - Creating change 'sidebar-multi-view-redesign'...
+     ✔ Created change 'sidebar-multi-view-redesign' at openspec/changes/sid
+     ebar-multi-view-redesign/ (schema: spec-driven)
+
+● Bash(openspec status --change "sidebar-multi-view-redesign" --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "schemaName": "spec-driven",
+     … +37 lines (ctrl+o to expand)
+
+● Bash(openspec instructions proposal --change "sidebar-multi-view-redesign"
+      --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "artifactId": "proposal",
+     … +35 lines (ctrl+o to expand)
+● Write(openspec\changes\sidebar-multi-view-redesign\proposal.md)
+  ⎿  Wrote 29 lines to openspec\changes\sidebar-multi-view-redesign\proposal.md
+
+       1 ## Why
+       2 
+       3 创建会话的 UI 交互不直观 — 点击 "+" 后 Dialog 从 Sidebar 底部弹
+         出，空间受限、视觉突兀，且缺少浏览和搜索 Agent 的能力。同时，用
+         户缺少一个统一查看和管理所有已创建 Agent 的入口。
+       4 
+       5 ## What Changes
+       6 
+       7 - **"+ "按钮交互重构**：点击 "+" 不再弹出 Dialog，而是将 Sidebar
+          切换到「添加 Agent」视图，展示所有可用 Agent 供选择
+       8 - **新增 Sidebar 多视图模式**：Sidebar 支持三个视图 — 会话列表（
+         默认）、添加 Agent、Agent 管理，视图间通过 Header 按钮和返回导航
+         切换
+       9 - **新增 Agent 管理入口**：Sidebar Header 新增 🤖 按钮，点击进入
+         「我的 Agent」视图，可浏览、搜索、编辑、删除所有已创建的 Agent
+      10 - **添加 Agent 视图支持搜索**：在添加 Agent 视图中提供搜索框，可
+         按名称搜索可用 Agent
+     … +19 lines (ctrl+o to expand)
+
+● Bash(openspec instructions design --change "sidebar-multi-view-redesign"
+      --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "artifactId": "design",
+     … +26 lines (ctrl+o to expand)
+
+● Bash(openspec instructions specs --change "sidebar-multi-view-redesign"
+      --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "artifactId": "specs",
+     … +39 lines (ctrl+o to expand)
+
+● 现在并行创建设计文档和规格说明。
+
+● Write(openspec\changes\sidebar-multi-view-redesign\design.md)
+  ⎿  Wrote 64 lines to openspec\changes\sidebar-multi-view-redesign\design.md
+
+       1 ## Context
+       2 
+       3 当前 Sidebar 使用一个 absolute 定位的 Dialog 来处理「新建会话」
+         流程，该 Dialog 从 Sidebar 底部弹出，空间受限（最多展示 6 个 Age
+         nt）、无搜索能力、视觉突兀。同时，用户缺少一个集中查看和管理已创
+         建 Agent 的入口 — 目前只有一个「创建新 Agent」按钮，没有「浏览我
+         的 Agent」的功能。
+       4 
+       5 本次设计将 Sidebar 重构为多视图模式，类似微信左边栏的上下文切换
+         体验。
+       6 
+       7 ## Goals / Non-Goals
+       8 
+       9 **Goals:**
+      10 - Sidebar 支持三个视图的无缝切换：会话列表（默认）、添加 Agent、
+         Agent 管理
+     … +54 lines (ctrl+o to expand)
+
+● Bash(mkdir -p
+      "openspec/changes/sidebar-multi-view-redesign/specs/sidebar-multi-view" &&
+       mkdir -p
+      "openspec/changes/sidebar-multi-view-redesign/specs/agent-managemen…)
+  ⎿  Done
+
+● Write(openspec\changes\sidebar-multi-view-redesign\specs\sidebar-multi-view\sp
+       ec.md)
+  ⎿  Wrote 42 lines to openspec\changes\sidebar-multi-view-redesign\specs\sideba
+     r-multi-view\spec.md
+       1 ## ADDED Requirements
+       2 
+       3 ### Requirement: Sidebar supports three views
+       4 The Sidebar SHALL support three distinct views: `chats` (默认会
+         话列表), `add-agent` (添加 Agent), `agents` (Agent 管理).
+       5 
+       6 #### Scenario: Default view on load
+       7 - **WHEN** user opens the application
+       8 - **THEN** Sidebar displays the `chats` view showing the convers
+         ation list
+       9 
+      10 #### Scenario: Switch from chats to add-agent
+     … +32 lines (ctrl+o to expand)
+
+● Write(openspec\changes\sidebar-multi-view-redesign\specs\add-agent-flow\spec.m
+       d)
+  ⎿  Wrote 64 lines to
+     openspec\changes\sidebar-multi-view-redesign\specs\add-agent-flow\spec.md
+       1 ## ADDED Requirements
+       2 
+       3 ### Requirement: Add-agent view shows all available agents
+       4 The `add-agent` view SHALL display all available contacts (agent
+         s) in a scrollable list.
+       5 
+       6 #### Scenario: Agent list displayed
+       7 - **WHEN** Sidebar switches to `add-agent` view
+       8 - **THEN** all available contacts are displayed as a list with a
+         vatar, name, and short description
+       9 
+      10 #### Scenario: Agent list supports scrolling
+     … +54 lines (ctrl+o to expand)
+
+● Write(openspec\changes\sidebar-multi-view-redesign\specs\agent-management\spec
+       .md)
+  ⎿  Wrote 78 lines to openspec\changes\sidebar-multi-view-redesign\specs\a
+     gent-management\spec.md
+       1 ## ADDED Requirements
+       2 
+       3 ### Requirement: Agent management entry point
+       4 The Sidebar SHALL provide a visible button to access the Agent m
+         anagement view.
+       5 
+       6 #### Scenario: Agent button in sidebar header
+       7 - **WHEN** Sidebar is in `chats` view
+       8 - **THEN** the header shows a "🤖" button that transitions to `a
+         gents` view
+       9 
+      10 ### Requirement: Agent list display
+     … +68 lines (ctrl+o to expand)
+
+● Bash(openspec status --change "sidebar-multi-view-redesign" --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "schemaName": "spec-driven",
+     … +27 lines (ctrl+o to expand)
+
+● Bash(openspec instructions tasks --change "sidebar-multi-view-redesign"
+      --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "artifactId": "tasks",
+     … +22 lines (ctrl+o to expand)
+● Write(openspec\changes\sidebar-multi-view-redesign\tasks.md)
+  ⎿  Wrote 54 lines to openspec\changes\sidebar-multi-view-redesign\tasks.md
+
+       1 ## 1. Sidebar 视图状态机
+       2 
+       3 - [ ] 1.1 在 Sidebar 中添加 `sidebarView` state（类型: `'chats' 
+         | 'add-agent' | 'agents'`），替换 `showNewChatDialog` state
+       4 - [ ] 1.2 修改 Header：`chats` 视图显示 "AgentHub" + "+" + "🤖"
+         ；`add-agent`/`agents` 视图显示 "← 返回" + 视图标题
+       5 - [ ] 1.3 Header "🤖" 按钮点击切换到 `agents` 视图
+       6 - [ ] 1.4 Header "←" 按钮点击返回 `chats` 视图
+       7 
+       8 ## 2. 提取 ChatListView 组件
+       9 
+      10 - [ ] 2.1 从 Sidebar.tsx 中提取会话列表相关 JSX 为独立的 `ChatLi
+         stView` 子组件
+     … +44 lines (ctrl+o to expand)
+
+● Bash(openspec status --change "sidebar-multi-view-redesign")
+  ⎿  - Loading change status...
+     Change: sidebar-multi-view-redesign
+     Schema: spec-driven
+     … +8 lines (ctrl+o to expand)
+
+● 所有 artifacts 创建完成！
+
+  变更摘要：sidebar-multi-view-redesign
+
+  openspec/changes/sidebar-multi-view-redesign/
+  ├── proposal.md   ← 为什么改、改什么
+  ├── design.md     ← 技术方案、决策、风险
+  ├── specs/
+  │   ├── sidebar-multi-view/spec.md   ← 三视图切换规格
+  │   ├── add-agent-flow/spec.md       ← 添加 Agent 交互规格
+  │   └── agent-management/spec.md     ← Agent 管理视图规格
+  └── tasks.md      ← 7 组共 29 个实施任务
+
+  关键设计决策
+
+  - 状态机驱动视图：sidebarView: 'chats' | 'add-agent' | 'agents' 控制 Sidebar
+  渲染
+  - 视图提取为独立组件：ChatListView / AddAgentView / AgentManageView
+  - 纯 CSS 动画：opacity + transform 过渡，不引入新依赖
+  - 无需后端改动：纯前端重构
+
+  可以开始了吗？
+
+  运行 /opsx:apply 开始实施。
+
+✻ Brewed for 1m 36s
+
+❯ /opsx:apply                                                                   
+
+● Using change: sidebar-multi-view-redesign (to override: /opsx:apply 
+  <other-change>)
+
+● Bash(openspec status --change "sidebar-multi-view-redesign" --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "schemaName": "spec-driven",
+     … +27 lines (ctrl+o to expand)
+
+● Bash(openspec instructions apply --change "sidebar-multi-view-redesign"
+      --json)
+  ⎿  {
+       "changeName": "sidebar-multi-view-redesign",
+       "changeDir": "D:\\code\\github\\AgentHub\\openspec\\changes\\sidebar
+     … +74 lines (ctrl+o to expand)
+
+● 好的，开始实施。先看一下相关组件的接口。
+
+  Read 3 files (ctrl+o to expand)
+
+● Now let me also check how the contacts API works to understand agent
+  management.
+
+  Searched for 3 patterns, read 2 files (ctrl+o to expand)
+
+● Good, I have full understanding now. Let me implement all the changes
+  systematically.
+
+● Step 1: Extend ContactInfo type to include fields needed for agent management.
+
+● Update(apps\web\lib\chat-context.tsx)
+  ⎿  Added 3 lines
+      23    name: string;
+      24    provider: string;
+      25    avatarUrl?: string;
+      26 +  displayName?: string | null;                                 
+      27 +  tags?: string[];                                             
+      28 +  systemPrompt?: string | null;                                
+      29  }
+      30  
+      31  interface StreamingMessage {
+● Step 2: Create ChatListView.tsx component.
+
+● Write(apps\web\components\ChatListView.tsx)
+  ⎿  Wrote 345 lines to apps\web\components\ChatListView.tsx
+       1 "use client";
+       2 
+       3 import { useState, useMemo } from "react";
+       4 import { useI18n } from "@/lib/i18n";
+       5 import type { Conversation } from "@agenthub/shared";
+       6 
+       7 interface ChatListViewProps {
+       8   conversations: Conversation[];
+       9   isLoadingConversations: boolean;
+      10   activeConversationId: string | null;
+     … +335 lines (ctrl+o to expand)
+
+● Step 3: Create AddAgentView.tsx.
+
+● Write(apps\web\components\AddAgentView.tsx)
+  ⎿  Wrote 253 lines to apps\web\components\AddAgentView.tsx
+       1 "use client";
+       2 
+       3 import { useState, useMemo } from "react";
+       4 import type { Conversation } from "@agenthub/shared";
+       5 
+       6 interface AgentInfo {
+       7   id: string;
+       8   name: string;
+       9   provider: string;
+      10   avatarUrl?: string;
+     … +243 lines (ctrl+o to expand)
+
+● Step 4: Create AgentManageView.tsx.
+
+● Write(apps\web\components\AgentManageView.tsx)
+  ⎿  Wrote 282 lines to apps\web\components\AgentManageView.tsx
+       1 "use client";
+       2 
+       3 import { useState, useMemo } from "react";
+       4 import { api } from "@/lib/api-client";
+       5 import EditAgentModal from "./EditAgentModal";
+       6 
+       7 interface AgentInfo {
+       8   id: string;
+       9   name: string;
+      10   provider: string;
+     … +272 lines (ctrl+o to expand)
+
+● Step 5: Now rewrite Sidebar.tsx to integrate the new multi-view system.
+
+● Write(apps\web\components\Sidebar.tsx)
+  ⎿  Added 193 lines, removed 544 lines
+       1  "use client";
+       2  
+       3 -import { useState, useMemo } from "react";                     
+       3 +import { useState } from "react";                              
+       4  import { useAuth } from "@/lib/auth-context";
+       5  import { useChat } from "@/lib/chat-context";
+       6  import { api } from "@/lib/api-client";
+       7  import { useI18n } from "@/lib/i18n";
+       8  import CreateAgentModal from "./CreateAgentModal";
+       9  import { ThemeSwitcher } from "./ThemeSwitcher";
+      10 +import ChatListView from "./ChatListView";                     
+      11 +import AddAgentView from "./AddAgentView";                     
+      12 +import AgentManageView from "./AgentManageView";               
+      13  
+      14  interface SidebarProps {
+      15    activeConversationId: string | null;
+      16    onSelectConversation: (id: string) => void;
+      17  }
+      18  
+      16 -// ─── Agent contact colors ───────────────────────────────────
+         -──────────                                                     
+      19 +type SidebarView = "chats" | "add-agent" | "agents";           
+      20  
+      18 -/** Palette of warm, distinguishable agent avatar colors. */   
+      19 -const AGENT_PALETTE = [                                        
+      20 -  "#1a1a2e", "#b8860b", "#2b8a6b", "#7c3aed", "#c93a3a",       
+      21 -  "#2563eb", "#c2410c", "#059669", "#6d28d9", "#be185d",       
+      22 -];                                                             
+      23 -                                                               
+      24 -/** Generate a consistent color for an agent based on its name/
+         -ID hash. */                                                    
+      25 -function getAgentColor(name: string): string {                 
+      26 -  let hash = 0;                                                
+      27 -  for (let i = 0; i < name.length; i++) {                      
+      28 -    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;      
+      29 -  }                                                            
+      30 -  return AGENT_PALETTE[Math.abs(hash) % AGENT_PALETTE.length]!;
+      31 -}                                                              
+      32 -                                                               
+      21  export default function Sidebar({ activeConversationId, onSelec
+          tConversation }: SidebarProps) {
+      22    const { user, logout } = useAuth();
+      35 -  const { conversations, isLoadingConversations, createConversa
+         -tion, contacts, fetchContacts, fetchConversations, togglePinCon
+         -versation, toggleArchiveConversation } = useChat();            
+      23 +  const {                                                      
+      24 +    conversations, isLoadingConversations, createConversation, 
+         +contacts,                                                      
+      25 +    fetchContacts, fetchConversations, togglePinConversation, t
+         +oggleArchiveConversation,                                      
+      26 +  } = useChat();                                               
+      27    const { t } = useI18n();
+      37 -  const [searchQuery, setSearchQuery] = useState("");          
+      38 -  const [showNewChatDialog, setShowNewChatDialog] = useState(fa
+         -lse);                                                          
+      28 +                                                               
+      29 +  const [sidebarView, setSidebarView] = useState<SidebarView>("
+         +chats");                                                       
+      30    const [showCreateAgentModal, setShowCreateAgentModal] = useSt
+          ate(false);
+      40 -  const [hoveredConvId, setHoveredConvId] = useState<string | n
+         -ull>(null);                                                    
+      41 -  const [deleteConfirmId, setDeleteConfirmId] = useState<string
+         - | null>(null);                                                
+      42 -  const [showArchived, setShowArchived] = useState(false);     
+      43 -  const [isGroupMode, setIsGroupMode] = useState(false);       
+      44 -  const [selectedAgentIds, setSelectedAgentIds] = useState<Set<
+         -string>>(new Set());                                           
+      31  
+      46 -  const filteredConversations = useMemo(                       
+      47 -    () => conversations.filter((c) => c.title.toLowerCase().inc
+         -ludes(searchQuery.toLowerCase())),                             
+      48 -    [conversations, searchQuery],                              
+      49 -  );                                                           
+      32 +  // ─── Handlers ─────────────────────────────────────────────
+         +─────────────                                                  
+      33  
+      51 -  // Agents to show in contact strip (top 4-5 frequent agents) 
+      52 -  const topAgents = (contacts ?? []).slice(0, 4);              
+      34 +  function handleNewChat() {                                   
+      35 +    setSidebarView("add-agent");                               
+      36 +  }                                                            
+      37  
+      38    async function handlePillClick(agentId: string) {
+      39      try {
+     ...
+       57      try {
+       58        await api.delete(`/api/conversations/${convId}/delete`);
+       59        if (activeConversationId === convId) onSelectConversatio
+           n("");
+       76 -      setDeleteConfirmId(null);                               
+       60        fetchConversations();
+       61      } catch {
+       62        // silent
+       63      }
+       64    }
+       65  
+       83 -  async function handleNewChat() {                            
+       84 -    setShowNewChatDialog(true);                               
+       85 -    setIsGroupMode(false);                                    
+       86 -    setSelectedAgentIds(new Set());                           
+       87 -  }                                                           
+       66 +  // ─── View title ──────────────────────────────────────────
+          +──────────────                                                
+       67  
+       89 -  async function handleSelectAgent(agentId: string) {         
+       90 -    const agent = contacts?.find((a: { id: string; name: strin
+          -g }) => a.id === agentId);                                    
+       91 -    const title = agent ? `${agent.name}` : "新对话";         
+       92 -    const conv = await createConversation(title, "single", [ag
+          -entId]);                                                      
+       93 -    if (conv?.id) onSelectConversation(conv.id);              
+       94 -    setShowNewChatDialog(false);                              
+       95 -  }                                                           
+       68 +  const viewTitle = sidebarView === "add-agent" ? "添加 Agent"
+          + : "我的 Agent";                                              
+       69  
+       97 -  async function handleCreateGroup() {                        
+       98 -    const selectedIds = Array.from(selectedAgentIds);         
+       99 -    if (selectedIds.length < 2) return;                       
+      100 -    const names = selectedIds                                 
+      101 -      .map((id) => contacts?.find((c) => c.id === id)?.name)  
+      102 -      .filter(Boolean)                                        
+      103 -      .join(", ");                                            
+      104 -    const title = `群聊: ${names}`;                           
+      105 -    const conv = await createConversation(title, "group", sele
+          -ctedIds);                                                     
+      106 -    if (conv?.id) onSelectConversation(conv.id);              
+      107 -    setShowNewChatDialog(false);                              
+      108 -    setSelectedAgentIds(new Set());                           
+      109 -    setIsGroupMode(false);                                    
+      110 -  }                                                           
+       70 +  // ─── Render ──────────────────────────────────────────────
+          +──────────────                                                
+       71  
+      112 -  function toggleAgentSelection(agentId: string) {            
+      113 -    setSelectedAgentIds((prev) => {                           
+      114 -      const next = new Set(prev);                             
+      115 -      if (next.has(agentId)) {                                
+      116 -        next.delete(agentId);                                 
+      117 -      } else {                                                
+      118 -        next.add(agentId);                                    
+      119 -      }                                                       
+      120 -      return next;                                            
+      121 -    });                                                       
+      122 -  }                                                           
+      123 -                                                              
+       72    return (
+       73      <div className="flex h-full flex-col" style={{ background:
+            "var(--bg-sidebar)" }}>
+      126 -      {/* Header — Design Doc Section 3.1 */}                 
+       74 +      {/* Header */}                                          
+       75        <div
+       76          className="flex items-center justify-between flex-shri
+           nk-0"
+       77          style={{ padding: "22px 18px 14px" }}
+       78        >
+      131 -        <h2                                                   
+      132 -          className="font-semibold"                           
+      133 -          style={{                                            
+      134 -            fontSize: "16px",                                 
+      135 -            fontWeight: 600,                                  
+      136 -            letterSpacing: "-0.3px",                          
+      137 -            color: "var(--text-primary)",                     
+      138 -          }}                                                  
+      139 -        >                                                     
+      140 -          Agent<span style={{ color: "var(--text-tertiary)", f
+          -ontWeight: 300 }}>Hub</span>                                  
+      141 -        </h2>                                                 
+      142 -        <button                                               
+      143 -          onClick={handleNewChat}                             
+      144 -          className="flex items-center justify-center text-sm 
+          -transition-all cursor-pointer"                                
+      145 -          style={{                                            
+      146 -            width: "30px",                                    
+      147 -            height: "30px",                                   
+      148 -            border: "1px solid var(--border)",                
+      149 -            borderRadius: "var(--radius-sm)",                 
+      150 -            background: "var(--bg-app)",                      
+      151 -            color: "var(--text-secondary)",                   
+      152 -            fontSize: "15px",                                 
+      153 -          }}                                                  
+      154 -          onMouseEnter={(e) => {                              
+      155 -            e.currentTarget.style.background = "var(--bg-hover
+          -)";                                                           
+      156 -            e.currentTarget.style.transform = "scale(1.05)";  
+      157 -          }}                                                  
+      158 -          onMouseLeave={(e) => {                              
+      159 -            e.currentTarget.style.background = "var(--bg-app)"
+          -;                                                             
+      160 -            e.currentTarget.style.transform = "scale(1)";     
+      161 -          }}                                                  
+      162 -        >                                                     
+      163 -          +                                                   
+      164 -        </button>                                             
+       79 +        {sidebarView === "chats" ? (                          
+       80 +          <>                                                  
+       81 +            <h2                                               
+       82 +              className="font-semibold"                       
+       83 +              style={{                                        
+       84 +                fontSize: "16px",                             
+       85 +                fontWeight: 600,                              
+       86 +                letterSpacing: "-0.3px",                      
+       87 +                color: "var(--text-primary)",                 
+       88 +              }}                                              
+       89 +            >                                                 
+       90 +              Agent<span style={{ color: "var(--text-tertiary)
+          +", fontWeight: 300 }}>Hub</span>                              
+       91 +            </h2>                                             
+       92 +            <div className="flex items-center gap-1.5">       
+       93 +              <button                                         
+       94 +                onClick={handleNewChat}                       
+       95 +                className="flex items-center justify-center te
+          +xt-sm transition-all cursor-pointer"                          
+       96 +                style={{                                      
+       97 +                  width: "30px",                              
+       98 +                  height: "30px",                             
+       99 +                  border: "1px solid var(--border)",          
+      100 +                  borderRadius: "var(--radius-sm)",           
+      101 +                  background: "var(--bg-app)",                
+      102 +                  color: "var(--text-secondary)",             
+      103 +                  fontSize: "15px",                           
+      104 +                }}                                            
+      105 +                onMouseEnter={(e) => {                        
+      106 +                  e.currentTarget.style.background = "var(--bg
+          +-hover)";                                                     
+      107 +                  e.currentTarget.style.transform = "scale(1.0
+          +5)";                                                          
+      108 +                }}                                            
+      109 +                onMouseLeave={(e) => {                        
+      110 +                  e.currentTarget.style.background = "var(--bg
+          +-app)";                                                       
+      111 +                  e.currentTarget.style.transform = "scale(1)"
+          +;                                                             
+      112 +                }}                                            
+      113 +                title="新建会话"                              
+      114 +              >                                               
+      115 +                +                                             
+      116 +              </button>                                       
+      117 +              <button                                         
+      118 +                onClick={() => setSidebarView("agents")}      
+      119 +                className="flex items-center justify-center te
+          +xt-sm transition-all cursor-pointer"                          
+      120 +                style={{                                      
+      121 +                  width: "30px",                              
+      122 +                  height: "30px",                             
+      123 +                  border: "1px solid var(--border)",          
+      124 +                  borderRadius: "var(--radius-sm)",           
+      125 +                  background: "var(--bg-app)",                
+      126 +                  color: "var(--text-secondary)",             
+      127 +                  fontSize: "14px",                           
+      128 +                }}                                            
+      129 +                onMouseEnter={(e) => {                        
+      130 +                  e.currentTarget.style.background = "var(--bg
+          +-hover)";                                                     
+      131 +                  e.currentTarget.style.transform = "scale(1.0
+          +5)";                                                          
+      132 +                }}                                            
+      133 +                onMouseLeave={(e) => {                        
+      134 +                  e.currentTarget.style.background = "var(--bg
+          +-app)";                                                       
+      135 +                  e.currentTarget.style.transform = "scale(1)"
+          +;                                                             
+      136 +                }}                                            
+      137 +                title="Agent 管理"                            
+      138 +              >                                               
+      139 +                🤖                                            
+      140 +              </button>                                       
+      141 +            </div>                                            
+      142 +          </>                                                 
+      143 +        ) : (                                                 
+      144 +          <>                                                  
+      145 +            <div className="flex items-center gap-2">         
+      146 +              <button                                         
+      147 +                onClick={() => setSidebarView("chats")}       
+      148 +                className="flex items-center justify-center tr
+          +ansition-colors cursor-pointer"                               
+      149 +                style={{                                      
+      150 +                  width: "24px",                              
+      151 +                  height: "24px",                             
+      152 +                  borderRadius: "var(--radius-sm)",           
+      153 +                  color: "var(--text-secondary)",             
+      154 +                  fontSize: "14px",                           
+      155 +                }}                                            
+      156 +                onMouseEnter={(e) => { e.currentTarget.style.b
+          +ackground = "var(--bg-hover)"; }}                             
+      157 +                onMouseLeave={(e) => { e.currentTarget.style.b
+          +ackground = "transparent"; }}                                 
+      158 +                title="返回"                                  
+      159 +              >                                               
+      160 +                ←                                             
+      161 +              </button>                                       
+      162 +              <h2                                             
+      163 +                className="font-semibold"                     
+      164 +                style={{                                      
+      165 +                  fontSize: "14px",                           
+      166 +                  fontWeight: 600,                            
+      167 +                  color: "var(--text-primary)",               
+      168 +                }}                                            
+      169 +              >                                               
+      170 +                {viewTitle}                                   
+      171 +              </h2>                                           
+      172 +            </div>                                            
+      173 +            {/* Spacer to keep header balanced */}            
+      174 +            <div style={{ width: "24px" }} />                 
+      175 +          </>                                                 
+      176 +        )}                                                    
+      177        </div>
+      178  
+      167 -      {/* Search — Design Doc Section 3.2 */}                 
+      168 -      <div                                                    
+      169 -        className="flex items-center gap-1.5 text-xs transitio
+          -n-colors flex-shrink-0"                                       
+      170 -        style={{                                              
+      171 -          margin: "0 14px 12px",                              
+      172 -          padding: "7px 12px",                                
+      173 -          background: "var(--bg-app)",                        
+      174 -          border: "1px solid var(--border-light)",            
+      175 -          borderRadius: "var(--radius-md)",                   
+      176 -          color: "var(--text-tertiary)",                      
+      177 -        }}                                                    
+      178 -      >                                                       
+      179 -        <span style={{ fontSize: "11px" }}>&#128269;</span>   
+      180 -        <input                                                
+      181 -          placeholder={t("chat").searchPlaceholder}           
+      182 -          value={searchQuery}                                 
+      183 -          onChange={(e) => setSearchQuery(e.target.value)}    
+      184 -          className="flex-1 bg-transparent text-xs outline-non
+          -e"                                                            
+      185 -          style={{ color: "var(--text-primary)", fontSize: "12
+          -px" }}                                                        
+      186 -        />                                                    
+      187 -        <kbd                                                  
+      188 -          className="rounded border px-1"                     
+      189 -          style={{                                            
+      190 -            borderColor: "var(--border-light)",               
+      191 -            color: "var(--text-tertiary)",                    
+      192 -            fontSize: "9px",                                  
+      193 -            fontFamily: "var(--font-mono)",                   
+      194 -          }}                                                  
+      195 -        >                                                     
+      196 -          ⌘K                                                  
+      197 -        </kbd>                                                
+      198 -      </div>                                                  
+      199 -                                                              
+      200 -      {/* Contact Strip — Design Doc Section 3.3 */}          
+      201 -      {topAgents.length > 0 && (                              
+      179 +      {/* Contact Strip — visible in all views */}            
+      180 +      {contacts && contacts.length > 0 && (                   
+      181          <div
+      182            className="flex gap-1.5 overflow-x-auto flex-shrink-
+           0"
+      183            style={{ padding: "2px 14px 10px" }}
+      184          >
+      206 -          {topAgents.map((agent) => {                         
+      185 +          {contacts.slice(0, 4).map((agent) => {              
+      186 +            const agentPalette = [                            
+      187 +              "#1a1a2e", "#b8860b", "#2b8a6b", "#7c3aed", "#c9
+          +3a3a",                                                        
+      188 +              "#2563eb", "#c2410c", "#059669", "#6d28d9", "#be
+          +185d",                                                        
+      189 +            ];                                                
+      190 +            let hash = 0;                                     
+      191 +            for (let i = 0; i < (agent.name ?? "").length; i++
+          +) {                                                           
+      192 +              hash = ((hash << 5) - hash + agent.name.charCode
+          +At(i)) | 0;                                                   
+      193 +            }                                                 
+      194 +            const color = agentPalette[Math.abs(hash) % agentP
+          +alette.length]!;                                              
+      195 +                                                              
+      196              return (
+      197                <div
+      198                  key={agent.id}
+     ...
+      206                      width: "18px",
+      207                      height: "18px",
+      208                      borderRadius: "50%",
+      220 -                    background: getAgentColor(agent.name ?? ""
+          -),                                                            
+      209 +                    background: color,                        
+      210                      fontSize: "8px",
+      211                    }}
+      212                  >
+     ...
+      219          </div>
+      220        )}
+      221  
+      233 -      {/* Conversation List — Design Doc Section 3.4 */}      
+      234 -      <div className="flex-1 overflow-y-auto" style={{ padding
+          -: "0 8px" }}>                                                 
+      235 -        {isLoadingConversations ? (                           
+      236 -          <div className="flex flex-col gap-1.5 px-1">        
+      237 -            {[1, 2, 3].map((i) => (                           
+      238 -              <div key={i} className="skeleton" style={{ heigh
+          -t: "48px", marginBottom: "2px" }} />                          
+      239 -            ))}                                               
+      240 -          </div>                                              
+      241 -        ) : filteredConversations.length === 0 ? (            
+      242 -          <div                                                
+      243 -            className="flex flex-col items-center justify-cent
+          -er py-10 text-center"                                         
+      244 -            style={{ color: "var(--text-tertiary)", fontSize: 
+          -"11px" }}                                                     
+      245 -          >                                                   
+      246 -            <p>{t("chat").emptyConversations}</p>             
+      247 -          </div>                                              
+      248 -        ) : (                                                 
+      249 -          filteredConversations.map((conv) => {               
+      250 -            const isActive = conv.id === activeConversationId;
+      251 -            const isHovered = hoveredConvId === conv.id;      
+      252 -            const isDeleteConfirm = deleteConfirmId === conv.i
+          -d;                                                            
+      253 -            return (                                          
+      254 -              <div                                            
+      255 -                key={conv.id}                                 
+      256 -                style={{ position: "relative" }}              
+      257 -                onMouseEnter={() => setHoveredConvId(conv.id)}
+      258 -                onMouseLeave={() => setHoveredConvId(null)}   
+      259 -              >                                               
+      260 -                <button                                       
+      261 -                  onClick={() => onSelectConversation(conv.id)
+          -}                                                             
+      262 -                  className="w-full text-left transition-all" 
+      263 -                  style={{                                    
+      264 -                    padding: "11px 12px",                     
+      265 -                    borderRadius: "var(--radius-md)",         
+      266 -                    cursor: "pointer",                        
+      267 -                    marginBottom: "2px",                      
+      268 -                    position: "relative",                     
+      269 -                    background: isActive ? "var(--bg-active)" 
+          -: isHovered ? "var(--bg-hover)" : "transparent",              
+      270 -                    transition: "all 0.18s ease",             
+      271 -                  }}                                          
+      272 -                >                                             
+      273 -                  {/* Active indicator bar */}                
+      274 -                  {isActive && (                              
+      275 -                    <div                                      
+      276 -                      style={{                                
+      277 -                        position: "absolute",                 
+      278 -                        left: "-6px",                         
+      279 -                        top: "50%",                           
+      280 -                        transform: "translateY(-50%)",        
+      281 -                        width: "3px",                         
+      282 -                        height: "24px",                       
+      283 -                        background: "var(--text-primary)",    
+      284 -                        borderRadius: "0 3px 3px 0",          
+      285 -                      }}                                      
+      286 -                    />                                        
+      287 -                  )}                                          
+      288 -                  <div className="flex justify-between items-c
+          -enter">                                                       
+      289 -                    <span                                     
+      290 -                      className="truncate flex items-center ga
+          -p-1.5"                                                        
+      291 -                      style={{                                
+      292 -                        fontSize: "13px",                     
+      293 -                        fontWeight: 500,                      
+      294 -                        color: "var(--text-primary)",         
+      295 -                      }}                                      
+      296 -                    >                                         
+      297 -                      {conv.isPinned && (                     
+      298 -                        <svg className="h-3 w-3 flex-shrink-0"
+          - fill="var(--text-tertiary)" viewBox="0 0 20 20">             
+      299 -                          <path d="M9.049 2.927c.3-.921 1.603-
+          -.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24
+          -.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.75
+          -5 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.78
+          -4.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.9
+          -8 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07
+          --3.292z" />                                                   
+      300 -                        </svg>                                
+      301 -                      )}                                      
+      302 -                      {conv.isArchived && (                   
+      303 -                        <span style={{ fontSize: "9px", color:
+          - "var(--text-tertiary)" }}>📦</span>                          
+      304 -                      )}                                      
+      305 -                      {conv.type === "group" && (             
+      306 -                        <span                                 
+      307 -                          className="flex items-center justify
+          --center flex-shrink-0"                                        
+      308 -                          style={{                            
+      309 -                            fontSize: "7px",                  
+      310 -                            fontWeight: 600,                  
+      311 -                            color: "var(--accent)",           
+      312 -                            border: "1px solid var(--accent)",
+      313 -                            borderRadius: "4px",              
+      314 -                            padding: "0 4px",                 
+      315 -                            height: "14px",                   
+      316 -                            lineHeight: "14px",               
+      317 -                          }}                                  
+      318 -                        >                                     
+      319 -                          群                                  
+      320 -                        </span>                               
+      321 -                      )}                                      
+      322 -                      {conv.title}                            
+      323 -                    </span>                                   
+      324 -                    <span                                     
+      325 -                      className="flex-shrink-0"               
+      326 -                      style={{                                
+      327 -                        color: "var(--text-tertiary)",        
+      328 -                        fontSize: "10px",                     
+      329 -                        fontFamily: "var(--font-mono)",       
+      330 -                      }}                                      
+      331 -                    >                                         
+      332 -                      {conv.lastMessageAt                     
+      333 -                        ? new Date(conv.lastMessageAt).toLocal
+          -eTimeString([], { hour: "2-digit", minute: "2-digit" })       
+      334 -                        : ""}                                 
+      335 -                    </span>                                   
+      336 -                  </div>                                      
+      337 -                  <div                                        
+      338 -                    className="truncate"                      
+      339 -                    style={{                                  
+      340 -                      color: "var(--text-secondary)",         
+      341 -                      fontSize: "11px",                       
+      342 -                      marginTop: "3px",                       
+      343 -                    }}                                        
+      344 -                  >                                           
+      345 -                    {conv.lastMessageAt                       
+      346 -                      ? new Date(conv.lastMessageAt).toLocaleD
+          -ateString()                                                   
+      347 -                      : ""}                                   
+      348 -                  </div>                                      
+      349 -                  {/* Mini agent avatars */}                  
+      350 -                  <div className="flex gap-0.5" style={{ margi
+          -nTop: "5px" }}>                                               
+      351 -                    {(conv.contactIds ?? []).slice(0, 3).map((
+          -contactId, i) => {                                            
+      352 -                      const contact = contacts?.find((c) => c.
+          -id === contactId);                                            
+      353 -                      return (                                
+      354 -                        <span                                 
+      355 -                          key={contactId ?? i}                
+      356 -                          className="flex items-center justify
+          --center text-white"                                           
+      357 -                          style={{                            
+      358 -                            width: "16px",                    
+      359 -                            height: "16px",                   
+      360 -                            borderRadius: "50%",              
+      361 -                            fontSize: "7px",                  
+      362 -                            background: getAgentColor(contact?
+          -.name ?? ""),                                                 
+      363 -                            border: "1.5px solid var(--bg-side
+          -bar)",                                                        
+      364 -                          }}                                  
+      365 -                        >                                     
+      366 -                          {(contact?.name ?? "?")[0]?.toUpperC
+          -ase()}                                                        
+      367 -                        </span>                               
+      368 -                      );                                      
+      369 -                    })}                                       
+      370 -                  </div>                                      
+      371 -                </button>                                     
+      372 -                                                              
+      373 -                {/* Hover actions: Pin / Archive / Delete */} 
+      374 -                {isHovered && !isDeleteConfirm && (           
+      375 -                  <div                                        
+      376 -                    className="flex items-center gap-0.5"     
+      377 -                    style={{                                  
+      378 -                      position: "absolute",                   
+      379 -                      top: "8px",                             
+      380 -                      right: "10px",                          
+      381 -                      zIndex: 10,                             
+      382 -                    }}                                        
+      383 -                  >                                           
+      384 -                    <button                                   
+      385 -                      onClick={(e) => { e.stopPropagation(); t
+          -ogglePinConversation(conv.id, conv.isPinned ?? false); }}     
+      386 -                      className="flex items-center justify-cen
+          -ter rounded transition-colors"                                
+      387 -                      style={{                                
+      388 -                        width: "22px", height: "22px",        
+      389 -                        color: conv.isPinned ? "var(--accent)"
+          - : "var(--text-tertiary)",                                    
+      390 -                        background: "var(--bg-app)",          
+      391 -                        fontSize: "9px",                      
+      392 -                      }}                                      
+      393 -                      title={conv.isPinned ? "取消置顶" : "置 
+          -顶"}                                                          
+      394 -                    >                                         
+      395 -                      <svg className="h-2.5 w-2.5" fill="none"
+          - viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>   
+      396 -                        <path strokeLinecap="round" strokeLine
+          -join="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21
+          -V5z" />                                                       
+      397 -                      </svg>                                  
+      398 -                    </button>                                 
+      399 -                    <button                                   
+      400 -                      onClick={(e) => { e.stopPropagation(); t
+          -oggleArchiveConversation(conv.id, conv.isArchived ?? false); }
+          -}                                                             
+      401 -                      className="flex items-center justify-cen
+          -ter rounded transition-colors"                                
+      402 -                      style={{                                
+      403 -                        width: "22px", height: "22px",        
+      404 -                        color: "var(--text-tertiary)",        
+      405 -                        background: "var(--bg-app)",          
+      406 -                        fontSize: "9px",                      
+      407 -                      }}                                      
+      408 -                      title={conv.isArchived ? "取消归档" : " 
+          -归档"}                                                        
+      409 -                    >                                         
+      410 -                      <svg className="h-2.5 w-2.5" fill="none"
+          - viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>   
+      411 -                        <path strokeLinecap="round" strokeLine
+          -join="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a
+          -2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />                       
+      412 -                      </svg>                                  
+      413 -                    </button>                                 
+      414 -                    <button                                   
+      415 -                      onClick={(e) => { e.stopPropagation(); s
+          -etDeleteConfirmId(conv.id); }}                                
+      416 -                      className="flex items-center justify-cen
+          -ter rounded transition-colors"                                
+      417 -                      style={{                                
+      418 -                        width: "22px", height: "22px",        
+      419 -                        color: "var(--text-tertiary)",        
+      420 -                        background: "var(--bg-app)",          
+      421 -                        fontSize: "9px",                      
+      422 -                      }}                                      
+      423 -                      title="删除"                            
+      424 -                    >                                         
+      425 -                      <svg className="h-2.5 w-2.5" fill="none"
+          - viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>   
+      426 -                        <path strokeLinecap="round" strokeLine
+          -join="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2
+          - 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0
+          - 00-1 1v3M4 7h16" />                                          
+      427 -                      </svg>                                  
+      428 -                    </button>                                 
+      429 -                  </div>                                      
+      430 -                )}                                            
+      431 -                                                              
+      432 -                {/* Delete confirmation */}                   
+      433 -                {isDeleteConfirm && (                         
+      434 -                  <div                                        
+      435 -                    className="flex items-center gap-1.5"     
+      436 -                    style={{                                  
+      437 -                      position: "absolute",                   
+      438 -                      top: "8px",                             
+      439 -                      right: "10px",                          
+      440 -                      zIndex: 10,                             
+      441 -                    }}                                        
+      442 -                  >                                           
+      443 -                    <span className="text-[10px]" style={{ col
+          -or: "var(--text-tertiary)" }}>确认?</span>                    
+      444 -                    <button                                   
+      445 -                      onClick={(e) => { e.stopPropagation(); h
+          -andleDeleteConversation(conv.id); }}                          
+      446 -                      className="rounded px-1.5 py-0.5 text-[1
+          -0px] text-white"                                              
+      447 -                      style={{ background: "var(--red)" }}    
+      448 -                    >                                         
+      449 -                      删除                                    
+      450 -                    </button>                                 
+      451 -                    <button                                   
+      452 -                      onClick={(e) => { e.stopPropagation(); s
+          -etDeleteConfirmId(null); }}                                   
+      453 -                      className="rounded px-1.5 py-0.5 text-[1
+          -0px]"                                                         
+      454 -                      style={{ color: "var(--text-tertiary)" }
+          -}                                                             
+      455 -                    >                                         
+      456 -                      取消                                    
+      457 -                    </button>                                 
+      458 -                  </div>                                      
+      459 -                )}                                            
+      460 -              </div>                                          
+      461 -            );                                                
+      462 -          })                                                  
+      463 -        )}                                                    
+      464 -                                                              
+      465 -        {/* Archived toggle */}                               
+      466 -        {conversations.some((c) => c.isArchived) && (         
+      467 -          <div style={{ padding: "4px 14px" }}>               
+      468 -            <button                                           
+      469 -              onClick={() => setShowArchived(!showArchived)}  
+      470 -              className="w-full text-left text-[10px] transiti
+          -on-colors"                                                    
+      471 -              style={{                                        
+      472 -                color: "var(--text-tertiary)",                
+      473 -                padding: "4px 8px",                           
+      474 -                borderRadius: "var(--radius-sm)",             
+      475 -              }}                                              
+      476 -              onMouseEnter={(e) => { e.currentTarget.style.col
+          -or = "var(--text-secondary)"; }}                              
+      477 -              onMouseLeave={(e) => { e.currentTarget.style.col
+          -or = "var(--text-tertiary)"; }}                               
+      478 -            >                                                 
+      479 -              {showArchived ? "▲ 隐藏已归档" : "▼ 显示已归档"}
+      480 -            </button>                                         
+      481 -          </div>                                              
+      482 -        )}                                                    
+      222 +      {/* View content */}                                    
+      223 +      <div className="flex-1 overflow-hidden" style={{ positio
+          +n: "relative" }}>                                             
+      224 +        <div                                                  
+      225 +          style={{                                            
+      226 +            opacity: sidebarView === "chats" ? 1 : 0,         
+      227 +            transform: sidebarView === "chats" ? "translateY(0
+          +)" : "translateY(8px)",                                       
+      228 +            transition: "opacity 0.2s ease, transform 0.2s eas
+          +e",                                                           
+      229 +            height: "100%",                                   
+      230 +            overflow: "hidden",                               
+      231 +            pointerEvents: sidebarView === "chats" ? "auto" : 
+          +"none",                                                       
+      232 +            position: "absolute",                             
+      233 +            inset: 0,                                         
+      234 +          }}                                                  
+      235 +        >                                                     
+      236 +          <ChatListView                                       
+      237 +            conversations={conversations}                     
+      238 +            isLoadingConversations={isLoadingConversations}   
+      239 +            activeConversationId={activeConversationId}       
+      240 +            onSelectConversation={onSelectConversation}       
+      241 +            onDeleteConversation={handleDeleteConversation}   
+      242 +            togglePinConversation={togglePinConversation}     
+      243 +            toggleArchiveConversation={toggleArchiveConversati
+          +on}                                                           
+      244 +          />                                                  
+      245 +        </div>                                                
+      246 +        <div                                                  
+      247 +          style={{                                            
+      248 +            opacity: sidebarView === "add-agent" ? 1 : 0,     
+      249 +            transform: sidebarView === "add-agent" ? "translat
+          +eY(0)" : "translateY(8px)",                                   
+      250 +            transition: "opacity 0.2s ease, transform 0.2s eas
+          +e",                                                           
+      251 +            height: "100%",                                   
+      252 +            overflow: "hidden",                               
+      253 +            pointerEvents: sidebarView === "add-agent" ? "auto
+          +" : "none",                                                   
+      254 +            position: "absolute",                             
+      255 +            inset: 0,                                         
+      256 +          }}                                                  
+      257 +        >                                                     
+      258 +          <AddAgentView                                       
+      259 +            contacts={contacts}                               
+      260 +            createConversation={createConversation}           
+      261 +            onSelectConversation={onSelectConversation}       
+      262 +            onBack={() => setSidebarView("chats")}            
+      263 +          />                                                  
+      264 +        </div>                                                
+      265 +        <div                                                  
+      266 +          style={{                                            
+      267 +            opacity: sidebarView === "agents" ? 1 : 0,        
+      268 +            transform: sidebarView === "agents" ? "translateY(
+          +0)" : "translateY(8px)",                                      
+      269 +            transition: "opacity 0.2s ease, transform 0.2s eas
+          +e",                                                           
+      270 +            height: "100%",                                   
+      271 +            overflow: "hidden",                               
+      272 +            pointerEvents: sidebarView === "agents" ? "auto" :
+          + "none",                                                      
+      273 +            position: "absolute",                             
+      274 +            inset: 0,                                         
+      275 +          }}                                                  
+      276 +        >                                                     
+      277 +          <AgentManageView                                    
+      278 +            contacts={contacts}                               
+      279 +            onRefresh={fetchContacts}                         
+      280 +            onBack={() => setSidebarView("chats")}            
+      281 +          />                                                  
+      282 +        </div>                                                
+      283        </div>
+      284  
+      485 -      {/* Bottom section — Design Doc Section 3.5 */}         
+      285 +      {/* Bottom section */}                                  
+      286        <div
+      287          className="flex-shrink-0"
+      288          style={{ padding: "6px 14px 14px" }}
+     ...
+      361            }}
+      362          />
+      363        )}
+      564 -                                                              
+      565 -      {/* New Chat Dialog */}                                 
+      566 -      {showNewChatDialog && (                                 
+      567 -        <>                                                    
+      568 -          <div className="fixed inset-0 z-40" onClick={() => s
+          -etShowNewChatDialog(false)} />                                
+      569 -          <div                                                
+      570 -            className="absolute bottom-20 left-3 right-3 z-50 
+          -rounded-lg border p-3 shadow-lg"                              
+      571 -            style={{                                          
+      572 -              background: "var(--bg-app)",                    
+      573 -              borderColor: "var(--border)",                   
+      574 -              boxShadow: "var(--shadow-md)",                  
+      575 -            }}                                                
+      576 -          >                                                   
+      577 -            {/* Mode toggle */}                               
+      578 -            <div className="flex items-center gap-2 mb-3">    
+      579 -              <button                                         
+      580 -                onClick={() => { setIsGroupMode(false); setSel
+          -ectedAgentIds(new Set()); }}                                  
+      581 -                className="flex-1 rounded-md py-1.5 text-xs fo
+          -nt-medium transition-all cursor-pointer"                      
+      582 -                style={{                                      
+      583 -                  background: !isGroupMode ? "var(--text-prima
+          -ry)" : "transparent",                                         
+      584 -                  color: !isGroupMode ? "var(--bg-app)" : "var
+          -(--text-tertiary)",                                           
+      585 -                  border: "none",                             
+      586 -                }}                                            
+      587 -              >                                               
+      588 -                单聊                                          
+      589 -              </button>                                       
+      590 -              <button                                         
+      591 -                onClick={() => { setIsGroupMode(true); setSele
+          -ctedAgentIds(new Set()); }}                                   
+      592 -                className="flex-1 rounded-md py-1.5 text-xs fo
+          -nt-medium transition-all cursor-pointer"                      
+      593 -                style={{                                      
+      594 -                  background: isGroupMode ? "var(--text-primar
+          -y)" : "transparent",                                          
+      595 -                  color: isGroupMode ? "var(--bg-app)" : "var(
+          ---text-tertiary)",                                            
+      596 -                  border: "none",                             
+      597 -                }}                                            
+      598 -              >                                               
+      599 -                群聊                                          
+      600 -              </button>                                       
+      601 -            </div>                                            
+      602 -                                                              
+      603 -            <div                                              
+      604 -              className="mb-2 font-semibold"                  
+      605 -              style={{ color: "var(--text-primary)", fontSize:
+          - "12px" }}                                                    
+      606 -            >                                                 
+      607 -              {isGroupMode ? "选择 Agent 加入群组" : t("chat")
+          -.selectAgent}                                                 
+      608 -            </div>                                            
+      609 -                                                              
+      610 -            {/* Selected count & hint in group mode */}       
+      611 -            {isGroupMode && (                                 
+      612 -              <div                                            
+      613 -                className="mb-2 text-xs"                      
+      614 -                style={{ color: "var(--text-tertiary)" }}     
+      615 -              >                                               
+      616 -                已选 {selectedAgentIds.size} 个 Agent         
+      617 -                {selectedAgentIds.size < 2 && "（至少选 2 个）
+          -"}                                                            
+      618 -              </div>                                          
+      619 -            )}                                                
+      620 -                                                              
+      621 -            <div className="flex flex-col gap-1">             
+      622 -              {(contacts ?? []).slice(0, 6).map((agent: { id: 
+          -string; name: string }) => {                                  
+      623 -                const isSelected = selectedAgentIds.has(agent.
+          -id);                                                          
+      624 -                return (                                      
+      625 -                  <button                                     
+      626 -                    key={agent.id}                            
+      627 -                    onClick={() => {                          
+      628 -                      if (isGroupMode) {                      
+      629 -                        toggleAgentSelection(agent.id);       
+      630 -                      } else {                                
+      631 -                        handleSelectAgent(agent.id);          
+      632 -                      }                                       
+      633 -                    }}                                        
+      634 -                    className="flex items-center gap-2 rounded
+          --md px-2.5 py-2 text-xs transition-colors w-full text-left"   
+      635 -                    style={{                                  
+      636 -                      color: "var(--text-primary)",           
+      637 -                      background: isSelected ? "var(--bg-hover
+          -)" : "transparent",                                           
+      638 -                    }}                                        
+      639 -                    onMouseEnter={(e) => { if (!isSelected) e.
+          -currentTarget.style.background = "var(--bg-hover)"; }}        
+      640 -                    onMouseLeave={(e) => { if (!isSelected) e.
+          -currentTarget.style.background = "transparent"; }}            
+      641 -                  >                                           
+      642 -                    {isGroupMode && (                         
+      643 -                      <span                                   
+      644 -                        className="flex items-center justify-c
+          -enter flex-shrink-0"                                          
+      645 -                        style={{                              
+      646 -                          width: "16px",                      
+      647 -                          height: "16px",                     
+      648 -                          borderRadius: "4px",                
+      649 -                          border: `1.5px solid ${isSelected ? 
+          -"var(--text-primary)" : "var(--border)"}`,                    
+      650 -                          background: isSelected ? "var(--text
+          --primary)" : "transparent",                                   
+      651 -                          color: isSelected ? "var(--bg-app)" 
+          -: "transparent",                                              
+      652 -                          fontSize: "9px",                    
+      653 -                        }}                                    
+      654 -                      >                                       
+      655 -                        {isSelected ? "✓" : ""}               
+      656 -                      </span>                                 
+      657 -                    )}                                        
+      658 -                    <span                                     
+      659 -                      className="flex items-center justify-cen
+          -ter text-white font-medium rounded-full flex-shrink-0"        
+      660 -                      style={{                                
+      661 -                        width: "22px",                        
+      662 -                        height: "22px",                       
+      663 -                        background: getAgentColor(agent.name ?
+          -? ""),                                                        
+      664 -                        fontSize: "8px",                      
+      665 -                      }}                                      
+      666 -                    >                                         
+      667 -                      {(agent.name ?? "?")[0]?.toUpperCase()} 
+      668 -                    </span>                                   
+      669 -                    {agent.name}                              
+      670 -                  </button>                                   
+      671 -                );                                            
+      672 -              })}                                             
+      673 -            </div>                                            
+      674 -                                                              
+      675 -            {/* Group create button */}                       
+      676 -            {isGroupMode && (                                 
+      677 -              <button                                         
+      678 -                onClick={handleCreateGroup}                   
+      679 -                disabled={selectedAgentIds.size < 2}          
+      680 -                className="mt-2 w-full rounded-md py-2 text-xs
+          - font-medium transition-all cursor-pointer"                   
+      681 -                style={{                                      
+      682 -                  background: selectedAgentIds.size >= 2 ? "va
+          -r(--text-primary)" : "var(--bg-hover)",                       
+      683 -                  color: selectedAgentIds.size >= 2 ? "var(--b
+          -g-app)" : "var(--text-tertiary)",                             
+      684 -                  border: "none",                             
+      685 -                  opacity: selectedAgentIds.size >= 2 ? 1 : 0.
+          -5,                                                            
+      686 -                }}                                            
+      687 -                onMouseEnter={(e) => {                        
+      688 -                  if (selectedAgentIds.size >= 2) {           
+      689 -                    e.currentTarget.style.opacity = "0.85";   
+      690 -                  }                                           
+      691 -                }}                                            
+      692 -                onMouseLeave={(e) => {                        
+      693 -                  e.currentTarget.style.opacity = selectedAgen
+          -tIds.size >= 2 ? "1" : "0.5";                                 
+      694 -                }}                                            
+      695 -              >                                               
+      696 -                创建群聊 ({selectedAgentIds.size} 个 Agent)   
+      697 -              </button>                                       
+      698 -            )}                                                
+      699 -                                                              
+      700 -            <button                                           
+      701 -              onClick={() => setShowNewChatDialog(false)}     
+      702 -              className="mt-2 w-full rounded-md py-2 text-xs t
+          -ransition-colors"                                             
+      703 -              style={{                                        
+      704 -                color: "var(--text-tertiary)",                
+      705 -                background: "var(--bg-hover)",                
+      706 -              }}                                              
+      707 -              onMouseEnter={(e) => { e.currentTarget.style.bac
+          -kground = "var(--bg-active)"; }}                              
+      708 -              onMouseLeave={(e) => { e.currentTarget.style.bac
+          -kground = "var(--bg-hover)"; }}                               
+      709 -            >                                                 
+      710 -              {t("common").cancel}                            
+      711 -            </button>                                         
+      712 -          </div>                                              
+      713 -        </>                                                   
+      714 -      )}                                                      
+      364      </div>
+      365    );
+      366  }
+
+● Now let me verify it builds correctly.
+
+● Bash(cd /d/D:/code/github/AgentHub && pnpm --filter @agenthub/web typecheck
+      2>&1 | head -60)
+  ⎿  Error: Exit code 1
+     /usr/bin/bash: line 1: cd: /d/D:/code/github/AgentHub: No such file or 
+     directory
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | head -80)
+  ⎿  > @agenthub/web@0.1.0 typecheck D:\code\github\AgentHub\apps\web
+     > tsc --noEmit
+     … +162 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● The errors are all pre-existing test file issues. Let me check if any errors
+  relate to my changed files.
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | grep -E
+      "(Sidebar|ChatListView|AddAgentView|AgentManageView|chat-context)" ||
+      echo…)
+  ⎿  No errors in changed files
+
+● All zero errors in my changed files — type checking passes cleanly. Now let me
+   update the task tracking.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(openspec\changes\sidebar-multi-view-redesign\tasks.md)
+  ⎿  Added 4 lines, removed 4 lines
+      1  ## 1. Sidebar 视图状态机
+      2  
+      3 -- [ ] 1.1 在 Sidebar 中添加 `sidebarView` state（类型: `'chats' 
+        -| 'add-agent' | 'agents'`），替换 `showNewChatDialog` state     
+      4 -- [ ] 1.2 修改 Header：`chats` 视图显示 "AgentHub" + "+" + "🤖" 
+        -；`add-agent`/`agents` 视图显示 "← 返回" + 视图标题             
+      5 -- [ ] 1.3 Header "🤖" 按钮点击切换到 `agents` 视图              
+      6 -- [ ] 1.4 Header "←" 按钮点击返回 `chats` 视图                  
+      3 +- [x] 1.1 在 Sidebar 中添加 `sidebarView` state（类型: `'chats' 
+        +| 'add-agent' | 'agents'`），替换 `showNewChatDialog` state     
+      4 +- [x] 1.2 修改 Header：`chats` 视图显示 "AgentHub" + "+" + "🤖" 
+        +；`add-agent`/`agents` 视图显示 "← 返回" + 视图标题             
+      5 +- [x] 1.3 Header "🤖" 按钮点击切换到 `agents` 视图              
+      6 +- [x] 1.4 Header "←" 按钮点击返回 `chats` 视图                  
+      7  
+      8  ## 2. 提取 ChatListView 组件
+      9  
+
+● Update(openspec\changes\sidebar-multi-view-redesign\tasks.md)
+  ⎿  Added 23 lines, removed 23 lines
+       7  
+       8  ## 2. 提取 ChatListView 组件
+       9  
+      10 -- [ ] 2.1 从 Sidebar.tsx 中提取会话列表相关 JSX 为独立的 `ChatL
+         -istView` 子组件                                                
+      11 -- [ ] 2.2 将搜索框、contact pills 提取为 ChatListView 的组成部 
+         -分                                                             
+      12 -- [ ] 2.3 确保 ChatListView 在 `chats` 视图下正常渲染          
+      10 +- [x] 2.1 从 Sidebar.tsx 中提取会话列表相关 JSX 为独立的 `ChatL
+         +istView` 子组件                                                
+      11 +- [x] 2.2 将搜索框提取为 ChatListView 的组成部分（contact pills
+         + 保留在父组件，因跨视图可见）                                  
+      12 +- [x] 2.3 确保 ChatListView 在 `chats` 视图下正常渲染          
+      13  
+      14  ## 3. 实现 AddAgentView 组件
+      15  
+      16 -- [ ] 3.1 新建 `AddAgentView` 子组件，接收 `contacts`、`createC
+         -onversation`、`onSelectConversation` 等 props                  
+      17 -- [ ] 3.2 添加搜索框，通过 `useMemo` 按名称过滤 contacts       
+      18 -- [ ] 3.3 添加单聊/群聊模式切换 UI（按钮组），默认单聊         
+      19 -- [ ] 3.4 渲染 Agent 列表（avatar + name），支持滚动，不限 6 个
+      20 -- [ ] 3.5 单聊模式：点击 Agent 直接 `createConversation` + 跳转
+         - + 返回 `chats` 视图                                           
+      21 -- [ ] 3.6 群聊模式：勾选 Agent（`Set<string>` 管理选中状态）， 
+         -显示已选数量                                                   
+      22 -- [ ] 3.7 群聊模式：2+ Agent 选中后启用「创建群聊」按钮，点击执
+         -行 `createConversation` + 跳转 + 返回                          
+      23 -- [ ] 3.8 空搜索结果时显示空状态提示                           
+      16 +- [x] 3.1 新建 `AddAgentView` 子组件，接收 `contacts`、`createC
+         +onversation`、`onSelectConversation` 等 props                  
+      17 +- [x] 3.2 添加搜索框，通过 `useMemo` 按名称过滤 contacts       
+      18 +- [x] 3.3 添加单聊/群聊模式切换 UI（按钮组），默认单聊         
+      19 +- [x] 3.4 渲染 Agent 列表（avatar + name + provider），支持滚动
+         +，不限 6 个                                                    
+      20 +- [x] 3.5 单聊模式：点击 Agent 直接 `createConversation` + 跳转
+         + + 返回 `chats` 视图                                           
+      21 +- [x] 3.6 群聊模式：勾选 Agent（`Set<string>` 管理选中状态）， 
+         +显示已选数量                                                   
+      22 +- [x] 3.7 群聊模式：2+ Agent 选中后启用「创建群聊」按钮，点击执
+         +行 `createConversation` + 跳转 + 返回                          
+      23 +- [x] 3.8 空搜索结果时显示空状态提示                           
+      24  
+      25  ## 4. 实现 AgentManageView 组件
+      26  
+      27 -- [ ] 4.1 新建 `AgentManageView` 子组件，接收 `contacts` 等 pro
+         -ps                                                             
+      28 -- [ ] 4.2 添加搜索框过滤当前用户的 Agent                       
+      29 -- [ ] 4.3 渲染 Agent 卡片列表：avatar + name + description + ca
+         -pability tags + 编辑/删除按钮                                  
+      30 -- [ ] 4.4 编辑按钮：打开 EditAgentModal（需从父组件传入 `showEd
+         -itAgentModal` 状态或使用回调）                                 
+      31 -- [ ] 4.5 删除按钮：点击显示确认提示，确认后调用删除 API + 刷新
+         -列表                                                           
+      32 -- [ ] 4.6 底部保留「创建新 Agent」按钮，点击打开 CreateAgentMod
+         -al                                                             
+      33 -- [ ] 4.7 空状态：无 Agent 时显示提示 + 引导创建               
+      27 +- [x] 4.1 新建 `AgentManageView` 子组件，接收 `contacts` 等 pro
+         +ps                                                             
+      28 +- [x] 4.2 添加搜索框过滤当前用户的 Agent                       
+      29 +- [x] 4.3 渲染 Agent 卡片列表：avatar + name + provider + displ
+         +ayName + tags + 编辑/删除按钮                                  
+      30 +- [x] 4.4 编辑按钮：打开 EditAgentModal（内部管理状态）        
+      31 +- [x] 4.5 删除按钮：点击显示确认提示，确认后调用 `DELETE /api/c
+         +ontacts/:id/delete` + 刷新列表                                 
+      32 +- [x] 4.6 底部「创建新 Agent」按钮保留在 Sidebar 父组件底部    
+      33 +- [x] 4.7 空状态：无 Agent 时显示提示 + 引导创建               
+      34  
+      35  ## 5. 清理旧的 New Chat Dialog
+      36  
+      37 -- [ ] 5.1 删除 `showNewChatDialog` 相关 state 和 JSX（absolute 
+         -定位的 Dialog 代码块）                                         
+      38 -- [ ] 5.2 删除 `showArchived` 相关代码（如已不再需要）         
+      39 -- [ ] 5.3 验证无遗留的 Dialog 相关死代码                       
+      37 +- [x] 5.1 删除 `showNewChatDialog` 相关 state 和 JSX（absolute 
+         +定位的 Dialog 代码块）                                         
+      38 +- [x] 5.2 清理 `showArchived` 相关死代码（已移至 ChatListView  
+         +内部管理）                                                     
+      39 +- [x] 5.3 验证无遗留的 Dialog 相关死代码                       
+      40  
+      41  ## 6. 视图切换动画
+      42  
+      43 -- [ ] 6.1 为视图容器添加 CSS transition（opacity + transform tr
+         -anslateY，~200ms ease）                                        
+      44 -- [ ] 6.2 确保动画不影响交互（使用 `onTransitionEnd` 或延迟控制
+         -）                                                             
+      43 +- [x] 6.1 为视图容器添加 CSS transition（opacity + transform tr
+         +anslateY，~200ms ease）                                        
+      44 +- [x] 6.2 确保动画不影响交互（使用 `pointerEvents` 控制隐藏视图
+         +不可交互）                                                     
+      45  - [ ] 6.3 验证切换流畅度，调整动画曲线
+      46  
+      47  ## 7. 验证与测试
+
+● Let me verify the final state and run a build check one more time.
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | grep -E "error TS" | grep -v "__tests__" || echo "No errors outside
+       test files")
+  ⎿  No errors outside test files
+● All clean. Let me verify the file structure.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Implementation Complete
+
+  Change: sidebar-multi-view-redesign
+  Progress: 30/34 tasks complete ✓
+
+  Changed & Created Files
+
+  ┌──────────────────────────────┬──────────┬───────────────────────────────┐
+  │             File             │  Action  │          Description          │
+  ├──────────────────────────────┼──────────┼───────────────────────────────┤
+  │ components/Sidebar.tsx       │ Rewritte │ 多视图状态机，Header          │
+  │                              │ n        │ 自适应，集成三个视图组件      │
+  ├──────────────────────────────┼──────────┼───────────────────────────────┤
+  │                              │          │ 从原 Sidebar                  │
+  │ components/ChatListView.tsx  │ New      │ 提取的会话列表组件（搜索 +    │
+  │                              │          │ 列表 + 归档）                 │
+  ├──────────────────────────────┼──────────┼───────────────────────────────┤
+  │ components/AddAgentView.tsx  │ New      │ 添加 Agent 视图（搜索 +       │
+  │                              │          │ 单聊/群聊 + 选择创建）        │
+  ├──────────────────────────────┼──────────┼───────────────────────────────┤
+  │ components/AgentManageView.t │ New      │ Agent 管理视图（搜索 +        │
+  │ sx                           │          │ 卡片列表 + 编辑/删除）        │
+  ├──────────────────────────────┼──────────┼───────────────────────────────┤
+  │ lib/chat-context.tsx         │ Modified │ ContactInfo 扩展 tags、displa │
+  │                              │          │ yName、systemPrompt 字段      │
+  └──────────────────────────────┴──────────┴───────────────────────────────┘
+
+  What Changed
+
+  - "+" 按钮 — 不再弹 Dialog，而是将 Sidebar 平滑切换到「添加 Agent」视图
+  - 新增 🤖 按钮 — Header 中点击进入「我的 Agent」管理视图
+  - 添加 Agent 视图 — 可搜索所有 Agent、单聊直接创建、群聊多选后创建
+  - Agent 管理视图 — 卡片式展示所有
+  Agent，支持搜索、编辑（EditAgentModal）、删除（带确认）
+  - 视图切换动画 — opacity + translateY 的 CSS transition，~200ms
+
+  Remaining (4 tasks)
+
+  验证任务需要运行 dev server 手动测试：
+  - 7.1-7.6 全流程验证
+
+  运行 pnpm dev 启动后可以验证。需要我现在做些什么调整吗？
+
+✻ Crunched for 3m 13s
+
+❯ 我感觉Agent管理应该放在＋这个按键的下面，然后跟快速联系在同一行               
+
+● 明白，把 🤖 按钮从 Header 移到下面，和 contact pills 同一行。
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Removed 24 lines
+      114                >
+      115                  +
+      116                </button>
+      117 -              <button                                         
+      118 -                onClick={() => setSidebarView("agents")}      
+      119 -                className="flex items-center justify-center te
+          -xt-sm transition-all cursor-pointer"                          
+      120 -                style={{                                      
+      121 -                  width: "30px",                              
+      122 -                  height: "30px",                             
+      123 -                  border: "1px solid var(--border)",          
+      124 -                  borderRadius: "var(--radius-sm)",           
+      125 -                  background: "var(--bg-app)",                
+      126 -                  color: "var(--text-secondary)",             
+      127 -                  fontSize: "14px",                           
+      128 -                }}                                            
+      129 -                onMouseEnter={(e) => {                        
+      130 -                  e.currentTarget.style.background = "var(--bg
+          --hover)";                                                     
+      131 -                  e.currentTarget.style.transform = "scale(1.0
+          -5)";                                                          
+      132 -                }}                                            
+      133 -                onMouseLeave={(e) => {                        
+      134 -                  e.currentTarget.style.background = "var(--bg
+          --app)";                                                       
+      135 -                  e.currentTarget.style.transform = "scale(1)"
+          -;                                                             
+      136 -                }}                                            
+      137 -                title="Agent 管理"                            
+      138 -              >                                               
+      139 -                🤖                                            
+      140 -              </button>                                       
+      117              </div>
+      118            </>
+      119          ) : (
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I'll remove the spacer and add the 🤖 button to the contact strip row.
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Removed 2 lines
+      146                  {viewTitle}
+      147                </h2>
+      148              </div>
+      149 -            {/* Spacer to keep header balanced */}            
+      150 -            <div style={{ width: "24px" }} />                 
+      149            </>
+      150          )}
+      151        </div>
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Added 31 lines, removed 5 lines
+      151        </div>
+      152  
+      153        {/* Contact Strip — visible in all views */}
+      154 -      {contacts && contacts.length > 0 && (                   
+      155 -        <div                                                  
+      156 -          className="flex gap-1.5 overflow-x-auto flex-shrink-
+          -0"                                                            
+      157 -          style={{ padding: "2px 14px 10px" }}                
+      154 +      <div                                                    
+      155 +        className="flex gap-1.5 overflow-x-auto flex-shrink-0 
+          +items-center"                                                 
+      156 +        style={{ padding: "2px 14px 10px" }}                  
+      157 +      >                                                       
+      158 +        {/* Agent management button */}                       
+      159 +        <button                                               
+      160 +          onClick={() => setSidebarView("agents")}            
+      161 +          className="flex items-center justify-center flex-shr
+          +ink-0 transition-all cursor-pointer"                          
+      162 +          style={{                                            
+      163 +            width: "24px",                                    
+      164 +            height: "24px",                                   
+      165 +            borderRadius: "var(--radius-sm)",                 
+      166 +            background: "var(--bg-app)",                      
+      167 +            border: "1px solid var(--border-light)",          
+      168 +            color: "var(--text-secondary)",                   
+      169 +            fontSize: "12px",                                 
+      170 +          }}                                                  
+      171 +          onMouseEnter={(e) => {                              
+      172 +            e.currentTarget.style.background = "var(--bg-hover
+          +)";                                                           
+      173 +            e.currentTarget.style.transform = "scale(1.05)";  
+      174 +          }}                                                  
+      175 +          onMouseLeave={(e) => {                              
+      176 +            e.currentTarget.style.background = "var(--bg-app)"
+          +;                                                             
+      177 +            e.currentTarget.style.transform = "scale(1)";     
+      178 +          }}                                                  
+      179 +          title="Agent 管理"                                  
+      180          >
+      159 -          {contacts.slice(0, 4).map((agent) => {              
+      181 +          🤖                                                  
+      182 +        </button>                                             
+      183 +        {contacts && contacts.length > 0 && (                 
+      184 +          <>                                                  
+      185 +            {contacts.slice(0, 4).map((agent) => {            
+      186              const agentPalette = [
+      187                "#1a1a2e", "#b8860b", "#2b8a6b", "#7c3aed", "#c9
+           3a3a",
+      188                "#2563eb", "#c2410c", "#059669", "#6d28d9", "#be
+           185d",
+
+  Read 1 file (ctrl+o to expand)
+
+● The fragment needs closing. Let me fix the structure.
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Added 2 lines
+      216                </div>
+      217              );
+      218            })}
+      219 +            </>                                               
+      220 +          )}                                                  
+      221          </div>
+      222        )}
+      223  
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | grep -E "error TS" | grep -v "__tests__" || echo "No errors outside
+       test files")
+  ⎿  components/Sidebar.tsx(222,8): error TS1381: Unexpected token. Did you
+      mean `{'}'}` or `&rbrace;`?
+  ⎿  (timeout 2m)
+
+  Read 1 file (ctrl+o to expand)
+
+● There's leftover )} from the old code. Let me fix it.
+
+● Update(apps\web\components\Sidebar.tsx)  ⎿  Removed 1 line
+      219              </>
+      220            )}
+      221          </div>
+      222 -      )}                                                      
+      222  
+      223        {/* View content */}
+      224        <div className="flex-1 overflow-hidden" style={{ positio
+           n: "relative" }}>
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | grep -E "error TS" | grep -v "__tests__" || echo "No errors outside
+       test files")
+  ⎿  No errors outside test files
+  ⎿  (timeout 2m)
+
+● 通过了。现在的布局变成了：
+
+  ┌──────────────────────────┐
+  │ AgentHub            [+]  │  ← Header 只有 + 按钮
+  ├──────────────────────────┤
+  │ 🤖 [A] [B] [C] [D]      │  ← 🤖 和 contact pills 同一行
+  ├──────────────────────────┤
+  │ 会话列表...               │
+  │                          │
+  ├──────────────────────────┤
+  │ [+] 创建新 Agent         │
+  │ 👤 user       🌙 🚪     │
+  └──────────────────────────┘
+
+  这样 🤖 按钮更自然地融入快捷操作区，和快速联系人在同一行。要再调整什么吗？
+
+✻ Crunched for 60s
+
+❯ 放在快速联系的右边                                                            
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Removed 25 lines
+      155          className="flex gap-1.5 overflow-x-auto flex-shrink-0 
+           items-center"
+      156          style={{ padding: "2px 14px 10px" }}
+      157        >
+      158 -        {/* Agent management button */}                       
+      159 -        <button                                               
+      160 -          onClick={() => setSidebarView("agents")}            
+      161 -          className="flex items-center justify-center flex-shr
+          -ink-0 transition-all cursor-pointer"                          
+      162 -          style={{                                            
+      163 -            width: "24px",                                    
+      164 -            height: "24px",                                   
+      165 -            borderRadius: "var(--radius-sm)",                 
+      166 -            background: "var(--bg-app)",                      
+      167 -            border: "1px solid var(--border-light)",          
+      168 -            color: "var(--text-secondary)",                   
+      169 -            fontSize: "12px",                                 
+      170 -          }}                                                  
+      171 -          onMouseEnter={(e) => {                              
+      172 -            e.currentTarget.style.background = "var(--bg-hover
+          -)";                                                           
+      173 -            e.currentTarget.style.transform = "scale(1.05)";  
+      174 -          }}                                                  
+      175 -          onMouseLeave={(e) => {                              
+      176 -            e.currentTarget.style.background = "var(--bg-app)"
+          -;                                                             
+      177 -            e.currentTarget.style.transform = "scale(1)";     
+      178 -          }}                                                  
+      179 -          title="Agent 管理"                                  
+      180 -        >                                                     
+      181 -          🤖                                                  
+      182 -        </button>                                             
+      158          {contacts && contacts.length > 0 && (
+      159            <>
+      160              {contacts.slice(0, 4).map((agent) => {
+
+● Now add it after the pills, before the closing tags.
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Added 27 lines, removed 3 lines
+      191                </div>
+      192              );
+      193            })}
+      194 -            </>                                               
+      195 -          )}                                                  
+      196 -        </div>                                                
+      194 +          </>                                                 
+      195 +        )}                                                    
+      196 +        {/* Agent management button */}                       
+      197 +        <button                                               
+      198 +          onClick={() => setSidebarView("agents")}            
+      199 +          className="flex items-center justify-center flex-shr
+          +ink-0 transition-all cursor-pointer"                          
+      200 +          style={{                                            
+      201 +            width: "24px",                                    
+      202 +            height: "24px",                                   
+      203 +            borderRadius: "var(--radius-sm)",                 
+      204 +            background: "var(--bg-app)",                      
+      205 +            border: "1px solid var(--border-light)",          
+      206 +            color: "var(--text-secondary)",                   
+      207 +            fontSize: "12px",                                 
+      208 +          }}                                                  
+      209 +          onMouseEnter={(e) => {                              
+      210 +            e.currentTarget.style.background = "var(--bg-hover
+          +)";                                                           
+      211 +            e.currentTarget.style.transform = "scale(1.05)";  
+      212 +          }}                                                  
+      213 +          onMouseLeave={(e) => {                              
+      214 +            e.currentTarget.style.background = "var(--bg-app)"
+          +;                                                             
+      215 +            e.currentTarget.style.transform = "scale(1)";     
+      216 +          }}                                                  
+      217 +          title="Agent 管理"                                  
+      218 +        >                                                     
+      219 +          🤖                                                  
+      220 +        </button>                                             
+      221  
+      222        {/* View content */}
+      223        <div className="flex-1 overflow-hidden" style={{ positio
+           n: "relative" }}>
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Added 1 line
+      218          >
+      219            🤖
+      220          </button>
+      221 +      </div>                                                  
+      222  
+      223        {/* View content */}
+      224        <div className="flex-1 overflow-hidden" style={{ positio
+           n: "relative" }}>
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | grep -E "error TS" | grep -v "__tests__" || echo "No errors outside
+       test files")
+  ⎿  No errors outside test files
+
+● 通过。现在的布局：
+
+  ┌──────────────────────────┐
+  │ AgentHub            [+]  │
+  ├──────────────────────────┤
+  │ [A] [B] [C] [D]    🤖   │  ← 🤖 在快速联系右边
+  ├──────────────────────────┤
+  │ 会话列表...               │
+  └──────────────────────────┘
+
+✻ Crunched for 34s
+
+❯ 应该贴近最右边，而不是贴进快速联系那边                                        
+
+● Update(apps\web\components\Sidebar.tsx)
+  ⎿  Added 1 line, removed 1 line
+      196          {/* Agent management button */}
+      197          <button
+      198            onClick={() => setSidebarView("agents")}
+      199 -          className="flex items-center justify-center flex-shr
+          -ink-0 transition-all cursor-pointer"                          
+      199 +          className="flex items-center justify-center flex-shr
+          +ink-0 ml-auto transition-all cursor-pointer"                  
+      200            style={{
+      201              width: "24px",
+      202              height: "24px",
+
+● Bash(cd "D:/code/github/AgentHub" && pnpm --filter @agenthub/web typecheck
+      2>&1 | grep -E "error TS" | grep -v "__tests__" || echo "No errors")
+  ⎿  No errors
+  ⎿  (timeout 2m)
+
+● 现在 🤖 用 ml-auto 贴到了最右边：
+
+  ┌──────────────────────────┐
+  │ AgentHub            [+]  │
+  ├──────────────────────────┤
+  │ [A] [B] [C] [D]     🤖  │  ← 🤖 靠右
+  ├──────────────────────────┤
+  │ 会话列表...               │
+  └──────────────────────────┘

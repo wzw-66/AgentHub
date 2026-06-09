@@ -18,6 +18,9 @@ import SilentAlertCard from "./SilentAlertCard";
 import DiffCard from "./DiffCard";
 import ArtifactCardComponent from "./ArtifactCard";
 import ArtifactPreviewModal from "./ArtifactPreviewModal";
+import { parseArtifactMarkers } from "@/lib/artifact-marker-parser";
+import type { ContentBlock } from "@/lib/artifact-marker-parser";
+import { CodeBlock } from "@agenthub/ui";
 
 // ─── Agent color generator ──────────────────────────────────────────────
 
@@ -56,13 +59,147 @@ const TOOL_LABELS: Record<string, string> = {
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
+/** Map file extension → language identifier for syntax highlighting. */
+function detectLanguage(title: string): string {
+  const ext = title.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+    py: "python", rb: "ruby", go: "go", rs: "rust", java: "java",
+    c: "c", cpp: "cpp", h: "c", hpp: "cpp",
+    html: "html", css: "css", scss: "scss", json: "json",
+    yaml: "yaml", yml: "yaml", md: "markdown", sql: "sql",
+    sh: "bash", bash: "bash", xml: "xml", svg: "svg",
+    vue: "vue", php: "php", swift: "swift", kt: "kotlin",
+    toml: "toml", diff: "diff", patch: "diff",
+  };
+  return ext ? (map[ext] ?? "text") : "text";
+}
+
+/**
+ * Render parsed content blocks with differentiated rendering per type.
+ */
+function renderArtifactBlocks(blocks: ContentBlock[]): React.ReactNode {
+  return (
+    <>
+      {blocks.map((block, i) => {
+        switch (block.type) {
+          case "text":
+            return <MarkdownRenderer key={i} content={block.content} />;
+
+          case "code":
+            return (
+              <div key={i} className="mb-2">
+                {block.title && (
+                  <div
+                    className="text-[10px] font-mono px-2 py-1 rounded-t"
+                    style={{
+                      color: "var(--text-secondary)",
+                      background: "var(--bg-sidebar)",
+                      borderBottom: "1px solid var(--border-light)",
+                    }}
+                  >
+                    {block.title}
+                  </div>
+                )}
+                <CodeBlock
+                  code={block.content}
+                  language={detectLanguage(block.title)}
+                />
+              </div>
+            );
+
+          case "web_preview":
+            return (
+              <div
+                key={i}
+                className="rounded-lg overflow-hidden mb-2"
+                style={{ border: "1px solid var(--border-light)" }}
+              >
+                {block.title && (
+                  <div
+                    className="text-[10px] font-mono px-2 py-1"
+                    style={{
+                      color: "var(--text-secondary)",
+                      background: "var(--bg-sidebar)",
+                      borderBottom: "1px solid var(--border-light)",
+                    }}
+                  >
+                    {block.title} — 预览
+                  </div>
+                )}
+                <iframe
+                  className="w-full border-0"
+                  srcDoc={block.content}
+                  title={block.title}
+                  sandbox="allow-scripts"
+                  style={{ backgroundColor: "#fff", minHeight: "200px" }}
+                />
+              </div>
+            );
+
+          case "diff":
+            return (
+              <div key={i} className="mb-2">
+                <DiffCard content={block.content} />
+              </div>
+            );
+
+          case "document":
+            return <MarkdownRenderer key={i} content={block.content} />;
+
+          default:
+            return null;
+        }
+      })}
+    </>
+  );
+}
+
+/** Check whether a string contains artifact markers. */
+function hasArtifactMarkers(content: string): boolean {
+  return /~~~artifact:/.test(content);
+}
+
 function MessageContent({
   message,
   onShowArtifact,
+  streaming,
 }: {
   message: Message;
   onShowArtifact?: (artifactId: string) => void;
+  streaming?: boolean;
 }) {
+  // New path: content has artifact markers → parse and render by type
+  if (hasArtifactMarkers(message.content)) {
+    const blocks = parseArtifactMarkers(message.content);
+    return renderArtifactBlocks(blocks);
+  }
+
+  // Backward compat: old "artifact" type without markers → use ArtifactCard
+  if (message.type === "artifact") {
+    const firstArtifact = (message as Message & { artifacts?: Array<{ id: string }> }).artifacts?.[0];
+    return (
+      <ArtifactCardComponent
+        content={message.content}
+        title={firstArtifact?.id ? `Artifact #${firstArtifact.id.slice(0, 8)}` : "Artifact"}
+        onPreview={firstArtifact && onShowArtifact ? () => onShowArtifact(firstArtifact.id) : undefined}
+      />
+    );
+  }
+
+  // Streaming indicator for artifacts being built
+  if (streaming && hasArtifactMarkers(message.content)) {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 text-xs" style={{ color: "var(--accent)" }}>
+          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)", animation: "bounce 1s ease infinite" }} />
+          正在构建产物...
+        </span>
+      </div>
+    );
+  }
+
+  // Old path: no markers, render by message type
   switch (message.type) {
     case "deploy":
       return <DeployCard url={message.content} status="running" />;
@@ -89,16 +226,6 @@ function MessageContent({
       );
     case "diff":
       return <DiffCard content={message.content} />;
-    case "artifact": {
-      const firstArtifact = (message as Message & { artifacts?: Array<{ id: string }> }).artifacts?.[0];
-      return (
-        <ArtifactCardComponent
-          content={message.content}
-          title={firstArtifact?.id ? `Artifact #${firstArtifact.id.slice(0, 8)}` : "Artifact"}
-          onPreview={firstArtifact && onShowArtifact ? () => onShowArtifact(firstArtifact.id) : undefined}
-        />
-      );
-    }
     case "preview":
       return (
         <div
@@ -124,6 +251,57 @@ function MessageContent({
   }
 }
 
+// ─── Interaction Text Input ────────────────────────────────────────────
+
+function InteractionTextInput({
+  onSend,
+}: {
+  onSend: (text: string) => void;
+}) {
+  const [text, setText] = useState("");
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (text.trim()) {
+        onSend(text.trim());
+        setText("");
+      }
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="输入你的回答..."
+        className="flex-1 rounded-lg px-3 py-1.5 text-xs outline-none border"
+        style={{
+          background: "var(--bg-app)",
+          color: "var(--text-primary)",
+          borderColor: "var(--border)",
+        }}
+      />
+      <button
+        onClick={() => {
+          if (text.trim()) {
+            onSend(text.trim());
+            setText("");
+          }
+        }}
+        disabled={!text.trim()}
+        className="px-3 py-1.5 rounded-lg text-xs font-medium border-none cursor-pointer disabled:opacity-40"
+        style={{ background: "var(--accent)", color: "#fff" }}
+      >
+        发送
+      </button>
+    </div>
+  );
+}
+
 // ─── Component ─────────────────────────────────────────────────────────
 
 export default function ChatPanel({
@@ -135,13 +313,14 @@ export default function ChatPanel({
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap, pendingInteraction, respondToInteraction, cancelInteraction } = useChat();
   const allStreamingMessages = [...streamingMessages.values()];
   const { user } = useAuth();
   const { t } = useI18n();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
+  const [waitingForResponse, setWaitingForResponse] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -240,6 +419,13 @@ export default function ChatPanel({
     scrollToBottom();
   }, [messages, allStreamingMessages, scrollToBottom]);
 
+  // ─── Clear waiting state when streaming starts or error occurs ──
+  useEffect(() => {
+    if (waitingForResponse && (allStreamingMessages.length > 0 || streamError)) {
+      setWaitingForResponse(false);
+    }
+  }, [allStreamingMessages.length, streamError, waitingForResponse]);
+
   // ─── @mention detection ─────────────────────────────────────────
   useEffect(() => {
     if (!isGroupChat || !textareaRef.current) {
@@ -273,6 +459,15 @@ export default function ChatPanel({
     textareaRef.current?.focus();
   }
 
+  // ─── Auto-resize textarea ─────────────────────────────────────
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
+  }, [input]);
+
   // ─── Send ───────────────────────────────────────────────────────
   async function handleSend() {
     const trimmed = input.trim();
@@ -282,6 +477,7 @@ export default function ChatPanel({
     setStreamError(null);
     try {
       await sendMessage(conversationId, trimmed, replyTargetId ?? undefined);
+      setWaitingForResponse(true);
       setInput("");
       setReplyTargetId(null);
       textareaRef.current?.focus();
@@ -750,15 +946,19 @@ export default function ChatPanel({
                         overflowWrap: "anywhere",
                       }}
                     >
-                      <span className="markdown-render">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={MARKDOWN_COMPONENTS}
-                        >
-                          {sm.content || "..."}
-                        </ReactMarkdown>
-                        <span className="streaming-cursor" />
-                      </span>
+                      {hasArtifactMarkers(sm.content) ? (
+                        renderArtifactBlocks(parseArtifactMarkers(sm.content))
+                      ) : (
+                        <span className="markdown-render">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={MARKDOWN_COMPONENTS}
+                          >
+                            {sm.content || "..."}
+                          </ReactMarkdown>
+                          <span className="streaming-cursor" />
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -787,14 +987,86 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Typing Indicator — show for all actively streaming agents */}
-      {allStreamingMessages.length > 0 && (
+      {/* Typing Indicator — show during waiting period OR active streaming */}
+      {(waitingForResponse || allStreamingMessages.length > 0) && (
         <TypingIndicator
-          agents={allStreamingMessages.map((sm) => ({
-            name: contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "Agent",
-            color: getAgentColor(sm.senderId),
-          }))}
+          agents={allStreamingMessages.length > 0
+            ? allStreamingMessages.map((sm) => ({
+                name: contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "Agent",
+                color: getAgentColor(sm.senderId),
+              }))
+            : convAgents.length > 0
+              ? convAgents.map((a) => ({ name: a.name, color: getAgentColor(a.id) }))
+              : [{ name: "Agent", color: "var(--accent)" }]
+          }
         />
+      )}
+
+      {/* Interactive card — Agent asks user a question */}
+      {pendingInteraction && (
+        <div
+          className="mx-4 mb-2 rounded-lg overflow-hidden"
+          style={{
+            border: "1px solid var(--accent)",
+            background: "var(--bg-sidebar)",
+            animation: "msgIn 0.35s ease forwards",
+          }}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-3 py-2"
+            style={{
+              background: "var(--accent-light)",
+              borderBottom: "1px solid var(--border-light)",
+            }}
+          >
+            <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
+              🤖 Agent 需要你确认
+            </span>
+            <button
+              onClick={cancelInteraction}
+              className="flex items-center justify-center rounded p-1 border-none cursor-pointer"
+              style={{ color: "var(--text-tertiary)", background: "none" }}
+              title="取消"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="px-3 py-3">
+            <p className="text-sm mb-3" style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>
+              {pendingInteraction.prompt}
+            </p>
+
+            {/* Options as buttons */}
+            {pendingInteraction.options && pendingInteraction.options.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {pendingInteraction.options.map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => respondToInteraction(opt.label)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border-none cursor-pointer transition-all"
+                    style={{
+                      background: "var(--accent-light)",
+                      color: "var(--accent)",
+                      border: "1px solid var(--accent)",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.color = "#fff"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent-light)"; e.currentTarget.style.color = "var(--accent)"; }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Text input for custom responses */}
+            <InteractionTextInput onSend={respondToInteraction} />
+          </div>
+        </div>
       )}
 
       {/* Input area — Design Doc Section 4.7 */}
@@ -921,6 +1193,8 @@ export default function ChatPanel({
               fontSize: "13px",
               padding: "4px 0",
               fontFamily: "var(--font-sans)",
+              maxHeight: "200px",
+              overflowY: "hidden",
             }}
             rows={1}
             placeholder={isGroupChat ? "@ 提及 Agent..." : t("chat").inputPlaceholder}

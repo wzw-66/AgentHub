@@ -16,6 +16,7 @@ import {
 import { createAdapter, AgentHarness, ToolRegistry, LocalSandbox, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
 import type { Chunk, Agent, Message as SharedMessage, ToolDefinition } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
+import { processChunk } from "../orchestrator/artifact-detector.js";
 import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
 import { TaskDispatcher } from "../orchestrator/dispatcher.js";
 import { ResultAggregator } from "../orchestrator/aggregator.js";
@@ -575,24 +576,63 @@ async function runAgentExecution(
       let lastPushedContent = "";
 
       for await (const chunk of harness.execute(context)) {
-        if (chunk.type === ChunkType.Text || chunk.type === ChunkType.Code) {
-          streamingText += chunk.content;
-          finalResponse += chunk.content;
+        // ── Interactive: AskUserQuestion detection ─────────────────────
+        if (chunk.type === ChunkType.ToolCall) {
+          const toolName = extractToolName(chunk.content);
+          if (toolName === "AskUserQuestion" || toolName === "ask_user_question") {
+            try {
+              const parsed = JSON.parse(chunk.content) as { id?: string; input?: { questions?: Array<{ question: string; options?: string[]; multiSelect?: boolean }> } };
+              const questions = parsed.input?.questions;
+              if (questions && questions.length > 0) {
+                const q = questions[0]!;
+                const prompt = q.question;
+                const options = q.options?.map((label) => ({ label, description: "" }));
+                const multiSelect = q.multiSelect ?? false;
 
-          if (chunk.type === ChunkType.Text && chunk.content === lastPushedContent) {
+                // Create pending interaction — blocks until user responds
+                const response = await cm.createInteraction(conversationId, {
+                  prompt,
+                  toolUseId: parsed.id ?? "unknown",
+                  options,
+                  multiSelect,
+                });
+
+                // Write user's response to the adapter's stdin
+                adapter.writeStdin?.(response);
+              }
+            } catch (err) {
+              // Timeout or cancellation: abort the adapter, clear partial response
+              log.warn({ err, conversationId }, "Interaction error");
+              adapter.abort();
+              finalResponse = "";
+              streamingText = "";
+            }
+            continue; // Skip rest of loop for this chunk
+          }
+        }
+
+        const processed = processChunk(chunk);
+
+        if (processed.type === ChunkType.Text || processed.type === ChunkType.Code) {
+          streamingText += processed.content;
+          finalResponse += processed.content;
+
+          if (processed.type === ChunkType.Text && processed.content === lastPushedContent) {
             continue;
           }
-          lastPushedContent = chunk.content;
+          lastPushedContent = processed.content;
         }
 
         // A ToolCall ends this turn. The text so far was intermediate thinking;
         // discard it so the next turn becomes the new finalResponse.
+        // Note: processChunk may convert ToolCall → Text with markers,
+        // so we check the ORIGINAL chunk type here.
         if (chunk.type === ChunkType.ToolCall) {
           finalResponse = "";
         }
 
-        if (chunk.type !== ChunkType.Done) {
-          pushChunk(cm, conversationId, chunk, agent.id);
+        if (processed.type !== ChunkType.Done) {
+          pushChunk(cm, conversationId, processed, agent.id);
         }
       }
 
@@ -662,6 +702,12 @@ function pushChunk(
       break;
     }
 
+    case ChunkType.Interactive: {
+      // Interactive chunks are pushed via ConnectionManager.createInteraction()
+      // and handled by the frontend's interactive card. No additional SSE push needed.
+      break;
+    }
+
     case ChunkType.ToolCall: {
       // Send tool calls as a separate event — frontend renders them
       // as processing indicators, not as chat text.
@@ -673,18 +719,6 @@ function pushChunk(
       };
       cm.pushToConversation(conversationId, "tool_status", data);
       cm.broadcastToConversation(cm.getConnectedUserIds(), "tool_status", data);
-      break;
-    }
-
-    case ChunkType.Artifact: {
-      const data = {
-        id: chunk.metadata?.id ?? "",
-        status: chunk.metadata?.status ?? "building",
-        title: chunk.metadata?.title,
-        agentId,
-      };
-      cm.pushToConversation(conversationId, "artifact_status", data);
-      cm.broadcastToConversation(cm.getConnectedUserIds(), "artifact_status", data);
       break;
     }
 
@@ -825,15 +859,17 @@ async function handleRegenerate(
 
       let fullResponse = "";
       for await (const chunk of harness.execute(context)) {
+        const processed = processChunk(chunk);
+
         // Only accumulate text/code for the persisted message — skip tool calls
         if (
-          chunk.type === ChunkType.Text ||
-          chunk.type === ChunkType.Code
+          processed.type === ChunkType.Text ||
+          processed.type === ChunkType.Code
         ) {
-          fullResponse += chunk.content;
+          fullResponse += processed.content;
         }
-        if (chunk.type !== ChunkType.Done) {
-          pushChunk(cm, conversationId, chunk, agent.id);
+        if (processed.type !== ChunkType.Done) {
+          pushChunk(cm, conversationId, processed, agent.id);
         }
       }
 
@@ -868,6 +904,33 @@ async function handleListPinned(
   return reply.status(200).send(messages);
 }
 
+// ─── Interaction respond (REST fallback) ─────────────────────────────────────
+
+type InteractRespondBody = {
+  response: string;
+};
+
+async function handleInteractRespond(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  // conversationId is from the route prefix: /api/conversations/:conversationId
+  const conversationId = (request.params as Record<string, string>).conversationId;
+  const body = request.body as InteractRespondBody | undefined;
+  const cm = request.server.connectionManager;
+
+  if (!body?.response || typeof body.response !== "string" || !body.response.trim()) {
+    return reply.status(400).send({ error: "response is required" });
+  }
+
+  const resolved = cm.resolveInteraction(conversationId, body.response.trim());
+  if (!resolved) {
+    return reply.status(404).send({ error: "No pending interaction for this conversation" });
+  }
+
+  return reply.status(200).send({ status: "ok" });
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
@@ -879,4 +942,5 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
   app.get("/pinned/list", handleListPinned);
   app.patch("/:messageId/update", handleUpdateMessage);
   app.delete("/:messageId/delete", handleDeleteMessage);
+  app.post("/interact/respond", handleInteractRespond);
 }
