@@ -50,7 +50,13 @@ export default function ChatListView({
   const [showArchived, setShowArchived] = useState(false);
 
   const filteredConversations = useMemo(
-    () => conversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase())),
+    () => conversations
+      .filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return 0;
+      }),
     [conversations, searchQuery],
   );
 

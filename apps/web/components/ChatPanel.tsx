@@ -308,10 +308,12 @@ export default function ChatPanel({
   conversationId,
   onShowArtifact,
   onShowAgent: _onShowAgent,
+  onToggleRightPanel,
 }: {
   conversationId: string | null;
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
+  onToggleRightPanel?: () => void;
 }) {
   const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap, pendingInteraction, respondToInteraction, cancelInteraction } = useChat();
   const allStreamingMessages = [...streamingMessages.values()];
@@ -679,34 +681,21 @@ export default function ChatPanel({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            className="flex items-center gap-1 text-xs transition-colors rounded"
-            style={{
-              padding: "2px 10px",
-              color: "var(--text-secondary)",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-active)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-          >
-            &#9644; 预览
-          </button>
-          <button
-            className="flex items-center justify-center text-sm transition-colors rounded"
-            style={{
-              width: "30px",
-              height: "30px",
-              color: "var(--text-tertiary)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
-          >
-            •••
-          </button>
-        </div>
+        <button
+          onClick={onToggleRightPanel}
+          className="flex items-center justify-center text-sm transition-colors rounded cursor-pointer"
+          style={{
+            width: "30px",
+            height: "30px",
+            color: "var(--text-tertiary)",
+            background: "none",
+            border: "none",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+        >
+          •••
+        </button>
       </div>
 
       {/* Messages */}

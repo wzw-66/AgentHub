@@ -65,7 +65,7 @@ export async function listConversations(
   const [data, total] = await Promise.all([
     prisma.conversation.findMany({
       where,
-      orderBy: { lastActiveAt: "desc" },
+      orderBy: [{ isPinned: "desc" }, { lastActiveAt: "desc" }],
       skip: offset,
       take: limit,
     }),

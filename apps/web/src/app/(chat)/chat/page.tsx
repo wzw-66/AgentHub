@@ -13,6 +13,7 @@ export default function ChatPage() {
     type: "artifact" | "agent";
     id: string;
   } | null>(null);
+  const [rightPanelVisible, setRightPanelVisible] = useState(true);
 
   const { setActiveConversation } = useChat();
 
@@ -61,11 +62,12 @@ export default function ChatPage() {
             conversationId={activeConversationId}
             onShowArtifact={(id) => setRightPanelContent({ type: "artifact", id })}
             onShowAgent={(id) => setRightPanelContent({ type: "agent", id })}
+            onToggleRightPanel={() => setRightPanelVisible((v) => !v)}
           />
         </div>
 
         {/* Right Panel */}
-        {(rightPanelContent || activeConversationId) && (
+        {rightPanelVisible && (rightPanelContent || activeConversationId) && (
           <div
             className="flex-shrink-0 animate-fade-in-up"
             style={{

@@ -14,11 +14,10 @@ interface RightPanelProps {
   conversationId?: string | null;
 }
 
-type TabKey = "preview" | "debate" | "branch" | "versions";
+type TabKey = "preview" | "branch" | "versions";
 
 const PANEL_TABS: { key: TabKey; labelKey: string }[] = [
   { key: "preview", labelKey: "预览" },
-  { key: "debate", labelKey: "辩论" },
   { key: "branch", labelKey: "分支" },
   { key: "versions", labelKey: "版本" },
 ];
@@ -376,24 +375,6 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
               />
             </div>
           </>
-        )}
-
-        {/* Debate Tab */}
-        {activeTab === "debate" && (
-          <div
-            className="flex flex-col items-center justify-center"
-            style={{
-              padding: "40px 0",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: "13px", color: "var(--text-tertiary)", marginBottom: "4px" }}>
-              暂无辩论
-            </div>
-            <div style={{ fontSize: "10px", color: "var(--text-tertiary)", opacity: 0.7 }}>
-              多 Agent 辩论内容将在此处展示
-            </div>
-          </div>
         )}
 
         {/* Branch Tab */}

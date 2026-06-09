@@ -216,7 +216,7 @@ export default function Sidebar({ activeConversationId, onSelectConversation }: 
           }}
           title="Agent 管理"
         >
-          🤖
+          ☰
         </button>
       </div>
 

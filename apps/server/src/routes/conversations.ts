@@ -24,6 +24,7 @@ type CreateConversationBody = {
 
 type UpdateConversationBody = {
   title?: string;
+  isPinned?: boolean;
   isArchived?: boolean;
   addMembers?: string[];
   removeMembers?: string[];
