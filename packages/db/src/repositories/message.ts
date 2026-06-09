@@ -103,6 +103,42 @@ export async function deleteMessage(
   return prisma.message.delete({ where: { id } });
 }
 
+/**
+ * Delete all messages in a conversation created after a given timestamp.
+ * Also deletes associated artifacts. Returns the IDs of deleted messages.
+ */
+export async function deleteMessagesAfter(
+  conversationId: string,
+  afterCreatedAt: Date | string,
+  prisma: PrismaClient = defaultPrisma
+): Promise<string[]> {
+  const targetDate =
+    typeof afterCreatedAt === "string" ? new Date(afterCreatedAt) : afterCreatedAt;
+
+  const messagesToDelete = await prisma.message.findMany({
+    where: {
+      conversationId,
+      createdAt: { gt: targetDate },
+    },
+    select: { id: true },
+  });
+
+  const ids = messagesToDelete.map((m) => m.id);
+  if (ids.length === 0) return [];
+
+  // Delete artifacts first (deleteMany doesn't cascade in Prisma mode)
+  await prisma.artifact.deleteMany({
+    where: { messageId: { in: ids } },
+  });
+
+  // Delete messages
+  await prisma.message.deleteMany({
+    where: { id: { in: ids } },
+  });
+
+  return ids;
+}
+
 export async function listPinnedMessages(
   conversationId: string,
   prisma: PrismaClient = defaultPrisma

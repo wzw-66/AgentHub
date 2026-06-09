@@ -8,6 +8,7 @@ import {
   pinMessage as dbPinMessage,
   updateMessage as dbUpdateMessage,
   deleteMessage as dbDeleteMessage,
+  deleteMessagesAfter as dbDeleteMessagesAfter,
   getConversation,
   getContact,
   listPinnedMessages,
@@ -210,8 +211,64 @@ async function handleUpdateMessage(
     return reply.status(400).send({ error: "Content is required" });
   }
 
+  const cm = request.server.connectionManager;
+
+  // 1. Update the message content
   const updated = await dbUpdateMessage(request.params.messageId, { content });
-  return reply.status(200).send(updated);
+
+  // 2. Delete all subsequent messages (AI responses become stale)
+  const deletedMessageIds = await dbDeleteMessagesAfter(
+    request.params.conversationId,
+    message.createdAt,
+  );
+
+  // 3. Trigger agent re-execution in background (for both single and group chat)
+  const conversation = await getConversation(request.params.conversationId);
+  if (conversation) {
+    if (conversation.type === "single") {
+      runAgentExecution(
+        request.params.conversationId,
+        content,
+        cm,
+        request.server.log,
+      ).catch((err) => {
+        request.server.log.error(
+          { err, messageId: request.params.messageId },
+          "Agent re-execution after edit failed",
+        );
+        if (cm) {
+          cm.pushToConversation(request.params.conversationId, "error", {
+            message: err instanceof Error ? err.message : "Re-execution failed",
+            code: "EXECUTION_ERROR",
+          });
+        }
+      });
+    } else if (conversation.type === "group") {
+      runOrchestration(
+        request.params.messageId,
+        conversation,
+        cm,
+        request.server.log,
+      ).catch((err) => {
+        request.server.log.error(
+          { err, messageId: request.params.messageId },
+          "Re-orchestration after edit failed",
+        );
+        if (cm) {
+          cm.pushToConversation(request.params.conversationId, "error", {
+            message: err instanceof Error ? err.message : "Re-orchestration failed",
+            code: "ORCHESTRATION_ERROR",
+          });
+        }
+      });
+    }
+  }
+
+  // 4. Return updated message and deleted IDs so frontend can clean up
+  return reply.status(200).send({
+    message: updated,
+    deletedMessageIds,
+  });
 }
 
 async function handleDeleteMessage(
@@ -765,10 +822,13 @@ async function handleRegenerate(
     return reply.status(400).send({ error: "Not an AI message" });
   }
 
-  // 2. Find the most recent user message before this AI message
+  // 2. Find the most recent user message BEFORE this AI message
   const allMessages = await listMessages(conversationId, { limit: 100 });
-  const userMessages = allMessages.data.filter((m) => m.senderType === "User");
-  const userMessage = userMessages[userMessages.length - 1];
+  const aiCreatedAt = new Date(aiMessage.createdAt).getTime();
+  const precedingUserMessages = allMessages.data.filter(
+    (m) => m.senderType === "User" && new Date(m.createdAt).getTime() < aiCreatedAt,
+  );
+  const userMessage = precedingUserMessages[precedingUserMessages.length - 1];
   if (!userMessage) {
     return reply.status(400).send({ error: "No user message to regenerate from" });
   }
@@ -801,14 +861,16 @@ async function handleRegenerate(
         : undefined;
 
     try {
-      const adapterConfig: Record<string, unknown> = { cwd };
+      const adapterConfig: Record<string, unknown> = {
+        cwd,
+        timeout: AGENT_EXECUTION_TIMEOUT_MS,
+        ...(agent.model ? { model: agent.model } : {}),
+      };
 
       // For Custom provider, resolve endpoint and API key from config/credentials
       if (agent.provider === "Custom") {
         const contactConfig = agent.config as Record<string, unknown> | null;
-        // Support both apiEndpoint and apiUrl for backward compatibility
         let endpoint = (contactConfig?.apiEndpoint ?? contactConfig?.apiUrl) as string | undefined;
-        // Auto-append /chat/completions if endpoint is a base URL (e.g. https://api.deepseek.com)
         if (endpoint && !endpoint.endsWith("/chat/completions") && !endpoint.includes("/v1/")) {
           endpoint = endpoint.replace(/\/+$/, "") + "/chat/completions";
         }
@@ -821,6 +883,9 @@ async function handleRegenerate(
       }
 
       const adapter = createAdapter(agent.provider, adapterConfig);
+
+      // Register adapter so it can be aborted if SSE disconnects
+      cm.registerAdapter(conversationId, adapter);
 
       // ── Build AgentHarness with middleware and tools ─────────────
       const harness = new AgentHarness(adapter, {
@@ -844,9 +909,12 @@ async function handleRegenerate(
         { name: "list_dir", description: "List files in a directory", inputSchema: { type: "object", properties: { path: { type: "string", description: "Directory path relative to workspace" } }, required: ["path"] } },
       ];
 
-      // Load history for context
+      // Load history, excluding the AI message being regenerated and messages after it
       const historyResult = await listMessages(conversationId, { limit: 50 });
-      const historyMessages = mapPrismaMessages(historyResult.data);
+      const historyBeforeRegen = historyResult.data.filter(
+        (m) => new Date(m.createdAt).getTime() < aiCreatedAt,
+      );
+      const historyMessages = mapPrismaMessages(historyBeforeRegen);
 
       const context = {
         conversationId,
@@ -858,19 +926,68 @@ async function handleRegenerate(
       };
 
       let fullResponse = "";
+      let streamingText = "";
+      let lastPushedContent = "";
+
       for await (const chunk of harness.execute(context)) {
         const processed = processChunk(chunk);
 
-        // Only accumulate text/code for the persisted message — skip tool calls
+        // Handle interactive chunks (AskUserQuestion) during regeneration
+        if (chunk.type === ChunkType.ToolCall) {
+          const toolName = extractToolName(chunk.content);
+          if (toolName === "AskUserQuestion" || toolName === "ask_user_question") {
+            try {
+              const parsed = JSON.parse(chunk.content) as {
+                id?: string;
+                input?: { questions?: Array<{ question: string; options?: string[]; multiSelect?: boolean }> };
+              };
+              const questions = parsed.input?.questions;
+              if (questions && questions.length > 0) {
+                const q = questions[0]!;
+                const response = await cm.createInteraction(conversationId, {
+                  prompt: q.question,
+                  toolUseId: parsed.id ?? "unknown",
+                  options: q.options?.map((label) => ({ label, description: "" })),
+                  multiSelect: q.multiSelect ?? false,
+                });
+                adapter.writeStdin?.(response);
+              }
+            } catch {
+              adapter.abort();
+              fullResponse = "";
+              streamingText = "";
+            }
+            continue;
+          }
+        }
+
+        // Only accumulate text/code for the persisted message
         if (
           processed.type === ChunkType.Text ||
           processed.type === ChunkType.Code
         ) {
+          streamingText += processed.content;
           fullResponse += processed.content;
+
+          if (processed.type === ChunkType.Text && processed.content === lastPushedContent) {
+            continue;
+          }
+          lastPushedContent = processed.content;
         }
+
+        // A ToolCall ends this turn; discard intermediate text
+        if (chunk.type === ChunkType.ToolCall) {
+          fullResponse = "";
+        }
+
         if (processed.type !== ChunkType.Done) {
           pushChunk(cm, conversationId, processed, agent.id);
         }
+      }
+
+      // Fallback: if last turn had no text, use full stream
+      if (!fullResponse && streamingText) {
+        fullResponse = streamingText;
       }
 
       // 4. Update the AI reply message content (replace, not create new)
@@ -883,11 +1000,17 @@ async function handleRegenerate(
         content: fullResponse,
         agentId: agent.id,
       });
+
+      const donePayload = { messageId, agentId: agent.id, tokenUsage: { input: 0, output: 0 } };
+      cm.pushToConversation(conversationId, "done", donePayload);
+      cm.broadcastToConversation(cm.getConnectedUserIds(), "done", donePayload);
     } catch (err) {
       cm.pushToConversation(conversationId, "error", {
         message: err instanceof Error ? err.message : "Regeneration failed",
         code: "ADAPTER_ERROR",
       });
+    } finally {
+      cm.removeAdapter(conversationId);
     }
   }
   // Group conversation regeneration skipped for now (higher complexity)

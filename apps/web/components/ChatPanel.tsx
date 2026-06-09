@@ -365,6 +365,9 @@ export default function ChatPanel({
   const [editContent, setEditContent] = useState("");
   // (showDeleteConfirm removed)
 
+  // ─── Regenerating state — immediately hide old content, show transition ──
+  const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
+
   // ─── Reply state ────────────────────────────────────────────────
   const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(null);
 
@@ -425,6 +428,21 @@ export default function ChatPanel({
       setWaitingForResponse(false);
     }
   }, [allStreamingMessages.length, streamError, waitingForResponse]);
+
+  // ─── Clean up regenerating state when message content appears ──
+  useEffect(() => {
+    if (regeneratingIds.size === 0) return;
+    const next = new Set(regeneratingIds);
+    for (const id of regeneratingIds) {
+      const msg = messages.find((m) => m.id === id);
+      if (msg?.content) {
+        next.delete(id);
+      }
+    }
+    if (next.size !== regeneratingIds.size) {
+      setRegeneratingIds(next);
+    }
+  }, [messages, regeneratingIds]);
 
   // ─── @mention detection ─────────────────────────────────────────
   useEffect(() => {
@@ -514,10 +532,20 @@ export default function ChatPanel({
     if (!conversationId) return;
     try {
       setStreamError(null);
+      // Immediately hide old content and show transition animation
+      setRegeneratingIds((prev) => new Set(prev).add(messageId));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, content: "" } : m)),
+      );
       await api.post(
         `/api/conversations/${conversationId}/messages/${messageId}/regenerate`,
       );
     } catch (err: unknown) {
+      setRegeneratingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
       const apiErr = err as { message?: string };
       setStreamError(apiErr.message || "Regeneration failed");
     }
@@ -534,15 +562,24 @@ export default function ChatPanel({
     const trimmed = editContent.trim();
     if (!trimmed || !editingMessageId || !conversationId) return;
     try {
-      await api.patch(
+      const res = await api.patch<{
+        message: Message;
+        deletedMessageIds?: string[];
+      }>(
         `/api/conversations/${conversationId}/messages/${editingMessageId}/update`,
         { content: trimmed },
       );
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === editingMessageId ? { ...m, content: trimmed } : m,
-        ),
-      );
+      // Update local state: set new content and remove stale AI responses
+      setMessages((prev) => {
+        let updated = prev.map((m) =>
+          m.id === editingMessageId ? { ...m, content: res.message.content } : m,
+        );
+        // Remove deleted messages (stale AI responses after the edited message)
+        if (res.deletedMessageIds?.length) {
+          updated = updated.filter((m) => !res.deletedMessageIds!.includes(m.id));
+        }
+        return updated;
+      });
       setEditingMessageId(null);
       setEditContent("");
     } catch {
@@ -800,8 +837,12 @@ export default function ChatPanel({
                             ref={editTextareaRef}
                             value={editContent}
                             onChange={(e) => setEditContent(e.target.value)}
-                            className="w-full resize-none rounded border bg-transparent px-2 py-1 text-sm outline-none focus-visible:outline-none"
-                            style={{ borderColor: "var(--accent)", color: "var(--text-primary)" }}
+                            className="w-full resize-none rounded px-2 py-1 text-sm outline-none focus-visible:outline-none"
+                            style={{
+                              border: "1px solid var(--accent)",
+                              color: "#fff",
+                              background: "#000",
+                            }}
                             rows={3}
                           />
                           <div className="flex gap-2 justify-end">
@@ -825,13 +866,22 @@ export default function ChatPanel({
                             </button>
                           </div>
                         </div>
+                      ) : regeneratingIds.has(msg.id) ? (
+                        <div className="flex items-center gap-2 py-1" style={{ minHeight: "24px" }}>
+                          <div className="flex items-center gap-1">
+                            {[0, 1, 2].map((i) => (
+                              <span key={i} className="typing-dot" />
+                            ))}
+                          </div>
+                          <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>重新生成中...</span>
+                        </div>
                       ) : (
                         <MessageContent message={msg} onShowArtifact={handleShowArtifact} />
                       )}
                     </div>
 
                     {/* Bottom actions — merged below bubble */}
-                    {variant !== "system" && !isEditing && (
+                    {variant !== "system" && !isEditing && !regeneratingIds.has(msg.id) && (
                       <div
                         className="msg-actions mt-1"
                         style={{
@@ -964,6 +1014,19 @@ export default function ChatPanel({
                 </div>
               );
             })}
+
+            {/* Thinking indicator — shown between user message and first agent output */}
+            {waitingForResponse && (
+              <TypingIndicator
+                messageStyle
+                agents={
+                  convAgents.length > 0
+                    ? convAgents.map((a) => ({ name: a.name, color: getAgentColor(a.id) }))
+                    : [{ name: "Agent", color: "var(--accent)" }]
+                }
+              />
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -985,21 +1048,6 @@ export default function ChatPanel({
           </svg>
           <span className="text-xs">{streamError}</span>
         </div>
-      )}
-
-      {/* Typing Indicator — show during waiting period OR active streaming */}
-      {(waitingForResponse || allStreamingMessages.length > 0) && (
-        <TypingIndicator
-          agents={allStreamingMessages.length > 0
-            ? allStreamingMessages.map((sm) => ({
-                name: contacts?.find((c) => c.id === sm.senderId)?.name ?? sm.senderId ?? "Agent",
-                color: getAgentColor(sm.senderId),
-              }))
-            : convAgents.length > 0
-              ? convAgents.map((a) => ({ name: a.name, color: getAgentColor(a.id) }))
-              : [{ name: "Agent", color: "var(--accent)" }]
-          }
-        />
       )}
 
       {/* Interactive card — Agent asks user a question */}
