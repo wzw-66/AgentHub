@@ -22,6 +22,7 @@ import {
   AGENT_2_CHUNKS,
   AGENT_3_CHUNKS,
   AGGREGATOR_CHUNKS,
+  DIFF_CHUNKS,
   FILE_TREE_AGENT_1,
   FILE_TREE_AGENT_2,
   FILE_TREE_COMPLETE,
@@ -107,6 +108,8 @@ interface ChatContextValue {
   demoDiffs: DemoDiffItem[];
   /** Remove a diff item by its path (and optional timestamp for duplicates) */
   removeDemoDiff: (path: string) => void;
+  /** Set file tree manually (used by RightPanel version rollback) */
+  setDemoFileTree: (tree: DemoFileNode[]) => void;
   startDemoSequence: (convId: string, agents: { id: string; name: string }[]) => void;
 }
 
@@ -364,21 +367,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         // Push theme diff to the right panel timeline
         setDemoDiffs((prev) => [...prev, ...(DEMO_DIFFS_BY_PHASE.theme ?? [])]);
 
-        // Show aggregator summary in chat (no diff chunks in chat anymore)
+        // Step 1: Agent outputs the theme diff update
         setDemoPhase("aggregate");
-        AGGREGATOR_CHUNKS.forEach((chunk, i) => {
+        DIFF_CHUNKS.forEach((chunk, i) => {
           const t = setTimeout(() => {
             appendMessageChunk(chunk, agents[0]!.id);
           }, i * 800);
           demoTimersRef.current.push(t);
         });
 
-        // Finalize after aggregator
-        const finalT = setTimeout(() => {
+        // Step 2: Finalize diff → show orchestrator summary
+        const diffDoneT = setTimeout(() => {
           finalizeMessage(undefined, agents[0]!.id);
-          setDemoPhase("done");
-        }, AGGREGATOR_CHUNKS.length * 800 + 500);
-        demoTimersRef.current.push(finalT);
+          AGGREGATOR_CHUNKS.forEach((chunk, i) => {
+            const t = setTimeout(() => {
+              appendMessageChunk(chunk, "Orchestrator");
+            }, i * 800);
+            demoTimersRef.current.push(t);
+          });
+          // Finalize orchestrator summary → done
+          const finalT = setTimeout(() => {
+            finalizeMessage(undefined, "Orchestrator");
+            setDemoPhase("done");
+          }, AGGREGATOR_CHUNKS.length * 800 + 500);
+          demoTimersRef.current.push(finalT);
+        }, DIFF_CHUNKS.length * 800 + 500);
+        demoTimersRef.current.push(diffDoneT);
 
         return;
       }
@@ -435,7 +449,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       demoTimersRef.current = [];
 
       setDemoMode(true);
-      setDemoPhase("intro");
+      setDemoPhase("analyzing");
       setDemoFileTree([]);
       setDemoDiffs([]);
       setMessages([]);
@@ -447,7 +461,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const a = agents;
       const timers = demoTimersRef.current;
 
-      // t=DEMO_TIMING.showDag: 意图分析 appears (phase already set)
+      // → Orchestrator 分析 (2s) → 意图分析
+      timers.push(setTimeout(() => setDemoPhase("intro"), DEMO_TIMING.phaseAnalyzing));
 
       // → 任务分解
       timers.push(setTimeout(() => setDemoPhase("decompose"), DEMO_TIMING.phaseIntro));
@@ -462,39 +477,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             return next;
           });
           AGENT_1_CHUNKS.forEach((chunk, i) => {
-            timers.push(setTimeout(() => appendMessageChunk(chunk, a[0]!.id), i * 500));
+            timers.push(setTimeout(() => appendMessageChunk(chunk, a[0]!.id), i * 1500));
           });
         }, DEMO_TIMING.phaseDecompose),
       );
-      // Tool indicators for Agent 1 (8 chunks × 500ms = 3500ms)
+      // Tool indicators for Agent 1 (8 chunks × 1500ms = 10500ms)
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.set(a[0]!.id, { toolName: "Write", timestamp: Date.now() });
           return next;
         });
-      }, DEMO_TIMING.phaseDecompose + 200));
+      }, DEMO_TIMING.phaseDecompose + 1300));
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.set(a[0]!.id, { toolName: "Write", timestamp: Date.now() });
           return next;
         });
-      }, DEMO_TIMING.phaseDecompose + 1200));
+      }, DEMO_TIMING.phaseDecompose + 4300));
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.set(a[0]!.id, { toolName: "Write", timestamp: Date.now() });
           return next;
         });
-      }, DEMO_TIMING.phaseDecompose + 2200));
+      }, DEMO_TIMING.phaseDecompose + 7300));
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.delete(a[0]!.id);
           return next;
         });
-      }, DEMO_TIMING.phaseDecompose + 3400));
+      }, DEMO_TIMING.phaseDecompose + 11000));
 
       // → Agent 1 done → Agent 2 starts
       timers.push(
@@ -514,32 +529,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             return next;
           });
           AGENT_2_CHUNKS.forEach((chunk, i) => {
-            timers.push(setTimeout(() => appendMessageChunk(chunk, a[1]!.id), i * 500));
+            timers.push(setTimeout(() => appendMessageChunk(chunk, a[1]!.id), i * 1500));
           });
         }, DEMO_TIMING.finishAgent1),
       );
-      // Tool indicators for Agent 2 (4 chunks × 500ms = 1500ms)
+      // Tool indicators for Agent 2 (4 chunks × 1500ms = 4500ms)
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.set(a[1]!.id, { toolName: "Write", timestamp: Date.now() });
           return next;
         });
-      }, DEMO_TIMING.finishAgent1 + 200));
+      }, DEMO_TIMING.finishAgent1 + 1300));
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.set(a[1]!.id, { toolName: "Write", timestamp: Date.now() });
           return next;
         });
-      }, DEMO_TIMING.finishAgent1 + 1200));
+      }, DEMO_TIMING.finishAgent1 + 4300));
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.delete(a[1]!.id);
           return next;
         });
-      }, DEMO_TIMING.finishAgent1 + 1800));
+      }, DEMO_TIMING.finishAgent1 + 5000));
 
       // → Agent 2 done → Agent 3 starts
       timers.push(
@@ -559,25 +574,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             return next;
           });
           AGENT_3_CHUNKS.forEach((chunk, i) => {
-            timers.push(setTimeout(() => appendMessageChunk(chunk, a[2]!.id), i * 500));
+            timers.push(setTimeout(() => appendMessageChunk(chunk, a[2]!.id), i * 1500));
           });
         }, DEMO_TIMING.finishAgent2),
       );
-      // Tool indicators for Agent 3 (3 chunks × 500ms = 1000ms)
+      // Tool indicators for Agent 3 (3 chunks × 1500ms = 3000ms)
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.set(a[2]!.id, { toolName: "Write", timestamp: Date.now() });
           return next;
         });
-      }, DEMO_TIMING.finishAgent2 + 200));
+      }, DEMO_TIMING.finishAgent2 + 1300));
       timers.push(setTimeout(() => {
         setToolStatusMap((prev) => {
           const next = new Map(prev);
           next.delete(a[2]!.id);
           return next;
         });
-      }, DEMO_TIMING.finishAgent2 + 1000));
+      }, DEMO_TIMING.finishAgent2 + 3500));
 
       // → Agent 3 done → show interaction card
       timers.push(
@@ -808,6 +823,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         demoFileTree,
         demoDiffs,
         removeDemoDiff,
+        setDemoFileTree,
         startDemoSequence,
       }}
     >

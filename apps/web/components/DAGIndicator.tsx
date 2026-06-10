@@ -72,11 +72,12 @@ export default function DAGIndicator({
 
   if (!currentPhase || currentPhase === "done") return null;
 
-  /** Get visible nodes — progressive reveal: intro/decompose show only up to current, agents show all. */
+  /** Get visible nodes — progressive reveal: pre-agent phases show only up to current, agents show all. */
   function getVisibleNodes(): readonly { key: string; label: string }[] {
     const phaseIndex = DAG_NODES.findIndex((n) => n.key === currentPhase);
-    // During intro/decompose, show nodes incrementally
-    if (phaseIndex <= 1) return DAG_NODES.slice(0, phaseIndex + 1);
+    const agentStartIdx = DAG_NODES.findIndex((n) => n.key.startsWith("agent_"));
+    // Before agents start, show nodes incrementally
+    if (phaseIndex >= 0 && phaseIndex < agentStartIdx) return DAG_NODES.slice(0, phaseIndex + 1);
     // From agent_1 onward, show all nodes
     return DAG_NODES;
   }

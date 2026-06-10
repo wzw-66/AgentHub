@@ -12,6 +12,7 @@ export const DEMO_TRIGGER =
 
 export type DemoPhase =
   | null // not in demo
+  | "analyzing" // Orchestrator 分析中
   | "intro" // 意图分析
   | "decompose" // 任务分解
   | "agent_1" // Agent 1 writing homepage
@@ -22,6 +23,7 @@ export type DemoPhase =
   | "done"; // demo complete
 
 export const DAG_NODES = [
+  { key: "analyzing", label: "Orchestrator 分析中" },
   { key: "intro", label: "意图分析" },
   { key: "decompose", label: "任务分解" },
   { key: "agent_1", label: "Agent: 首页" },
@@ -34,15 +36,13 @@ export const DAG_NODES = [
 
 export const DEMO_TIMING = {
   showDag: 600,
-  phaseIntro: 2500,          // 意图分析单独展示 2.5s
-  phaseDecompose: 5000,      // 任务分解单独展示 2.5s（从 start 算起）
-  startAgent1: 5500,         // Agent 1 开始（5.5s 的编排过程）
-  finishAgent1: 13000,       // 8 chunks × 500ms = 3.5s + 余量
-  startAgent2: 14500,        // 1.5s 停顿模拟 Agent 反应
-  finishAgent2: 18500,       // 4 chunks × 500ms = 1.5s + 余量
-  startAgent3: 20000,        // 1.5s 停顿
-  finishAgent3: 23000,       // 3 chunks × 500ms = 1s + 余量
-  showInteraction: 24500,
+  phaseAnalyzing: 2000,      // Orchestrator 分析 2s
+  phaseIntro: 5000,          // 意图分析（2s + 3s）
+  phaseDecompose: 8000,      // 任务分解（2s + 6s）
+  finishAgent1: 20500,       // 8 chunks × 1500ms + 余量
+  finishAgent2: 27000,       // 4 chunks × 1500ms + 余量
+  finishAgent3: 32000,       // 3 chunks × 1500ms + 余量
+  showInteraction: 34000,    // (保留, 实际由 summary 时长动态决定)
 };
 
 // ─── Interaction Card ───────────────────────────────────────────────────
@@ -385,15 +385,36 @@ export const DIFF_CHUNKS = [
 ~~~artifact:end:diff~~~`,
 ];
 
-/** Aggregator summary — shown after user interaction */
+/** Aggregator summary — shown after DIFF_CHUNKS (merges orchestrator summary + completion) */
 export const AGGREGATOR_CHUNKS = [
-  '✅ 博客网站开发完成！\n\n已由 3 个 Agent 协作完成以下页面：\n\n',
+  '🧠 **Orchestrator 任务总结**\n\n✅ 博客网站开发完成！\n\n已由 3 个 Agent 协作完成以下页面：\n\n',
   `| 页面 | 负责 Agent | 功能 |
 |------|-----------|------|
 | 首页 \`index.html\` | Agent 1 | Hero 粒子动画 + 导航栏 + 文章预览 |
 | 文章列表 \`articles/\` | Agent 2 | 数据驱动渲染 + 交互卡片 |
 | 关于页面 \`about/\` | Agent 3 | 个人简介 + 社交链接 |\n\n`,
-  `项目文件结构：\n\`\`\`\n├── index.html          (首页)\n├── style.css           (全局样式)\n├── hero-animation.js   (粒子动画)\n├── articles/\n│   ├── index.html      (文章列表)\n│   └── data.js         (文章数据)\n└── about/\n    └── index.html      (关于页面)\n\`\`\`\n\n💡 如需进一步调整颜色、布局或添加新功能，请直接告诉我！`,
+  `📋 **项目文件结构**\n\`\`\`\n├── index.html          (首页)\n├── style.css           (全局样式，已按偏好更新为深色主题)\n├── hero-animation.js   (粒子动画)\n├── articles/\n│   ├── index.html      (文章列表)\n│   └── data.js         (文章数据)\n└── about/\n    └── index.html      (关于页面)\n\`\`\`\n\n💡 如需进一步调整颜色、布局或添加新功能，请直接告诉我！`,
+];
+
+/** Orchestrator summary — shown after all agents finish, before interaction card. */
+export const ORCHESTRATOR_SUMMARY = [
+  '🧠 **Orchestrator 任务总结**\n\n已由 3 个 Agent 协作完成静态博客网站：\n\n',
+  `| Agent | 负责模块 | 产出文件 |
+|-------|---------|---------|
+| **首页** | Hero 粒子动画 + 导航栏 + 文章预览 | \`index.html\`, \`style.css\`, \`hero-animation.js\` |
+| **文章列表** | 数据驱动渲染 + 交互卡片 | \`articles/index.html\`, \`articles/data.js\` |
+| **关于页面** | 个人简介 + 社交链接 | \`about/index.html\` |\n\n`,
+  `📋 **项目结构**\n
+\`\`\`
+├── index.html          (首页)
+├── style.css           (全局样式)
+├── hero-animation.js   (粒子动画)
+├── articles/
+│   ├── index.html      (文章列表)
+│   └── data.js         (文章数据)
+└── about/
+    └── index.html      (关于页面)
+\`\`\`\n\n`,
 ];
 
 // ─── File Tree Data (by phase) ──────────────────────────────────────────
@@ -675,6 +696,20 @@ renderArticles();`,
    position: relative; overflow: hidden;`,
     },
   ],
+};
+
+/**
+ * Phases that produce file diffs, in order — used by RightPanel version history.
+ * Each key maps to an entry in DEMO_DIFFS_BY_PHASE above.
+ */
+export const VERSION_PHASES = ["agent_1", "agent_2", "agent_3", "theme"] as const;
+
+/** Human-readable labels for each file-producing phase. */
+export const PHASE_LABELS: Record<string, string> = {
+  agent_1: "Agent: 首页",
+  agent_2: "Agent: 文章列表",
+  agent_3: "Agent: 关于页",
+  theme: "主题切换",
 };
 
 /** Flat lookup map: file path → content for all demo files. */

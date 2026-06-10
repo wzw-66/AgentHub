@@ -180,6 +180,28 @@ function renderArtifactBlocks(
           case "document":
             return <MarkdownRenderer key={i} content={block.content} />;
 
+          case "diff":
+            return (
+              <div key={i} className="mb-2">
+                {block.title && (
+                  <div
+                    className="text-[10px] font-mono px-2 py-1 rounded-t"
+                    style={{
+                      color: "var(--text-secondary)",
+                      background: "var(--bg-sidebar)",
+                      borderBottom: "1px solid var(--border-light)",
+                    }}
+                  >
+                    {block.title}
+                  </div>
+                )}
+                <CodeBlock
+                  code={block.content}
+                  language="diff"
+                />
+              </div>
+            );
+
           default:
             return null;
         }
@@ -773,6 +795,32 @@ export default function ChatPanel({
           currentPhase={demoPhase}
           agentLabels={convAgents.slice(0, 3).map((a) => a.name)}
         />
+      )}
+
+      {/* Orchestrator 分析中 — transition animation before DAG flow */}
+      {demoMode && demoPhase === "analyzing" && (
+        <div
+          className="flex items-center gap-2 px-4 py-3"
+          style={{
+            background: "var(--bg-sidebar)",
+            borderBottom: "1px solid var(--border-light)",
+            animation: "msgIn 0.35s ease forwards",
+          }}
+        >
+          <span
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              background: "#7c3aed",
+              boxShadow: "0 0 6px rgba(124, 58, 237, 0.4)",
+              animation: "pulse-glow 1.5s ease infinite",
+            }}
+          />
+          <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>
+            🧠 Orchestrator 正在分析你的需求...
+          </span>
+        </div>
       )}
 
       {/* Messages */}
