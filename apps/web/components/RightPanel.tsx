@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useChat } from "@/lib/chat-context";
 import { api } from "@/lib/api-client";
+import { DEMO_FILE_CONTENT } from "@/lib/demo-data";
 import GroupSection from "./GroupSection";
 import FileExplorer from "./FileExplorer";
 import FileEditor from "./FileEditor";
 
 interface RightPanelProps {
-  content?: { type: string; id: string } | null;
+  content?: { type: string; id: string; content?: string; title?: string } | null;
   onClose?: () => void;
   conversationId?: string | null;
 }
@@ -47,7 +48,7 @@ interface ArtifactDetail {
 }
 
 export default function RightPanel({ content, onClose: _onClose, conversationId }: RightPanelProps) {
-  const { conversations, contacts, fetchConversations } = useChat();
+  const { conversations, contacts, fetchConversations, demoMode, demoDiffs, removeDemoDiff } = useChat();
   const activeConversation = conversations.find((c) => c.id === conversationId);
   const isGroupChat = activeConversation?.type === "group";
   const convContactIds = activeConversation?.contactIds ?? [];
@@ -59,6 +60,8 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [diffsExpanded, setDiffsExpanded] = useState(true);
+  const [viewingDiffContent, setViewingDiffContent] = useState<{ path: string; content: string; type: string } | null>(null);
 
   // ─── Pinned messages state ────────────────────────────────────────────
   interface PinnedMessage {
@@ -164,6 +167,17 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
           setArtifactData(null);
           setArtifactLoading(false);
         });
+    } else if (content?.type === "preview" && content.content) {
+      // Inline preview content from chat panel (e.g., web_preview expand)
+      setArtifactData({
+        id: "preview",
+        content: content.content,
+        previewUrl: null,
+        type: "html",
+        status: "ready",
+      });
+      setArtifactLoading(false);
+      setActiveTab("preview");
     } else {
       setArtifactData(null);
     }
@@ -173,6 +187,23 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
   useEffect(() => {
     setSelectedFile(null);
   }, [conversationId]);
+
+  // Demo mode: when a file is selected in the tree, show its content in preview
+  useEffect(() => {
+    if (!demoMode || !selectedFile) return;
+    const content = DEMO_FILE_CONTENT[selectedFile];
+    if (content) {
+      const isHtml = selectedFile.endsWith(".html");
+      setArtifactData({
+        id: "file-" + selectedFile,
+        content,
+        previewUrl: null,
+        type: isHtml ? "html" : "code",
+        status: "ready",
+      });
+      setActiveTab("preview");
+    }
+  }, [selectedFile, demoMode]);
 
   return (
     <div
@@ -389,9 +420,34 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
                 className="flex flex-col overflow-hidden"
                 style={{ minHeight: "200px", borderRadius: "var(--radius-md)" }}
               >
+                {/* File path header for demo file previews */}
+                {artifactData.id.startsWith("file-") && (
+                  <div
+                    className="flex items-center justify-between px-3 py-1.5 text-[10px] font-mono"
+                    style={{
+                      background: "var(--bg-sidebar)",
+                      borderBottom: "1px solid var(--border-light)",
+                      color: "var(--text-secondary)",
+                      borderRadius: "var(--radius-md) var(--radius-md) 0 0",
+                    }}
+                  >
+                    <span>{artifactData.id.replace("file-", "")}</span>
+                    <button
+                      onClick={() => setArtifactData(null)}
+                      className="border-none cursor-pointer text-[10px]"
+                      style={{ color: "var(--text-tertiary)", background: "none" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 <div
                   className="flex-1 overflow-hidden rounded-lg"
-                  style={{ border: "1px solid var(--border-light)" }}
+                  style={{
+                    border: "1px solid var(--border-light)",
+                    borderTop: artifactData.id.startsWith("file-") ? "none" : undefined,
+                    borderRadius: artifactData.id.startsWith("file-") ? "0 0 var(--radius-md) var(--radius-md)" : undefined,
+                  }}
                 >
                   {artifactData.previewUrl ? (
                     <iframe
@@ -474,7 +530,7 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
                 项目文件
               </div>
 
-              {selectedFile && conversationId ? (
+              {selectedFile && conversationId && !demoMode ? (
                 <div className="mb-3">
                   <FileEditor
                     conversationId={conversationId}
@@ -547,6 +603,191 @@ export default function RightPanel({ content, onClose: _onClose, conversationId 
           </div>
         )}
       </div>
+      {/* ─── Diff Timeline (demo mode) ────────────────────────── */}
+      {demoMode && demoDiffs.length > 0 && (
+        <div
+          style={{
+            borderTop: "1px solid var(--border-light)",
+            padding: "12px 18px",
+            maxHeight: "50%",
+            overflow: "auto",
+          }}
+        >
+          {/* Collapsible header */}
+          <div
+            className="flex items-center gap-1.5 cursor-pointer select-none"
+            onClick={() => setDiffsExpanded((v) => !v)}
+            style={{ color: "var(--text-tertiary)", fontSize: "10px", letterSpacing: "0.3px", fontWeight: 500, marginBottom: diffsExpanded ? "6px" : "0" }}
+          >
+            <span style={{ fontSize: "8px", transition: "transform 0.2s", transform: diffsExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
+              ▶
+            </span>
+            变更记录
+            <span style={{ color: "var(--accent)", fontSize: "9px", marginLeft: "2px" }}>{demoDiffs.length}</span>
+          </div>
+
+          {diffsExpanded && (
+            <>
+              {/* Content preview for clicked diff item */}
+              {viewingDiffContent && (
+                <div
+                  className="rounded-lg overflow-hidden mb-2"
+                  style={{
+                    border: "1px solid var(--border-light)",
+                    background: "var(--bg-app)",
+                  }}
+                >
+                  <div
+                    className="flex items-center justify-between px-2 py-1.5"
+                    style={{ borderBottom: "1px solid var(--border-light)", fontSize: "10px", color: "var(--text-secondary)" }}
+                  >
+                    <span className="font-mono">{viewingDiffContent.path}</span>
+                    <button
+                      onClick={() => setViewingDiffContent(null)}
+                      className="border-none cursor-pointer text-[10px]"
+                      style={{ color: "var(--text-tertiary)", background: "none" }}
+                    >
+                      关闭
+                    </button>
+                  </div>
+                  <div
+                    className="overflow-x-auto font-mono text-[10px] leading-relaxed p-2.5"
+                    style={{ color: "var(--text-primary)", maxHeight: "240px", overflowY: "auto", whiteSpace: "pre" }}
+                  >
+                    {viewingDiffContent.type === "modified"
+                      ? viewingDiffContent.content.split("\n").map((line, li) => {
+                          const trimmed = line;
+                          if (trimmed.startsWith("+") && !trimmed.startsWith("+++")) {
+                            return <div key={li} style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>{trimmed}</div>;
+                          }
+                          if (trimmed.startsWith("-") && !trimmed.startsWith("---")) {
+                            return <div key={li} style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>{trimmed}</div>;
+                          }
+                          if (trimmed.startsWith("@@")) {
+                            return <div key={li} style={{ color: "var(--accent)", opacity: 0.7 }}>{trimmed}</div>;
+                          }
+                          return <div key={li}>{trimmed}</div>;
+                        })
+                      : viewingDiffContent.content.split("\n").map((line, li) => (
+                          <div key={li} style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>+ {line}</div>
+                        ))
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Diff list */}
+              <div
+                className="flex flex-col rounded-lg overflow-hidden"
+                style={{ border: "1px solid var(--border-light)", fontSize: "11px" }}
+              >
+                {demoDiffs.map((diff, i) => (
+                  <div
+                    key={`${diff.path}-${i}`}
+                    className="flex items-center gap-1.5 px-3 py-2 cursor-pointer transition-colors"
+                    style={{
+                      borderBottom: i < demoDiffs.length - 1 ? "1px solid var(--border-light)" : "none",
+                      color: "var(--text-secondary)",
+                    }}
+                    onClick={() => {
+                      if (diff.content) setViewingDiffContent({ path: diff.path, content: diff.content, type: diff.type });
+                      else if (diff.diff) setViewingDiffContent({ path: diff.path, content: diff.diff, type: diff.type });
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span
+                      className="flex-shrink-0 font-mono text-[10px]"
+                      style={{ color: diff.type === "created" ? "#22c55e" : "var(--accent)" }}
+                    >
+                      {diff.type === "created" ? "+" : "~"}
+                    </span>
+                    <span className="truncate font-mono" style={{ fontSize: "10px" }}>
+                      {diff.path}
+                    </span>
+                    <span
+                      className="flex-shrink-0 text-[9px]"
+                      style={{
+                        color: diff.type === "created" ? "#22c55e" : "var(--accent)",
+                        background: diff.type === "created" ? "rgba(34,197,94,0.1)" : "var(--accent-light)",
+                        padding: "1px 6px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      {diff.type === "created" ? "新增" : "修改"}
+                    </span>
+                    {/* Per-file confirm / cancel */}
+                    <div className="flex gap-0.5 flex-shrink-0 ml-auto">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (viewingDiffContent?.path === diff.path) setViewingDiffContent(null);
+                          removeDemoDiff(diff.path);
+                        }}
+                        className="flex items-center justify-center w-5 h-5 rounded border-none cursor-pointer transition-all"
+                        style={{ background: "var(--accent)", color: "#fff", fontSize: "9px", lineHeight: 1 }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                        title="确认"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (viewingDiffContent?.path === diff.path) setViewingDiffContent(null);
+                          removeDemoDiff(diff.path);
+                        }}
+                        className="flex items-center justify-center w-5 h-5 rounded border-none cursor-pointer transition-all"
+                        style={{ background: "var(--bg-hover)", color: "var(--text-tertiary)", fontSize: "9px", lineHeight: 1 }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        title="取消"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Global Confirm / Cancel buttons */}
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    setViewingDiffContent(null);
+                    demoDiffs.forEach((d) => removeDemoDiff(d.path));
+                  }}
+                  className="flex-1 rounded-lg py-1.5 text-[10px] font-medium border-none cursor-pointer transition-all"
+                  style={{
+                    background: "var(--accent)",
+                    color: "#fff",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                >
+                  ✓ 确认全部
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingDiffContent(null);
+                    demoDiffs.forEach((d) => removeDemoDiff(d.path));
+                  }}
+                  className="flex-1 rounded-lg py-1.5 text-[10px] font-medium border-none cursor-pointer transition-all"
+                  style={{
+                    background: "var(--bg-hover)",
+                    color: "var(--text-secondary)",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                >
+                  取消全部
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

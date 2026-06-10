@@ -15,6 +15,21 @@ import { useWS } from "./ws-context";
 import type { Conversation, Message } from "@agenthub/shared";
 import { SenderType, MessageType } from "@agenthub/shared";
 import type { Dispatch, SetStateAction } from "react";
+import {
+  DEMO_TIMING,
+  INTERACTION,
+  AGENT_1_CHUNKS,
+  AGENT_2_CHUNKS,
+  AGENT_3_CHUNKS,
+  AGGREGATOR_CHUNKS,
+  FILE_TREE_AGENT_1,
+  FILE_TREE_AGENT_2,
+  FILE_TREE_COMPLETE,
+  type DemoPhase,
+  type DemoFileNode,
+  type DemoDiffItem,
+  DEMO_DIFFS_BY_PHASE,
+} from "./demo-data";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -85,6 +100,14 @@ interface ChatContextValue {
   respondToInteraction: (response: string) => void;
   /** Cancel a pending agent interaction */
   cancelInteraction: () => void;
+  // ─── Demo mode ───────────────────────────────────────────────────
+  demoMode: boolean;
+  demoPhase: DemoPhase;
+  demoFileTree: DemoFileNode[];
+  demoDiffs: DemoDiffItem[];
+  /** Remove a diff item by its path (and optional timestamp for duplicates) */
+  removeDemoDiff: (path: string) => void;
+  startDemoSequence: (convId: string, agents: { id: string; name: string }[]) => void;
 }
 
 // ─── Context ───────────────────────────────────────────────────────────
@@ -125,6 +148,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ─── Pending interaction state ──────────────────────────────────
   const [pendingInteraction, setPendingInteraction] =
     useState<PendingInteraction | null>(null);
+
+  // ─── Demo mode state ────────────────────────────────────────────
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoPhase, setDemoPhase] = useState<DemoPhase>(null);
+  const [demoFileTree, setDemoFileTree] = useState<DemoFileNode[]>([]);
+  const [demoDiffs, setDemoDiffs] = useState<DemoDiffItem[]>([]);
+  const removeDemoDiff = useCallback((path: string) => {
+    setDemoDiffs((prev) => prev.filter((d) => d.path !== path));
+  }, []);
+  const demoAgentsRef = useRef<{ id: string; name: string }[]>([]);
+  const demoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Track accumulated streaming content by agentId (ref, not state — enables
+  // finalizeMessage to read content without nested setState)
+  const streamingContentRef = useRef<Map<string, string>>(new Map());
 
   const fetchConversations = useCallback(async () => {
     setIsLoadingConversations(true);
@@ -219,6 +256,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const appendMessageChunk = useCallback(
     (chunkText: string, agentId?: string) => {
       const key = agentId ?? "default";
+      // Store content in ref immediately (not through React state batching)
+      // so finalizeMessage can read it without relying on React state
+      const prevRefContent = streamingContentRef.current.get(key) ?? "";
+      streamingContentRef.current.set(key, prevRefContent + chunkText);
+
       setStreamingMessages((prev) => {
         const next = new Map(prev);
         const existing = next.get(key);
@@ -246,35 +288,45 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const finalizeMessage = useCallback((messageId?: string, agentId?: string) => {
     const key = agentId ?? "default";
-    setStreamingMessages((prev) => {
-      const next = new Map(prev);
-      const msg = next.get(key);
-      if (msg) {
-        // Convert streaming message to a permanent message
-        // Use the real DB messageId if available, otherwise keep the streaming id
-        const id = messageId || msg.id;
-        const permanent: Message = {
-          id,
-          conversationId: msg.conversationId,
-          content: msg.content,
-          senderType: SenderType.Contact,
-          senderId: agentId ?? msg.senderId,
-          type: MessageType.Text,
-          createdAt: msg.createdAt,
-          updatedAt: new Date().toISOString(),
-        };
-        setMessages((msgs) => {
-          // Avoid duplicates: if a message with the same DB id already exists
-          // (e.g., loaded from API after a re-fetch), don't add it again
-          if (messageId && msgs.some((m) => m.id === messageId)) {
-            return msgs;
-          }
-          return [...msgs, permanent];
-        });
+    // Read content from ref (immediate, not through React state batching).
+    // This avoids reading from streamingMessages state inside an updater,
+    // which would require nested setState (setState inside another's updater).
+    // React 18 may assign nested setState to a different lane, causing
+    // setMessages and setStreamingMessages.delete to commit in separate
+    // renders — which means the UI briefly shows BOTH the permanent message
+    // AND the streaming entry, resulting in the duplicate render.
+    const content = streamingContentRef.current.get(key);
+    if (content) {
+      // Clean up ref so repeated calls are no-ops
+      streamingContentRef.current.delete(key);
+
+      const id = messageId || `streaming-${++streamIdRef.current}`;
+      const permanent: Message = {
+        id,
+        conversationId: activeConvRef.current || "",
+        content,
+        senderType: SenderType.Contact,
+        senderId: agentId ?? "agent",
+        type: MessageType.Text,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      // Both setMessages and setStreamingMessages are called at the SAME level
+      // (not nested inside each other's updaters). React 18 reliably batches
+      // same-level setState calls from the same synchronous context into a
+      // single commit, preventing the duplicate rendering bug.
+      setMessages((msgs) => {
+        if (messageId && msgs.some((m) => m.id === messageId)) {
+          return msgs;
+        }
+        return [...msgs, permanent];
+      });
+      setStreamingMessages((prev) => {
+        const next = new Map(prev);
         next.delete(key);
-      }
-      return next;
-    });
+        return next;
+      });
+    }
     setTypingAgents(new Map());
   }, []);
 
@@ -290,6 +342,48 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ─── Interaction methods ────────────────────────────────────────
   const respondToInteraction = useCallback(
     (response: string) => {
+      // ─── Demo mode: handle interaction locally ────────────────
+      if (demoMode) {
+        setPendingInteraction(null);
+        const agents = demoAgentsRef.current;
+        if (agents.length === 0) return;
+
+        // Add user's response as a message
+        const userResponseMsg: Message = {
+          id: `demo-user-resp-${Date.now()}`,
+          conversationId: activeConvRef.current || "",
+          content: response,
+          senderType: SenderType.User,
+          senderId: "user",
+          type: MessageType.Text,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, userResponseMsg]);
+
+        // Push theme diff to the right panel timeline
+        setDemoDiffs((prev) => [...prev, ...(DEMO_DIFFS_BY_PHASE.theme ?? [])]);
+
+        // Show aggregator summary in chat (no diff chunks in chat anymore)
+        setDemoPhase("aggregate");
+        AGGREGATOR_CHUNKS.forEach((chunk, i) => {
+          const t = setTimeout(() => {
+            appendMessageChunk(chunk, agents[0]!.id);
+          }, i * 800);
+          demoTimersRef.current.push(t);
+        });
+
+        // Finalize after aggregator
+        const finalT = setTimeout(() => {
+          finalizeMessage(undefined, agents[0]!.id);
+          setDemoPhase("done");
+        }, AGGREGATOR_CHUNKS.length * 800 + 500);
+        demoTimersRef.current.push(finalT);
+
+        return;
+      }
+
+      // ─── Normal mode ──────────────────────────────────────────
       const convId = activeConvRef.current;
       if (!convId) return;
       wsSend({
@@ -298,12 +392,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
       setPendingInteraction(null);
     },
-    [wsSend],
+    [wsSend, demoMode, appendMessageChunk, finalizeMessage, setMessages],
   );
 
   const cancelInteraction = useCallback(() => {
+    // Demo mode: skip interaction → show aggregator
+    if (demoMode) {
+      setPendingInteraction(null);
+      const agents = demoAgentsRef.current;
+      if (agents.length > 0) {
+        setDemoPhase("aggregate");
+        AGGREGATOR_CHUNKS.forEach((chunk, i) => {
+          const t = setTimeout(() => appendMessageChunk(chunk, agents[0]!.id), i * 600);
+          demoTimersRef.current.push(t);
+        });
+        const t = setTimeout(() => {
+          finalizeMessage(undefined, agents[0]!.id);
+          setDemoPhase("done");
+        }, AGGREGATOR_CHUNKS.length * 600 + 400);
+        demoTimersRef.current.push(t);
+      }
+      return;
+    }
+    // Normal mode
     setPendingInteraction(null);
-    // Optionally send a cancellation to the server
     const convId = activeConvRef.current;
     if (convId) {
       wsSend({
@@ -311,7 +423,200 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         payload: { conversationId: convId, response: "__cancel__" },
       });
     }
-  }, [wsSend]);
+  }, [wsSend, demoMode, appendMessageChunk, finalizeMessage]);
+
+  // ─── Demo sequence ─────────────────────────────────────────────
+  const startDemoSequence = useCallback(
+    (convId: string, agents: { id: string; name: string }[]) => {
+      if (!convId || agents.length < 3) return;
+
+      // Clean up any previous demo timers
+      demoTimersRef.current.forEach(clearTimeout);
+      demoTimersRef.current = [];
+
+      setDemoMode(true);
+      setDemoPhase("intro");
+      setDemoFileTree([]);
+      setDemoDiffs([]);
+      setMessages([]);
+      setStreamError(null);
+      setPendingInteraction(null);
+      setToolStatusMap(new Map());
+      demoAgentsRef.current = agents;
+
+      const a = agents;
+      const timers = demoTimersRef.current;
+
+      // t=DEMO_TIMING.showDag: 意图分析 appears (phase already set)
+
+      // → 任务分解
+      timers.push(setTimeout(() => setDemoPhase("decompose"), DEMO_TIMING.phaseIntro));
+
+      // ─── Agent 1 ─────────────────────────────────────────────────
+      timers.push(
+        setTimeout(() => {
+          setDemoPhase("agent_1");
+          setToolStatusMap((prev) => {
+            const next = new Map(prev);
+            next.set(a[0]!.id, { toolName: "Think", timestamp: Date.now() });
+            return next;
+          });
+          AGENT_1_CHUNKS.forEach((chunk, i) => {
+            timers.push(setTimeout(() => appendMessageChunk(chunk, a[0]!.id), i * 500));
+          });
+        }, DEMO_TIMING.phaseDecompose),
+      );
+      // Tool indicators for Agent 1 (8 chunks × 500ms = 3500ms)
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.set(a[0]!.id, { toolName: "Write", timestamp: Date.now() });
+          return next;
+        });
+      }, DEMO_TIMING.phaseDecompose + 200));
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.set(a[0]!.id, { toolName: "Write", timestamp: Date.now() });
+          return next;
+        });
+      }, DEMO_TIMING.phaseDecompose + 1200));
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.set(a[0]!.id, { toolName: "Write", timestamp: Date.now() });
+          return next;
+        });
+      }, DEMO_TIMING.phaseDecompose + 2200));
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.delete(a[0]!.id);
+          return next;
+        });
+      }, DEMO_TIMING.phaseDecompose + 3400));
+
+      // → Agent 1 done → Agent 2 starts
+      timers.push(
+        setTimeout(() => {
+          finalizeMessage(undefined, a[0]!.id);
+          setToolStatusMap((prev) => {
+            const next = new Map(prev);
+            next.delete(a[0]!.id);
+            return next;
+          });
+          setDemoFileTree(FILE_TREE_AGENT_1);
+          setDemoDiffs((prev) => [...prev, ...(DEMO_DIFFS_BY_PHASE.agent_1 ?? [])]);
+          setDemoPhase("agent_2");
+          setToolStatusMap((prev) => {
+            const next = new Map(prev);
+            next.set(a[1]!.id, { toolName: "Think", timestamp: Date.now() });
+            return next;
+          });
+          AGENT_2_CHUNKS.forEach((chunk, i) => {
+            timers.push(setTimeout(() => appendMessageChunk(chunk, a[1]!.id), i * 500));
+          });
+        }, DEMO_TIMING.finishAgent1),
+      );
+      // Tool indicators for Agent 2 (4 chunks × 500ms = 1500ms)
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.set(a[1]!.id, { toolName: "Write", timestamp: Date.now() });
+          return next;
+        });
+      }, DEMO_TIMING.finishAgent1 + 200));
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.set(a[1]!.id, { toolName: "Write", timestamp: Date.now() });
+          return next;
+        });
+      }, DEMO_TIMING.finishAgent1 + 1200));
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.delete(a[1]!.id);
+          return next;
+        });
+      }, DEMO_TIMING.finishAgent1 + 1800));
+
+      // → Agent 2 done → Agent 3 starts
+      timers.push(
+        setTimeout(() => {
+          finalizeMessage(undefined, a[1]!.id);
+          setToolStatusMap((prev) => {
+            const next = new Map(prev);
+            next.delete(a[1]!.id);
+            return next;
+          });
+          setDemoFileTree(FILE_TREE_AGENT_2);
+          setDemoDiffs((prev) => [...prev, ...(DEMO_DIFFS_BY_PHASE.agent_2 ?? [])]);
+          setDemoPhase("agent_3");
+          setToolStatusMap((prev) => {
+            const next = new Map(prev);
+            next.set(a[2]!.id, { toolName: "Think", timestamp: Date.now() });
+            return next;
+          });
+          AGENT_3_CHUNKS.forEach((chunk, i) => {
+            timers.push(setTimeout(() => appendMessageChunk(chunk, a[2]!.id), i * 500));
+          });
+        }, DEMO_TIMING.finishAgent2),
+      );
+      // Tool indicators for Agent 3 (3 chunks × 500ms = 1000ms)
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.set(a[2]!.id, { toolName: "Write", timestamp: Date.now() });
+          return next;
+        });
+      }, DEMO_TIMING.finishAgent2 + 200));
+      timers.push(setTimeout(() => {
+        setToolStatusMap((prev) => {
+          const next = new Map(prev);
+          next.delete(a[2]!.id);
+          return next;
+        });
+      }, DEMO_TIMING.finishAgent2 + 1000));
+
+      // → Agent 3 done → show interaction card
+      timers.push(
+        setTimeout(() => {
+          finalizeMessage(undefined, a[2]!.id);
+          setToolStatusMap((prev) => {
+            const next = new Map(prev);
+            next.delete(a[2]!.id);
+            return next;
+          });
+          setDemoFileTree(FILE_TREE_COMPLETE);
+          setDemoDiffs((prev) => [...prev, ...(DEMO_DIFFS_BY_PHASE.agent_3 ?? [])]);
+          setDemoPhase("interact");
+          setPendingInteraction(INTERACTION);
+        }, DEMO_TIMING.finishAgent3),
+      );
+    },
+    [appendMessageChunk, finalizeMessage, setMessages, setStreamError],
+  );
+
+  // ─── Clean up demo timers on unmount ────────────────────────────
+  useEffect(() => {
+    return () => {
+      demoTimersRef.current.forEach(clearTimeout);
+    };
+  }, []);
+
+  // ─── Reset demo state when conversation changes ─────────────────
+  useEffect(() => {
+    if (demoMode) {
+      demoTimersRef.current.forEach(clearTimeout);
+      demoTimersRef.current = [];
+      setDemoMode(false);
+      setDemoPhase(null);
+      setDemoFileTree([]);
+      setDemoDiffs([]);
+      setPendingInteraction(null);
+    }
+  }, [activeConversationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePinConversation = useCallback(
     async (conversationId: string, isPinned: boolean) => {
@@ -497,6 +802,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setMessages,
         respondToInteraction,
         cancelInteraction,
+        // ─── Demo mode ────────────────────────────────────────────
+        demoMode,
+        demoPhase,
+        demoFileTree,
+        demoDiffs,
+        removeDemoDiff,
+        startDemoSequence,
       }}
     >
       {children}

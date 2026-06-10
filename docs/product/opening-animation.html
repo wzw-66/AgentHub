@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentHub 开场动画</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f4f3f0;
+    overflow: hidden;
+    height: 100vh;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  canvas { display: block; }
+
+  .hint {
+    position: fixed;
+    bottom: 80px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    color: rgba(26,26,46,0.12);
+    font-size: 12px;
+    letter-spacing: 2px;
+    font-weight: 300;
+    transition: opacity 0.6s ease;
+  }
+  .hint.hidden { opacity: 0; }
+
+  .tagline {
+    position: fixed;
+    bottom: 72px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    color: rgba(26,26,46,0.08);
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    font-weight: 300;
+    opacity: 0;
+  }
+
+  @keyframes fadeInTag {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .progress {
+    position: fixed;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 1px;
+    background: rgba(26,26,46,0.04);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: rgba(26,26,46,0.15);
+    border-radius: 2px;
+  }
+
+  @keyframes progressAnim {
+    0%   { width: 0%; }
+    100% { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<div class="hint" id="hint">— Press <span style="font-weight:500">SPACE</span> to start —</div>
+<div class="tagline" id="tagline">Multi-Agent Collaboration Platform</div>
+<div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+<script>
+const hint = document.getElementById('hint');
+const tagline = document.getElementById('tagline');
+const progressBar = document.getElementById('progressBar');
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── 生成 A 形目标点阵 ──────────────────────────
+function generateAPoints(count) {
+  const points = [];
+  const cx = W / 2, cy = H / 2 - 24;
+  const size = Math.min(W, H) * 0.18;
+  const leftCount = Math.floor(count * 0.38);
+  const rightCount = Math.floor(count * 0.38);
+  const barCount = count - leftCount - rightCount;
+  for (let i = 0; i < leftCount; i++) {
+    const t = i / leftCount;
+    points.push({ tx: cx - size + t * size, ty: cy + size * 0.7 - t * size * 1.4, r: 1.2 + Math.random() * 1.2 });
+  }
+  for (let i = 0; i < rightCount; i++) {
+    const t = i / rightCount;
+    points.push({ tx: cx + t * size, ty: cy - size * 0.7 + t * size * 1.4, r: 1.2 + Math.random() * 1.2 });
+  }
+  const barY = cy + size * 0.1;
+  const barStartX = cx - size * 0.55;
+  const barEndX = cx + size * 0.55;
+  for (let i = 0; i < barCount; i++) {
+    const t = i / barCount;
+    points.push({ tx: barStartX + t * (barEndX - barStartX), ty: barY + (Math.random() - 0.5) * size * 0.03, r: 1.2 + Math.random() * 1.2 });
+  }
+  return points;
+}
+
+const targetPoints = generateAPoints(160);
+
+// ─── 粒子类 ──────────────────────────────────────
+class Particle {
+  constructor(target) {
+    this.target = { x: target.tx, y: target.ty };
+    this.r = target.r;
+    this.x = Math.random() * W * 1.4 - W * 0.2;
+    this.y = Math.random() * H * 1.4 - H * 0.2;
+    this.vx = 0;
+    this.vy = 0;
+    this.baseAlpha = 0.15 + Math.random() * 0.2;
+    this.phase = Math.random() * Math.PI * 2;
+  }
+  update(time, progress) {
+    const ease = 1 - Math.pow(1 - progress, 1.6);
+    const force = 0.015 + ease * 0.04;
+    const dx = this.target.x - this.x;
+    const dy = this.target.y - this.y;
+    this.vx += dx * force;
+    this.vy += dy * force;
+    this.vx *= 0.9;
+    this.vy *= 0.9;
+    this.x += this.vx;
+    this.y += this.vy;
+    if (progress > 0.85) {
+      const breathe = Math.sin(time * 0.0008 + this.phase) * 0.25 * (progress - 0.85) * 6;
+      this.x += Math.cos(this.phase) * breathe;
+      this.y += Math.sin(this.phase) * breathe;
+    }
+  }
+  draw(ctx, progress) {
+    const dist = Math.hypot(this.x - this.target.x, this.y - this.target.y);
+    const settled = Math.max(0, 1 - dist / 120);
+    const progressAlpha = Math.min(1, progress * 2.5);
+    const alpha = this.baseAlpha * progressAlpha * (0.5 + 0.5 * settled);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(26, 26, 46, ${alpha})`;
+    ctx.fill();
+  }
+}
+
+const particles = targetPoints.map(t => new Particle(t));
+
+// ─── 绘制函数 ──────────────────────────────────────
+function drawLines(progress) {
+  const easedProgress = Math.max(0, (progress - 0.4) / 0.6);
+  if (easedProgress <= 0) return;
+  const maxDist = 70 + (1 - easedProgress) * 30;
+  const alphaMul = easedProgress * 0.06;
+  for (let i = 0; i < particles.length; i += 4) {
+    for (let j = i + 1; j < particles.length; j += 4) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < maxDist) {
+        const alpha = (1 - dist / maxDist) * alphaMul;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `rgba(26, 26, 46, ${alpha})`;
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function drawLogoBadge(progress) {
+  if (progress < 0.65) return;
+  const alpha = Math.min(1, (progress - 0.65) / 0.15);
+  const scale = 0.85 + 0.15 * alpha;
+  const cx = W / 2, cy = H / 2 - 24;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  const badgeSize = 56;
+  const bx = -badgeSize / 2;
+  const by = -badgeSize / 2 - 36;
+  const r = 12;
+  ctx.beginPath();
+  ctx.moveTo(bx + r, by);
+  ctx.lineTo(bx + badgeSize - r, by);
+  ctx.quadraticCurveTo(bx + badgeSize, by, bx + badgeSize, by + r);
+  ctx.lineTo(bx + badgeSize, by + badgeSize - r);
+  ctx.quadraticCurveTo(bx + badgeSize, by + badgeSize, bx + badgeSize - r, by + badgeSize);
+  ctx.lineTo(bx + r, by + badgeSize);
+  ctx.quadraticCurveTo(bx, by + badgeSize, bx, by + badgeSize - r);
+  ctx.lineTo(bx, by + r);
+  ctx.quadraticCurveTo(bx, by, bx + r, by);
+  ctx.closePath();
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 28px "DM Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('A', 0, by + badgeSize / 2 - 1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.font = '600 32px "DM Sans", sans-serif';
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillText('AgentHub', 0, by + badgeSize + 20);
+  ctx.font = '300 12px "DM Sans", sans-serif';
+  ctx.fillStyle = 'rgba(26,26,46,0.2)';
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fillText('Multi-Agent Collaboration Platform', 0, by + badgeSize + 58);
+  ctx.restore();
+}
+
+function drawScene(progress) {
+  ctx.clearRect(0, 0, W, H);
+  drawLines(progress);
+  particles.forEach(p => { p.update(startTime ? Date.now() - startTime : 0, progress); p.draw(ctx, progress); });
+  drawLogoBadge(progress);
+}
+
+// ─── 初始空闲画面 ──────────────────────────────
+function drawIdle() {
+  ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2 - 24;
+  const size = Math.min(W, H) * 0.18;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size * 0.7);
+  ctx.lineTo(cx - size, cy + size * 0.7);
+  ctx.moveTo(cx, cy - size * 0.7);
+  ctx.lineTo(cx + size, cy + size * 0.7);
+  ctx.moveTo(cx - size * 0.55, cy + size * 0.1);
+  ctx.lineTo(cx + size * 0.55, cy + size * 0.1);
+  ctx.strokeStyle = 'rgba(26,26,46,0.03)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+drawIdle();
+
+// ─── 状态管理 ──────────────────────────────────
+let animationState = 'idle'; // idle | running | done
+let startTime = 0;
+const DURATION = 4500;
+
+function animate() {
+  if (animationState !== 'running') return;
+  const elapsed = Date.now() - startTime;
+  const progress = Math.min(1, elapsed / DURATION);
+  drawScene(progress);
+  if (progress >= 1) {
+    animationState = 'done';
+    return; // 定格
+  }
+  requestAnimationFrame(animate);
+}
+
+function startAnimation() {
+  if (animationState !== 'idle') return;
+  animationState = 'running';
+
+  hint.classList.add('hidden');
+  tagline.style.animation = 'fadeInTag 4s ease 2.8s forwards';
+  progressBar.style.animation = 'progressAnim 4s ease forwards';
+
+  particles.forEach(p => {
+    p.x = Math.random() * W * 1.4 - W * 0.2;
+    p.y = Math.random() * H * 1.4 - H * 0.2;
+    p.vx = 0;
+    p.vy = 0;
+  });
+
+  startTime = Date.now();
+  animate();
+}
+
+// ─── 空格键触发 ────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    startAnimation();
+  }
+});
+
+// ─── 响应式 ──────────────────────────────────────
+window.addEventListener('resize', () => {
+  resize();
+  const newTargets = generateAPoints(160);
+  particles.forEach((p, i) => { if (newTargets[i]) { p.target.x = newTargets[i].tx; p.target.y = newTargets[i].ty; } });
+  if (animationState === 'idle') drawIdle();
+});
+</script>
+</body>
+</html>

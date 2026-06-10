@@ -15,12 +15,13 @@ import DeployCard from "./DeployCard";
 import HesitateBubble from "./HesitateBubble";
 import DebateTable from "./DebateTable";
 import SilentAlertCard from "./SilentAlertCard";
-import DiffCard from "./DiffCard";
 import ArtifactCardComponent from "./ArtifactCard";
 import ArtifactPreviewModal from "./ArtifactPreviewModal";
 import { parseArtifactMarkers } from "@/lib/artifact-marker-parser";
 import type { ContentBlock } from "@/lib/artifact-marker-parser";
 import { CodeBlock } from "@agenthub/ui";
+import DAGIndicator from "./DAGIndicator";
+import { DEMO_TRIGGER } from "@/lib/demo-data";
 
 // ─── Agent color generator ──────────────────────────────────────────────
 
@@ -78,7 +79,10 @@ function detectLanguage(title: string): string {
 /**
  * Render parsed content blocks with differentiated rendering per type.
  */
-function renderArtifactBlocks(blocks: ContentBlock[]): React.ReactNode {
+function renderArtifactBlocks(
+  blocks: ContentBlock[],
+  onExpandPreview?: (content: string, title: string) => void,
+): React.ReactNode {
   return (
     <>
       {blocks.map((block, i) => {
@@ -117,14 +121,50 @@ function renderArtifactBlocks(blocks: ContentBlock[]): React.ReactNode {
               >
                 {block.title && (
                   <div
-                    className="text-[10px] font-mono px-2 py-1"
+                    className="flex items-center justify-between text-[10px] font-mono px-2 py-1"
                     style={{
                       color: "var(--text-secondary)",
                       background: "var(--bg-sidebar)",
                       borderBottom: "1px solid var(--border-light)",
                     }}
                   >
-                    {block.title} — 预览
+                    <span>{block.title} — 预览</span>
+                    <button
+                      onClick={() =>
+                        onExpandPreview?.(block.content, block.title)
+                      }
+                      className="flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors cursor-pointer"
+                      style={{
+                        border: "none",
+                        background: "none",
+                        color: "var(--text-tertiary)",
+                        fontSize: "9px",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "var(--accent)";
+                        e.currentTarget.style.background = "var(--accent-light)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "var(--text-tertiary)";
+                        e.currentTarget.style.background = "none";
+                      }}
+                      title="展开预览"
+                    >
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                        />
+                      </svg>
+                      展开
+                    </button>
                   </div>
                 )}
                 <iframe
@@ -134,13 +174,6 @@ function renderArtifactBlocks(blocks: ContentBlock[]): React.ReactNode {
                   sandbox="allow-scripts"
                   style={{ backgroundColor: "#fff", minHeight: "200px" }}
                 />
-              </div>
-            );
-
-          case "diff":
-            return (
-              <div key={i} className="mb-2">
-                <DiffCard content={block.content} />
               </div>
             );
 
@@ -164,15 +197,17 @@ function MessageContent({
   message,
   onShowArtifact,
   streaming,
+  onExpandPreview,
 }: {
   message: Message;
   onShowArtifact?: (artifactId: string) => void;
   streaming?: boolean;
+  onExpandPreview?: (content: string, title: string) => void;
 }) {
   // New path: content has artifact markers → parse and render by type
   if (hasArtifactMarkers(message.content)) {
     const blocks = parseArtifactMarkers(message.content);
-    return renderArtifactBlocks(blocks);
+    return renderArtifactBlocks(blocks, onExpandPreview);
   }
 
   // Backward compat: old "artifact" type without markers → use ArtifactCard
@@ -224,8 +259,6 @@ function MessageContent({
           suggestion=""
         />
       );
-    case "diff":
-      return <DiffCard content={message.content} />;
     case "preview":
       return (
         <div
@@ -309,13 +342,15 @@ export default function ChatPanel({
   onShowArtifact,
   onShowAgent: _onShowAgent,
   onToggleRightPanel,
+  onShowPreview,
 }: {
   conversationId: string | null;
   onShowArtifact?: (id: string) => void;
   onShowAgent?: (id: string) => void;
   onToggleRightPanel?: () => void;
+  onShowPreview?: (content: string, title: string) => void;
 }) {
-  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap, pendingInteraction, respondToInteraction, cancelInteraction, togglePinMessage } = useChat();
+  const { messages, conversations, isLoadingMessages, sendMessage, contacts, streamingMessages, streamError, setStreamError, setMessages, toolStatusMap, pendingInteraction, respondToInteraction, cancelInteraction, togglePinMessage, startDemoSequence, demoPhase, demoMode } = useChat();
   const allStreamingMessages = [...streamingMessages.values()];
   const { user } = useAuth();
   const { t } = useI18n();
@@ -503,6 +538,23 @@ export default function ChatPanel({
   async function handleSend() {
     const trimmed = input.trim();
     if (!trimmed || !conversationId || sendingRef.current) return;
+
+    // ─── Demo trigger detection ──────────────────────────────────
+    if (trimmed === DEMO_TRIGGER && isGroupChat) {
+      const convMembers = (contacts || []).filter((c) =>
+        activeConversation?.contactIds?.includes(c.id),
+      );
+      if (convMembers.length >= 3) {
+        setInput("");
+        setReplyTargetId(null);
+        startDemoSequence(
+          conversationId,
+          convMembers.slice(0, 3).map((a) => ({ id: a.id, name: a.name })),
+        );
+        return;
+      }
+    }
+
     sendingRef.current = true;
     setSending(true);
     setStreamError(null);
@@ -607,6 +659,12 @@ export default function ChatPanel({
 
   // (handleDelete removed - Delete button no longer exists)
 
+  // ─── Expand preview → routes to right panel ────────────────────
+  const handleExpandPreview = useCallback(
+    (content: string, title: string) => onShowPreview?.(content, title),
+    [onShowPreview],
+  );
+
   // ─── Empty state ────────────────────────────────────────────────
   if (!conversationId) {
     return (
@@ -708,6 +766,14 @@ export default function ChatPanel({
           •••
         </button>
       </div>
+
+      {/* DAG Orchestrator indicator — shown during demo sequence */}
+      {demoMode && demoPhase && demoPhase !== "done" && (
+        <DAGIndicator
+          currentPhase={demoPhase}
+          agentLabels={convAgents.slice(0, 3).map((a) => a.name)}
+        />
+      )}
 
       {/* Messages */}
       <div ref={containerRef} className="flex-1 overflow-y-auto" style={{ padding: "24px 24px 16px" }}>
@@ -895,6 +961,7 @@ export default function ChatPanel({
                             <MessageContent
                               message={{ ...msg, content: sm.content }}
                               onShowArtifact={handleShowArtifact}
+                              onExpandPreview={handleExpandPreview}
                               streaming
                             />
                           ) : (
@@ -909,7 +976,7 @@ export default function ChatPanel({
                           );
                         })()
                       ) : (
-                        <MessageContent message={msg} onShowArtifact={handleShowArtifact} />
+                        <MessageContent message={msg} onShowArtifact={handleShowArtifact} onExpandPreview={handleExpandPreview} />
                       )}
                     </div>
 
@@ -1046,7 +1113,10 @@ export default function ChatPanel({
                       }}
                     >
                       {hasArtifactMarkers(sm.content) ? (
-                        renderArtifactBlocks(parseArtifactMarkers(sm.content))
+                        renderArtifactBlocks(
+                          parseArtifactMarkers(sm.content),
+                          handleExpandPreview,
+                        )
                       ) : (
                         <span className="markdown-render">
                           <ReactMarkdown

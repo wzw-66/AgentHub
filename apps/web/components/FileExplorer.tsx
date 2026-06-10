@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api-client";
+import { useChat } from "@/lib/chat-context";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -144,10 +145,26 @@ export default function FileExplorer({ conversationId, onFileSelect }: FileExplo
   const [files, setFiles] = useState<FileNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { demoMode, demoFileTree } = useChat();
+
+  // ─── Demo mode: sync file tree from context ──────────────────────
+  useEffect(() => {
+    if (demoMode && demoFileTree.length > 0) {
+      setFiles(demoFileTree as FileNode[]);
+      setError(null);
+      setIsLoading(false);
+    }
+  }, [demoMode, demoFileTree]);
 
   const fetchFiles = useCallback(async () => {
     if (!conversationId) {
       setFiles([]);
+      return;
+    }
+
+    // In demo mode, files come from context, not API
+    if (demoMode) {
+      setIsLoading(false);
       return;
     }
 
@@ -169,7 +186,7 @@ export default function FileExplorer({ conversationId, onFileSelect }: FileExplo
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, demoMode]);
 
   // Fetch files when conversation changes
   useEffect(() => {
