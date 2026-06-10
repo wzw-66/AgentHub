@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的第一篇博客 - AgentHub</title>
+  <style>
+    /* Reset & Base */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f5f7fa;
+      color: #1e293b;
+      line-height: 1.8;
+    }
+
+    /* Header */
+    .blog-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      padding: 60px 24px 48px;
+      text-align: center;
+    }
+    .blog-header h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 12px; }
+    .blog-header .meta { font-size: 0.95rem; opacity: 0.9; }
+    .blog-header .meta span { margin: 0 10px; }
+    .blog-header .tags { margin-top: 16px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+    .blog-header .tags span {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+    }
+
+    /* Container */
+    .blog-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* Article Card */
+    .blog-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 40px 48px;
+    }
+
+    /* Typography */
+    .blog-card h2 {
+      font-size: 1.5rem;
+      margin: 36px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #667eea;
+      color: #1e293b;
+    }
+    .blog-card h2:first-of-type { margin-top: 0; }
+    .blog-card h3 {
+      font-size: 1.2rem;
+      margin: 24px 0 12px;
+      color: #334155;
+    }
+    .blog-card p {
+      margin-bottom: 16px;
+      text-align: justify;
+    }
+    .blog-card strong {
+      color: #667eea;
+    }
+
+    /* Lists */
+    .blog-card ol, .blog-card ul {
+      margin: 12px 0 20px 24px;
+    }
+    .blog-card li {
+      margin-bottom: 8px;
+    }
+
+    /* Table */
+    .blog-card table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .blog-card th {
+      background: #667eea;
+      color: #fff;
+      font-weight: 600;
+      padding: 12px 16px;
+      text-align: left;
+    }
+    .blog-card td {
+      padding: 10px 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .blog-card tr:last-child td { border-bottom: none; }
+    .blog-card tr:nth-child(even) td { background: #f8fafc; }
+
+    /* Code Block */
+    .code-block {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 16px 0 24px;
+      font-family: "Fira Code", "Cascadia Code", "JetBrains Mono", "Consolas", monospace;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+    .code-block .lang-tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .code-block .keyword { color: #c792ea; }
+    .code-block .string { color: #c3e88d; }
+    .code-block .function { color: #82aaff; }
+    .code-block .comment { color: #546e7a; font-style: italic; }
+    .code-block .punctuation { color: #89ddff; }
+
+    /* Horizontal Rule */
+    .blog-card hr {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 32px 0;
+    }
+
+    /* Footer */
+    .blog-footer {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-top: 32px;
+      font-style: italic;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .blog-header { padding: 40px 16px 32px; }
+      .blog-header h1 { font-size: 1.6rem; }
+      .blog-card { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="blog-header">
+  <h1>我的第一篇博客</h1>
+  <div class="meta">
+    <span>📅 2026-06-10</span>
+    <span>✍️ AgentHub</span>
+  </div>
+  <div class="tags">
+    <span>技术</span>
+    <span>人工智能</span>
+    <span>入门</span>
+  </div>
+</header>
+
+<main class="blog-container">
+  <article class="blog-card">
+
+    <h2>前言</h2>
+    <p>欢迎来到我的第一篇博客！今天我想分享关于 <strong>AI Agent 协作平台</strong>的一些思考。</p>
+
+    <h2>什么是 AgentHub？</h2>
+    <p>AgentHub 是一个多 Agent 协作平台，以 IM 聊天为核心交互范式。用户可以像使用微信或飞书一样，与多个 AI Agent（如 Claude、OpenCode 等）进行对话协作。</p>
+
+    <h3>核心特性</h3>
+    <ol>
+      <li><strong>多 Agent 协作</strong> — 多个 AI Agent 可以协同完成任务</li>
+      <li><strong>实时交互</strong> — 基于 SSE/WebSocket 的实时流式输出</li>
+      <li><strong>任务编排</strong> — 智能的任务分解与调度</li>
+    </ol>
+
+    <h2>为什么选择 AgentHub？</h2>
+    <table>
+      <thead>
+        <tr><th>特性</th><th>优势</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>实时性</td><td>流式输出，所见即所得</td></tr>
+        <tr><td>可扩展</td><td>支持自定义 Agent 接入</td></tr>
+        <tr><td>协作性</td><td>多 Agent 并行工作</td></tr>
+      </tbody>
+    </table>
+
+    <h2>示例代码</h2>
+    <div class="code-block">
+      <div class="lang-tag">TypeScript</div>
+      <span class="keyword">import</span> { createAdapter } <span class="keyword">from</span> <span class="string">"@agenthub/agent-core"</span>;<br>
+      <br>
+      <span class="keyword">const</span> adapter = createAdapter(<span class="string">"claude"</span>, {<br>
+      &nbsp;&nbsp;apiKey: process.env.CLAUDE_API_KEY,<br>
+      });<br>
+      <br>
+      <span class="keyword">for await</span> (<span class="keyword">const</span> chunk <span class="keyword">of</span> adapter.execute({ prompt: <span class="string">"Hello!"</span> })) {<br>
+      &nbsp;&nbsp;console.log(chunk);<br>
+      }
+    </div>
+
+    <h2>结语</h2>
+    <p>AI Agent 正在改变我们与机器交互的方式，AgentHub 让这一切变得更加简单和高效。</p>
+
+    <hr>
+
+    <div class="blog-footer">
+      <em>本文由 AgentHub 自动生成，2026-06-10</em>
+    </div>
+
+  </article>
+</main>
+
+</body>
+</html>
