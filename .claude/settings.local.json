@@ -97,7 +97,8 @@
       "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:\\\\D\\\\Git\\\\bin\\\\bash.exe\" npx @anthropic-ai/claude-code plugin install superpowers@superpowers-marketplace)",
       "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:\\\\D\\\\Git\\\\bin\\\\bash.exe\" npx @anthropic-ai/claude-code plugin list)",
       "Bash(wmic process *)",
-      "Bash(DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5433/agenthub\" pnpm --filter @agenthub/db db:seed)"
+      "Bash(DATABASE_URL=\"postgresql://agenthub:agenthub_dev@localhost:5433/agenthub\" pnpm --filter @agenthub/db db:seed)",
+      "Bash(git mv:*)"
     ]
   }
 }

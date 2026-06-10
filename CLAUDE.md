@@ -143,12 +143,17 @@ AgentHub/
 
 ### Database Layer (packages/db)
 
-**Important concept: Agent = Contact** — There is no standalone `Agent` table/model. Agents are represented entirely by the `Contact` model, differentiated by `contactType` (`User`, `Agent`, `System`). When the code references an "agent", it's working with a `Contact` record where `contactType === "Agent"`.
+**Important concept: Agent = Contact** — There is no standalone `Agent` table/model. Agents are represented entirely by the `Contact` model, differentiated by `provider` field set to one of `AgentProvider` (`Claude`, `OpenCode`, `Custom`). When the code references an "agent", it's working with a `Contact` record. Key Contact fields: `provider`, `systemPrompt`, `model`, `workspacePath`, `displayName`, `tags`, `isPinned`, `config` (arbitrary JSON).
 
-**Prisma (7 models, 6 enums):**
+**PublishedAgent** — A separate Prisma model for the agent marketplace. Users can publish their Contact agents as PublishedAgent listings (with `sourceContactId` linking back to the original Contact). Has its own `creatorId` → `User` relation.
+
+**Prisma (8 models, 6 enums):**
 
 ```
-User ──→ Contact ──→ Agent (no table — Agent IS a Contact)
+User ──→ RefreshToken
+  │
+  ├──→ Contact (Agent = Contact with provider field set to a non-User provider)
+  │       └──→ PublishedAgent (marketplace agent listing, separate table)
   │
   ├──→ Conversation ──→ Message ──→ Artifact
   │                        │
@@ -196,6 +201,8 @@ Three implementations:
 Unified `createAdapter(provider, config)` factory dispatches by `AgentProvider` enum.
 
 **Chunk types** (from `ChunkType` enum): `Text`, `Code`, `ToolCall`, `Artifact`, `Error`, `Done`.
+
+**MessageType** (stored in DB): `Text`, `Code`, `Diff`, `Preview`, `Artifact`, `Deploy`, `Hesitate`, `Debate`, `Alert`.
 
 **Chunk parser utils** handle per-provider format parsing: `parseClaudeStreamJson`, `parseOpenCodeEvent`, `parseOpenAIStreamEvent`, `parseEventLine`.
 
@@ -302,6 +309,26 @@ Zero-dependency package with enums and TypeScript interfaces shared across all p
 - **Server tests** require the test DB to be pushed beforehand (`pnpm --filter @agenthub/db db:push:test`). Setup is intentionally minimal.
 - **Agent-core tests** are unit tests — no external dependencies.
 - Test files co-located in `src/__tests__/` within each package.
+
+### Configuration
+
+All env vars are read from root `.env` (not per-package `.env`). Key config:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://agenthub:agenthub_dev@localhost:5432/agenthub` | Prod DB |
+| `TEST_DATABASE_URL` | `postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test` | Test DB |
+| `PORT` | `8124` | Server HTTP port |
+| `WEB_PORT` | `3002` | Next.js dev port |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8124` | API base for web app |
+| `JWT_SECRET` | — | JWT signing secret (change in production) |
+| `JWT_ACCESS_EXPIRES_IN` | `15m` | Access token TTL |
+| `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token TTL |
+| `API_KEY` / `BASE_URL` / `MODEL` | DeepSeek defaults | Intelligent router LLM config |
+
+### OpenSpec Change Management
+
+The `openspec/` directory tracks active changes using a spec-driven workflow (config in `openspec/config.yaml`). Each change has a spec, task list, and implementation artifacts under `openspec/changes/` and `openspec/specs/`.
 
 ### Key TypeScript Notes
 
