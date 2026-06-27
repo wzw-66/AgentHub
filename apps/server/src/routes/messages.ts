@@ -567,7 +567,7 @@ async function runAgentExecution(
       const harness = new AgentHarness(adapter, {
         maxTurns: 10,
       });
-
+ 
       // Sandbox + ToolRegistry for file/command tools
       let harnessSandbox: LocalSandbox | undefined;
       if (cwd) {
