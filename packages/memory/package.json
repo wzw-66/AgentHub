@@ -1,0 +1,37 @@
+{
+  "name": "@agenthub/memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Long-term memory module for AI Agents with SQLite + FTS5 storage",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@agenthub/shared": "workspace:*",
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^25.9.1",
+    "tsup": "^8.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^3.0.0"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  }
+}
