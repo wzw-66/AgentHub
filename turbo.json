@@ -28,6 +28,15 @@
     },
     "web#test": {
       "dependsOn": ["^build"]
+    },
+    "@agenthub/memory#build": {
+      "dependsOn": ["^build"]
+    },
+    "@agenthub/memory#test": {
+      "dependsOn": ["build"]
+    },
+    "@agenthub/memory#lint": {
+      "dependsOn": ["build"]
     }
   }
 }

@@ -1,22 +1,7 @@
 import type { MemoryRecord } from "@agenthub/shared";
 import type { Database } from "./db.js";
 import { getDatabase } from "./db.js";
-
-function toCamelCase(row: { [key: string]: unknown }): MemoryRecord {
-  return {
-    id: row.id as string,
-    userId: row.user_id as string,
-    agentId: row.agent_id as string,
-    type: row.type as MemoryRecord["type"],
-    content: row.content as string,
-    tags: JSON.parse(row.tags as string) as string[],
-    sourceMessageId: (row.source_message_id as string) ?? undefined,
-    conversationId: (row.conversation_id as string) ?? undefined,
-    importance: row.importance as number,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-  };
-}
+import { rowToMemoryRecord } from "./utils.js";
 
 export function searchMemories(
   options: {
@@ -56,5 +41,5 @@ export function searchMemories(
   `;
 
   const rows = db.prepare(sql).all(...values, limit, offset) as Record<string, unknown>[];
-  return rows.map(toCamelCase);
+  return rows.map(rowToMemoryRecord);
 }

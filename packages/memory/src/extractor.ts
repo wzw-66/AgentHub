@@ -122,7 +122,7 @@ function parseExtractionResponse(response: string): ExtractedMemory[] | null {
  * 3. Parses the LLM response and executes add/update/delete operations
  *
  * This is designed to be called fire-and-forget (non-blocking).
- * Errors are caught internally and logged — never thrown to the caller.
+ * Errors propagate to the caller for handling.
  */
 export async function extractMemories(
   params: {
@@ -137,91 +137,93 @@ export async function extractMemories(
 ): Promise<void> {
   const db = customDb || getDatabase();
 
-  try {
-    // 1. Search existing relevant memories
-    const existingMemories = searchMemories(
-      {
-        query: params.userMessage,
-        agentId: params.agentId,
-        limit: 5,
-      },
-      db,
-    );
+  // 1. Search existing relevant memories
+  const existingMemories = searchMemories(
+    {
+      query: params.userMessage,
+      agentId: params.agentId,
+      limit: 5,
+    },
+    db,
+  );
 
-    const existingMemoriesJson = JSON.stringify(
-      existingMemories.map((m) => ({
-        id: m.id,
-        type: m.type,
-        content: m.content,
-        tags: m.tags,
-        importance: m.importance,
-      })),
-    );
+  const existingMemoriesJson = JSON.stringify(
+    existingMemories.map((m) => ({
+      id: m.id,
+      type: m.type,
+      content: m.content,
+      tags: m.tags,
+      importance: m.importance,
+    })),
+  );
 
-    // 2. Build and send prompt
-    const prompt = buildPrompt(
-      params.userMessage,
-      params.agentResponse,
-      params.agentName,
-      existingMemoriesJson,
-    );
+  // 2. Build and send prompt
+  const prompt = buildPrompt(
+    params.userMessage,
+    params.agentResponse,
+    params.agentName,
+    existingMemoriesJson,
+  );
 
-    const response = await callLLM(prompt, llmConfig);
-    if (!response) return;
+  const response = await callLLM(prompt, llmConfig);
+  if (!response) return;
 
-    // 3. Parse response
-    const operations = parseExtractionResponse(response);
-    if (!operations || operations.length === 0) return;
+  // 3. Parse response
+  const operations = parseExtractionResponse(response);
+  if (!operations || operations.length === 0) return;
 
-    // 4. Execute operations
-    for (const op of operations) {
-      switch (op.action) {
-        case "add":
-          if (op.type && op.content) {
-            createMemory(
+  // 4. Execute operations
+  for (const op of operations) {
+    switch (op.action) {
+      case "add":
+        if (op.type && op.content) {
+          createMemory(
+            {
+              userId: params.userId,
+              agentId: params.agentId,
+              type: op.type,
+              content: op.content,
+              tags: op.tags,
+              importance: op.importance ?? 1,
+            },
+            db,
+          );
+        }
+        break;
+
+      case "update":
+        if (op.id && op.type && op.content) {
+          const id = op.id;
+          const type = op.type;
+          const content = op.content;
+          const tags = op.tags;
+          const importance = op.importance ?? 1;
+          const txn = db.transaction(() => {
+            deleteMemory(id, db);
+            return createMemory(
               {
                 userId: params.userId,
                 agentId: params.agentId,
-                type: op.type,
-                content: op.content,
-                tags: op.tags,
-                importance: op.importance ?? 1,
+                type,
+                content,
+                tags,
+                importance,
               },
               db,
             );
-          }
-          break;
+          });
+          txn();
+        }
+        break;
 
-        case "update":
-          if (op.id) {
-            deleteMemory(op.id, db);
-          }
-          if (op.type && op.content) {
-            createMemory(
-              {
-                userId: params.userId,
-                agentId: params.agentId,
-                type: op.type,
-                content: op.content,
-                tags: op.tags,
-                importance: op.importance ?? 1,
-              },
-              db,
-            );
-          }
-          break;
+      case "delete":
+        if (op.id) {
+          deleteMemory(op.id, db);
+        }
+        break;
 
-        case "delete":
-          if (op.id) {
-            deleteMemory(op.id, db);
-          }
-          break;
-
-        case "noop":
-          break;
-      }
+      case "noop":
+        break;
     }
-  } catch {
-    // Extraction is non-blocking; swallow all errors
   }
 }

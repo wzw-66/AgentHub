@@ -2,23 +2,8 @@ import type { MemoryRecord, MemoryType } from "@agenthub/shared";
 import type { Database } from "./db.js";
 import { getDatabase } from "./db.js";
 import type { CreateMemoryInput } from "./types.js";
+import { rowToMemoryRecord } from "./utils.js";
 import { randomUUID } from "node:crypto";
-
-function toCamelCase(row: { [key: string]: unknown }): MemoryRecord {
-  return {
-    id: row.id as string,
-    userId: row.user_id as string,
-    agentId: row.agent_id as string,
-    type: row.type as MemoryType,
-    content: row.content as string,
-    tags: JSON.parse(row.tags as string) as string[],
-    sourceMessageId: (row.source_message_id as string) ?? undefined,
-    conversationId: (row.conversation_id as string) ?? undefined,
-    importance: row.importance as number,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-  };
-}
 
 export function createMemory(input: CreateMemoryInput, customDb?: Database): MemoryRecord {
   const db = customDb || getDatabase();
@@ -49,7 +34,7 @@ export function createMemory(input: CreateMemoryInput, customDb?: Database): Mem
 export function getMemory(id: string, customDb?: Database): MemoryRecord | null {
   const db = customDb || getDatabase();
   const row = db.prepare("SELECT * FROM memory_records WHERE id = ?").get(id) as Record<string, unknown> | undefined;
-  return row ? toCamelCase(row) : null;
+  return row ? rowToMemoryRecord(row) : null;
 }
 
 export function listMemories(
@@ -90,7 +75,7 @@ export function listMemories(
     .all(...values, limit, offset) as Record<string, unknown>[];
 
   return {
-    data: rows.map(toCamelCase),
+    data: rows.map(rowToMemoryRecord),
     total,
   };
 }
