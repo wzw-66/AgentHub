@@ -4,3 +4,4 @@ export { MessageType } from "./message.js";
 export { ArtifactType, ArtifactStatus } from "./artifact.js";
 export { AgentProvider } from "./agent.js";
 export { ChunkType } from "./chunk.js";
+export type { MemoryType } from "./memory.js";

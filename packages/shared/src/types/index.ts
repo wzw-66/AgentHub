@@ -7,3 +7,4 @@ export type { User, UserCredential } from "./user.js";
 export type { Chunk, AgentContext, ToolDefinition, ToolInputSchema, ToolMessage } from "./chunk.js";
 export type { AgentAdapter } from "./adapter.js";
 export type { ApiResponse, HealthStatus } from "./common.js";
+export type { MemoryRecord } from "./memory.js";
