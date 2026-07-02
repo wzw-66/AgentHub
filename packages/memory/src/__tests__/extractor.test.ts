@@ -106,6 +106,50 @@ describe("extractMemories", () => {
     vi.unstubAllGlobals();
   });
 
+  it("handles update operation from LLM output", async () => {
+    // First, create a memory to be updated
+    const created = createMemory({
+      userId: "user-extract",
+      agentId: "agent-extract",
+      type: "fact",
+      content: "Old content to update",
+      importance: 3,
+    }, db);
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify([{
+              action: "update",
+              id: created.id,
+              type: "preference",
+              content: "Updated content with new preference",
+              importance: 7,
+              reason: "User preference changed",
+            }]),
+          },
+        }],
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await extractMemories(MOCK_PARAMS, { apiKey: "test-key" }, db);
+
+    // Verify the old memory is gone
+    expect(getMemory(created.id, db)).toBeNull();
+
+    // Verify the new memory exists with updated content
+    const updatedResults = searchMemories({ query: "Updated content", userId: "user-extract", agentId: "agent-extract" }, db);
+    expect(updatedResults.length).toBe(1);
+    expect(updatedResults[0]!.content).toBe("Updated content with new preference");
+    expect(updatedResults[0]!.type).toBe("preference");
+    expect(updatedResults[0]!.importance).toBe(7);
+
+    vi.unstubAllGlobals();
+  });
+
   it("handles LLM API failure gracefully (no throw)", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,

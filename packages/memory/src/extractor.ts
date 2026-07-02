@@ -48,9 +48,11 @@ async function callLLM(
   llmConfig?: { apiKey?: string; endpoint?: string; model?: string },
 ): Promise<string> {
   const apiKey = llmConfig?.apiKey ?? process.env["API_KEY"] ?? "";
+  const baseUrl = process.env["LLM_BASE_URL"]?.replace(/\/+$/, "");
+  const defaultEndpoint = baseUrl ? baseUrl + "/v1/chat/completions" : undefined;
   const endpoint =
     llmConfig?.endpoint ??
-    process.env["LLM_BASE_URL"]?.replace(/\/+$/, "") + "/v1/chat/completions" ??
+    defaultEndpoint ??
     "https://api.deepseek.com/v1/chat/completions";
   const model = llmConfig?.model ?? process.env["LLM_MODEL"] ?? "deepseek-chat";
 
