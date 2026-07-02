@@ -2,6 +2,7 @@ import type { Agent, AgentContext, Chunk } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createAdapter } from "@agenthub/agent-core";
 import { getConversation, listPinnedMessages } from "@agenthub/db";
+import { searchMemories } from "@agenthub/memory";
 import type { SubTask, SubTaskResult } from "./types.js";
 import { processChunk } from "./artifact-detector.js";
 import { resolve } from "node:path";
@@ -14,6 +15,12 @@ const MAX_RETRIES = 1;
 // ─── Executor ────────────────────────────────────────────────────────────
 
 export class SubTaskExecutor {
+  /**
+   * Track whether memory has been injected for this executor instance.
+   * Only inject on the first SubTask to maximize prefix caching.
+   */
+  private _memoryInjected = false;
+
   /**
    * Execute a single sub-task with retry logic.
    *
@@ -117,6 +124,32 @@ export class SubTaskExecutor {
     } catch {
       // Ignore errors loading pinned messages
     }
+
+    // Build system prompt parts
+    const systemParts: string[] = [];
+    if (pinnedContext) systemParts.push(pinnedContext);
+
+    // Inject relevant memories only on the FIRST SubTask
+    if (!this._memoryInjected) {
+      try {
+        const memories = searchMemories({
+          query: subtask.instruction,
+          agentId: subtask.agentId,
+          limit: 5,
+        });
+        if (memories.length > 0) {
+          systemParts.push(
+            memories
+              .map((m) => `[Memory - ${m.type}] ${m.content}`)
+              .join("\n\n"),
+          );
+        }
+      } catch {
+        // Non-blocking — memories are a hint, not a requirement
+      }
+      this._memoryInjected = true;
+    }
+
     return {
       conversationId: subtask.conversationId,
       message: subtask.instruction,
@@ -131,7 +164,7 @@ export class SubTaskExecutor {
         updatedAt: new Date().toISOString(),
       })) as AgentContext["history"],
       agents: [],
-      ...(pinnedContext ? { systemPrompt: pinnedContext } : {}),
+      ...(systemParts.length > 0 ? { systemPrompt: systemParts.join("\n\n") } : {}),
     };
   }
 

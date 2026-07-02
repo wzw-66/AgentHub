@@ -22,6 +22,7 @@ import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
 import { TaskDispatcher } from "../orchestrator/dispatcher.js";
 import { ResultAggregator } from "../orchestrator/aggregator.js";
 import { createMessage, createArtifact } from "@agenthub/db";
+import { extractMemories, initSchema } from "@agenthub/memory";
 import type { PushSSEFn } from "../orchestrator/types.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -434,6 +435,18 @@ async function runOrchestration(
           parentId: messageId,
         });
         log.info({ agentId: subtask.agentId }, "Agent message saved");
+
+        // ── Long-term memory extraction for this agent's response ──
+        extractMemories({
+          userId: conversation.ownerId,
+          agentId: subtask.agentId,
+          agentName: subtask.agentName ?? subtask.agentId,
+          userMessage: message.content,
+          agentResponse: result.content,
+        }).catch((err) => {
+          log.error({ err, agentId: subtask.agentId }, "Memory extraction failed");
+        });
+
         return msg.id;
       } catch (err) {
         log.error({ err, agentId: subtask.agentId }, "Failed to save agent message");
@@ -492,6 +505,7 @@ async function runAgentExecution(
   log: FastifyInstance["log"],
 ): Promise<void> {
   log.info({ conversationId }, "runAgentExecution start");
+  initSchema(); // Ensure memory DB is initialized
   const conv = await getConversation(conversationId);
   if (!conv) { log.warn("Conversation not found"); return; }
 
@@ -724,6 +738,17 @@ async function runAgentExecution(
           parentId: null,
         });
         messageId = saved.id;
+
+        // ── Long-term memory extraction ─────────────────────────────
+        extractMemories({
+          userId: conv.ownerId,
+          agentId: agent.id,
+          agentName: agent.name,
+          userMessage: content,
+          agentResponse: finalResponse,
+        }).catch((err) => {
+          log.error({ err }, "Memory extraction failed");
+        });
       }
 
       const donePayload = { messageId, agentId: agent.id, tokenUsage: { input: 0, output: 0 } };
