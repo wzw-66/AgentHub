@@ -1,10 +1,9 @@
 import Database from "better-sqlite3";
 import type { Database as DatabaseType } from "better-sqlite3";
 import path from "node:path";
-import os from "node:os";
 import fs from "node:fs";
 
-const DEFAULT_DIR = path.join(os.homedir(), ".agenthub");
+const DEFAULT_DIR = path.join(process.cwd(), ".agenthub");
 const DEFAULT_PATH = path.join(DEFAULT_DIR, "memory.db");
 
 let db: DatabaseType | null = null;
