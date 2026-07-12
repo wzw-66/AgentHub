@@ -1,11 +1,11 @@
 import type { Sandbox, SandboxProvider } from "./types.js";
 
 /**
- * Manages sandbox lifecycle — create, cache, destroy.
+ * Manages sandbox lifecycle -- acquire, cache, release.
  */
 export class SandboxManager {
   private provider: SandboxProvider | null = null;
-  private sandboxes: Map<string, Sandbox> = new Map();
+  private sandboxIds: Map<string, string> = new Map(); // threadId -> sandboxId
 
   constructor(provider?: SandboxProvider) {
     this.provider = provider ?? null;
@@ -15,32 +15,51 @@ export class SandboxManager {
     this.provider = provider;
   }
 
-  async getSandbox(id: string = "default"): Promise<Sandbox> {
-    const existing = this.sandboxes.get(id);
-    if (existing) return existing;
-
+  async getSandbox(threadId: string = "default"): Promise<Sandbox> {
     if (!this.provider) {
       throw new Error("No SandboxProvider configured");
     }
 
-    const sandbox = await this.provider.create();
-    this.sandboxes.set(id, sandbox);
+    // Check cached ID for this thread
+    const cachedId = this.sandboxIds.get(threadId);
+    if (cachedId) {
+      const existing = await this.provider.get(cachedId);
+      if (existing) return existing;
+    }
+
+    // Acquire new sandbox
+    const sandboxId = await this.provider.acquire(threadId);
+    this.sandboxIds.set(threadId, sandboxId);
+
+    const sandbox = await this.provider.get(sandboxId);
+    if (!sandbox) {
+      throw new Error(`Provider returned null for newly acquired sandbox: ${sandboxId}`);
+    }
     return sandbox;
   }
 
-  async destroySandbox(id: string = "default"): Promise<void> {
-    const sandbox = this.sandboxes.get(id);
-    if (!sandbox) return;
+  async destroySandbox(threadId: string = "default"): Promise<void> {
+    const sandboxId = this.sandboxIds.get(threadId);
+    if (!sandboxId) return;
 
     if (this.provider) {
-      await this.provider.destroy(sandbox);
+      await this.provider.release(sandboxId);
     }
-    this.sandboxes.delete(id);
+    this.sandboxIds.delete(threadId);
   }
 
   async destroyAll(): Promise<void> {
-    for (const [id] of this.sandboxes) {
-      await this.destroySandbox(id);
+    if (this.provider?.shutdown) {
+      await this.provider.shutdown();
+    } else {
+      for (const [, sandboxId] of this.sandboxIds) {
+        await this.provider?.release(sandboxId);
+      }
     }
+    this.sandboxIds.clear();
+  }
+
+  getProvider(): SandboxProvider | null {
+    return this.provider;
   }
 }

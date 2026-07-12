@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { LocalSandbox } from "../../harness/sandbox/local-sandbox.js";
 import { SandboxManager } from "../../harness/sandbox/sandbox-provider.js";
+import type { SandboxProvider } from "../../harness/sandbox/types.js";
 
 describe("LocalSandbox", () => {
   const sandbox = new LocalSandbox(process.cwd());
@@ -76,23 +77,27 @@ describe("LocalSandbox", () => {
   });
 });
 
+import type { SandboxProvider } from "../../harness/sandbox/types.js";
+
 describe("SandboxManager", () => {
   it("should throw when no provider configured", async () => {
     const manager = new SandboxManager();
     await expect(manager.getSandbox()).rejects.toThrow("No SandboxProvider configured");
   });
 
-  it("should create sandbox via provider", async () => {
+  it("should acquire sandbox via provider", async () => {
     const mockSandbox = {
       exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
       readFile: async () => "",
       writeFile: async () => {},
+      updateFile: async () => {},
       listDir: async () => [],
     };
 
-    const provider = {
-      create: async () => mockSandbox,
-      destroy: async () => {},
+    const provider: SandboxProvider = {
+      acquire: async () => "mock-1",
+      get: async (id: string) => id === "mock-1" ? mockSandbox : null,
+      release: async () => {},
     };
 
     const manager = new SandboxManager(provider);
@@ -100,38 +105,41 @@ describe("SandboxManager", () => {
     expect(sb).toBe(mockSandbox);
   });
 
-  it("should cache sandbox instances", async () => {
-    let createCount = 0;
-    const provider = {
-      create: async () => {
-        createCount++;
-        return {
-          exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
-          readFile: async () => "",
-          writeFile: async () => {},
-          listDir: async () => [],
-        };
-      },
-      destroy: async () => {},
+  it("should cache sandbox instances by thread", async () => {
+    let acquireCount = 0;
+    const sandbox = {
+      exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
+      readFile: async () => "",
+      writeFile: async () => {},
+      updateFile: async () => {},
+      listDir: async () => [],
+    };
+
+    const provider: SandboxProvider = {
+      acquire: async () => { acquireCount++; return "cached-1"; },
+      get: async () => sandbox,
+      release: async () => {},
     };
 
     const manager = new SandboxManager(provider);
     await manager.getSandbox("cached");
     await manager.getSandbox("cached");
 
-    expect(createCount).toBe(1);
+    expect(acquireCount).toBe(1);
   });
 
   it("should set provider after construction", async () => {
     const manager = new SandboxManager();
-    const provider = {
-      create: async () => ({
+    const provider: SandboxProvider = {
+      acquire: async () => "late-1",
+      get: async () => ({
         exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
         readFile: async () => "",
         writeFile: async () => {},
+        updateFile: async () => {},
         listDir: async () => [],
       }),
-      destroy: async () => {},
+      release: async () => {},
     };
     manager.setProvider(provider);
 
@@ -140,21 +148,23 @@ describe("SandboxManager", () => {
   });
 
   it("should destroy all sandboxes", async () => {
-    let destroyed = false;
-    const provider = {
-      create: async () => ({
+    let released = false;
+    const provider: SandboxProvider = {
+      acquire: async () => "destroy-all-1",
+      get: async () => ({
         exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
         readFile: async () => "",
         writeFile: async () => {},
+        updateFile: async () => {},
         listDir: async () => [],
       }),
-      destroy: async () => { destroyed = true; },
+      release: async () => { released = true; },
     };
 
     const manager = new SandboxManager(provider);
     await manager.getSandbox("to-destroy");
     await manager.destroyAll();
 
-    expect(destroyed).toBe(true);
+    expect(released).toBe(true);
   });
 });

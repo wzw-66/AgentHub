@@ -25,8 +25,17 @@ export interface SandboxResult {
 
 /**
  * Factory that provides sandbox instances.
+ *
+ * Lifecycle: acquire -> use (get) -> release -> shutdown (global)
+ * acquire returns a deterministic sandbox ID for the given thread.
  */
 export interface SandboxProvider {
-  create(): Sandbox | Promise<Sandbox>;
-  destroy(sandbox: Sandbox): void | Promise<void>;
+  /** Acquire a sandbox -- returns the sandbox ID. */
+  acquire(threadId?: string): string | Promise<string>;
+  /** Get a sandbox by ID. Returns null if not found. */
+  get(sandboxId: string): Sandbox | null | Promise<Sandbox | null>;
+  /** Release a sandbox by ID. */
+  release(sandboxId: string): void | Promise<void>;
+  /** Shut down all sandboxes (optional -- app exit). */
+  shutdown?(): void | Promise<void>;
 }
