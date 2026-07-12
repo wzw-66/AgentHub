@@ -16,8 +16,9 @@
     "db:push": "pnpm --filter @agenthub/db db:push",
     "db:seed": "pnpm --filter @agenthub/db db:seed",
     "db:studio": "pnpm --filter @agenthub/db db:studio",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:up": "docker compose up -d && docker compose --profile sandbox up sandbox-init",
+    "db:down": "docker compose down",
+    "sandbox:pull": "docker compose --profile sandbox up sandbox-init"
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {

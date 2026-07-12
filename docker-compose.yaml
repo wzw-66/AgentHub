@@ -12,5 +12,15 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # ── Agent Sandbox 初始化 ──────────────────────────────────────────
+  # 预拉取 Docker 沙箱镜像，避免首次请求时等待 ~385MB 下载。
+  # 运行: docker compose --profile sandbox up sandbox-init
+  sandbox-init:
+    image: docker/sandbox-templates:shell
+    container_name: agenthub-sandbox-init
+    entrypoint: ["echo", "docker/sandbox-templates:shell ready (image cached locally)"]
+    profiles:
+      - sandbox
+
 volumes:
   pgdata:
