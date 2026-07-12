@@ -582,7 +582,7 @@ async function runAgentExecution(
         maxTurns: 10,
       });
  
-      // ── Sandbox: FallbackSandboxProvider with middleware ──────────────
+      // ── Sandbox: LocalSandboxProvider with middleware ─────────────────
       let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
         const localProvider = new LocalSandboxProvider(cwd);
@@ -940,7 +940,7 @@ async function handleRegenerate(
         maxTurns: 10,
       });
 
-      // ── Sandbox: FallbackSandboxProvider with middleware ──────────────
+      // ── Sandbox: LocalSandboxProvider with middleware ─────────────────
       let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
         const localProvider = new LocalSandboxProvider(cwd);
