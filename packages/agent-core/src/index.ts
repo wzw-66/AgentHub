@@ -36,10 +36,21 @@ export { BlackboardMiddleware } from "./harness/middleware/blackboard.js";
 export { ToolRegistry } from "./harness/tools/registry.js";
 export type { Tool, ToolHandlerFn } from "./harness/tools/types.js";
 
-// Sandbox
+// Sandbox (updated)
 export { LocalSandbox } from "./harness/sandbox/local-sandbox.js";
+export { LocalSandboxProvider } from "./harness/sandbox/local-sandbox-provider.js";
 export { SandboxManager } from "./harness/sandbox/sandbox-provider.js";
+export { AioSandbox } from "./harness/sandbox/aio-sandbox.js";
+export { AioSandboxProvider } from "./harness/sandbox/aio-sandbox-provider.js";
+export { FallbackSandboxProvider } from "./harness/sandbox/fallback-sandbox-provider.js";
+export { DEFAULT_DOCKER_CONFIG } from "./harness/sandbox/docker-config.js";
 export type { Sandbox, SandboxProvider, SandboxResult } from "./harness/sandbox/types.js";
+export type { DockerSandboxConfig, Ulimit, NetworkRule, ProxyConfig, ImagePullPolicy } from "./harness/sandbox/docker-config.js";
+export type { FallbackMode } from "./harness/sandbox/fallback-sandbox-provider.js";
+
+// Middleware (new)
+export { SandboxMiddleware } from "./harness/middleware/sandbox-middleware.js";
+export type { SandboxMiddlewareConfig } from "./harness/middleware/sandbox-middleware.js";
 
 // Compression
 export { MicroCompactMiddleware } from "./harness/compression/micro-compact.js";

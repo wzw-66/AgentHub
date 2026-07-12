@@ -14,7 +14,7 @@ import {
   listPinnedMessages,
   listCredentials,
 } from "@agenthub/db";
-import { createAdapter, AgentHarness, ToolRegistry, LocalSandbox, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
+import { createAdapter, AgentHarness, ToolRegistry, LocalSandboxProvider, SandboxMiddleware, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
 import type { Chunk, Agent, Message as SharedMessage, ToolDefinition } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { processChunk } from "../orchestrator/artifact-detector.js";
@@ -582,13 +582,22 @@ async function runAgentExecution(
         maxTurns: 10,
       });
  
-      // Sandbox + ToolRegistry for file/command tools
-      let harnessSandbox: LocalSandbox | undefined;
+      // ── Sandbox: FallbackSandboxProvider with middleware ──────────────
+      let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
-        harnessSandbox = new LocalSandbox(cwd);
-        const toolRegistry = new ToolRegistry(harnessSandbox);
+        const localProvider = new LocalSandboxProvider(cwd);
+        sandboxMiddleware = new SandboxMiddleware({
+          provider: localProvider,
+          lazyInit: true,
+          sandboxType: "local",
+        });
+        harness.use(sandboxMiddleware);
+
+        // Acquire sandbox and wire up ToolRegistry
+        const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId);
+        const toolRegistry = new ToolRegistry(sb);
         harness.setToolRegistry(toolRegistry);
-        harness.setSandbox(harnessSandbox);
+        harness.setSandbox(sb);
       }
 
       // Middleware: blackboard for shared state, micro-compact for context
@@ -931,12 +940,22 @@ async function handleRegenerate(
         maxTurns: 10,
       });
 
-      let harnessSandbox: LocalSandbox | undefined;
+      // ── Sandbox: FallbackSandboxProvider with middleware ──────────────
+      let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
-        harnessSandbox = new LocalSandbox(cwd);
-        const toolRegistry = new ToolRegistry(harnessSandbox);
+        const localProvider = new LocalSandboxProvider(cwd);
+        sandboxMiddleware = new SandboxMiddleware({
+          provider: localProvider,
+          lazyInit: true,
+          sandboxType: "local",
+        });
+        harness.use(sandboxMiddleware);
+
+        // Acquire sandbox and wire up ToolRegistry
+        const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId);
+        const toolRegistry = new ToolRegistry(sb);
         harness.setToolRegistry(toolRegistry);
-        harness.setSandbox(harnessSandbox);
+        harness.setSandbox(sb);
       }
       harness.use(new BlackboardMiddleware());
       harness.use(new MicroCompactMiddleware());

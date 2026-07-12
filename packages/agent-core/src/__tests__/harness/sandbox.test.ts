@@ -166,3 +166,17 @@ describe("SandboxManager", () => {
     expect(released).toBe(true);
   });
 });
+
+describe("Sandbox exports", () => {
+  it("should export all sandbox types", async () => {
+    const mod = await import("../../index.js");
+    expect(mod.LocalSandbox).toBeDefined();
+    expect(mod.LocalSandboxProvider).toBeDefined();
+    expect(mod.SandboxManager).toBeDefined();
+    expect(mod.AioSandbox).toBeDefined();
+    expect(mod.AioSandboxProvider).toBeDefined();
+    expect(mod.FallbackSandboxProvider).toBeDefined();
+    expect(mod.SandboxMiddleware).toBeDefined();
+    expect(mod.DEFAULT_DOCKER_CONFIG).toBeDefined();
+  });
+});
