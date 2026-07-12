@@ -77,8 +77,6 @@ describe("LocalSandbox", () => {
   });
 });
 
-import type { SandboxProvider } from "../../harness/sandbox/types.js";
-
 describe("SandboxManager", () => {
   it("should throw when no provider configured", async () => {
     const manager = new SandboxManager();
