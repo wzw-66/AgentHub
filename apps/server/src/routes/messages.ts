@@ -14,7 +14,7 @@ import {
   listPinnedMessages,
   listCredentials,
 } from "@agenthub/db";
-import { createAdapter, AgentHarness, ToolRegistry, LocalSandboxProvider, SandboxMiddleware, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
+import { createAdapter, AgentHarness, ToolRegistry, AioSandboxProvider, LocalSandboxProvider, FallbackSandboxProvider, SandboxMiddleware, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
 import type { Chunk, Agent, Message as SharedMessage, ToolDefinition } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { processChunk } from "../orchestrator/artifact-detector.js";
@@ -582,19 +582,30 @@ async function runAgentExecution(
         maxTurns: 10,
       });
  
-      // ── Sandbox: LocalSandboxProvider with middleware ─────────────────
+      // ── Sandbox: Full chain (Docker → warn fallback → local) ──────────
       let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
+        const aioProvider = new AioSandboxProvider({
+          image: "docker/sandbox-templates:shell",
+          workingDir: cwd,
+        });
         const localProvider = new LocalSandboxProvider(cwd);
+        const fallbackProvider = new FallbackSandboxProvider(aioProvider, localProvider, "warn");
+
         sandboxMiddleware = new SandboxMiddleware({
-          provider: localProvider,
+          provider: fallbackProvider,
           lazyInit: false,
-          sandboxType: "local",
         });
         harness.use(sandboxMiddleware);
 
         // Acquire sandbox and wire up ToolRegistry
         const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId);
+
+        // Log which sandbox type was acquired
+        const origins = fallbackProvider.getOrigins();
+        const sandboxType = Array.from(origins.values())[0] ?? "unknown";
+        log.info({ conversationId, sandboxType }, `Agent sandbox initialized: ${sandboxType}`);
+
         const toolRegistry = new ToolRegistry(sb);
         harness.setToolRegistry(toolRegistry);
         harness.setSandbox(sb);
@@ -940,19 +951,30 @@ async function handleRegenerate(
         maxTurns: 10,
       });
 
-      // ── Sandbox: LocalSandboxProvider with middleware ─────────────────
+      // ── Sandbox: Full chain (Docker → warn fallback → local) ──────────
       let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
+        const aioProvider = new AioSandboxProvider({
+          image: "docker/sandbox-templates:shell",
+          workingDir: cwd,
+        });
         const localProvider = new LocalSandboxProvider(cwd);
+        const fallbackProvider = new FallbackSandboxProvider(aioProvider, localProvider, "warn");
+
         sandboxMiddleware = new SandboxMiddleware({
-          provider: localProvider,
+          provider: fallbackProvider,
           lazyInit: false,
-          sandboxType: "local",
         });
         harness.use(sandboxMiddleware);
 
         // Acquire sandbox and wire up ToolRegistry
         const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId);
+
+        // Log which sandbox type was acquired
+        const origins = fallbackProvider.getOrigins();
+        const sandboxType = Array.from(origins.values())[0] ?? "unknown";
+        request.server.log.info({ conversationId, sandboxType }, `Agent sandbox initialized: ${sandboxType}`);
+
         const toolRegistry = new ToolRegistry(sb);
         harness.setToolRegistry(toolRegistry);
         harness.setSandbox(sb);
