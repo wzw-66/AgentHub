@@ -36,7 +36,7 @@
          ▲                                    ▲
          │ retrieve memories                  │ extract from completed
          │ in buildContext()                  │ conversations
-         │                                    │
+         │ (首次 SubTask 仅注入一次)          │
 ┌────────┴──────────────┐       ┌─────────────┴──────────────────┐
 │  Orchestrator          │       │  Messages Handler              │
 │  executor.ts           │       │  routes/messages.ts            │
@@ -308,35 +308,50 @@ if (fullResponse) {
 
 ### Modifications to `executor.ts`
 
-在 `buildContext()` 中增加记忆检索：
+**设计决策：首次 SubTask 仅注入一次**。此举确保后续 SubTask 的 system prompt 完全固定，充分利用 Anthropic prompt prefix caching 机制——首次请求缓存未命中，但之后同一对话内的所有请求全量命中缓存，大幅降低 token 消耗。
+
+在 `buildContext()` 中增加记忆检索，仅在首次 SubTask 时注入：
 
 ```typescript
-private async buildContext(subtask: SubTask): Promise<AgentContext> {
-  // ... 现有代码 ...
+export class Executor {
+  private _memoryInjected = false;   // 追踪是否已注入记忆
 
-  // 新增：检索相关记忆
-  let memoriesContext: string | undefined;
-  try {
-    const memories = await searchMemories({
-      query: subtask.instruction,
-      agentId: subtask.agentId,
-      limit: 5,
-    });
-    if (memories.length > 0) {
-      memoriesContext = memories
-        .map(m => `[Memory] ${m.content}`)
-        .join('\n');
+  private async buildContext(subtask: SubTask): Promise<AgentContext> {
+    // ... 现有代码 ...
+
+    // 仅在首次 SubTask 时检索并注入长期记忆
+    if (!this._memoryInjected) {
+      let memoriesContext: string | undefined;
+      try {
+        const memories = await searchMemories({
+          query: subtask.instruction,
+          agentId: subtask.agentId,
+          limit: 5,
+        });
+        if (memories.length > 0) {
+          memoriesContext = memories
+            .map(m => `[Memory] ${m.content}`)
+            .join('\n');
+        }
+      } catch { /* non-blocking */ }
+
+      this._memoryInjected = true;  // 无论是否查到记忆，标记已注入
+
+      if (memoriesContext) {
+        return {
+          ...existingContext,
+          systemPrompt: [existingPrompt, memoriesContext]
+            .filter(Boolean).join('\n\n'),
+        };
+      }
     }
-  } catch { /* non-blocking */ }
 
-  return {
-    ...existingContext,
-    ...(memoriesContext ? {
-      systemPrompt: [existingPrompt, memoriesContext].filter(Boolean).join('\n\n')
-    } : {}),
-  };
+    return existingContext;
+  }
 }
 ```
+
+**为什么可以仅在首次注入？** 本对话中积累的新记忆由 Agent 自身短时记忆覆盖（刚讨论过的内容不需要帮助回忆），新提取的记忆将在下次对话开始时自动加载。这以最小的实时性代价换取最大的缓存收益。
 
 ## Web UI
 

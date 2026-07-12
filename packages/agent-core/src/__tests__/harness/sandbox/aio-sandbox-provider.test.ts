@@ -72,12 +72,12 @@ describe("AioSandboxProvider", () => {
   });
 
   it("should shut down all sandboxes via shutdown", async () => {
-    await provider.acquire("a");
-    await provider.acquire("b");
+    const id1 = await provider.acquire("a");
+    const id2 = await provider.acquire("b");
     await provider.shutdown();
     // After shutdown, sandboxes should be gone
-    expect(await provider.get("agenthub-sandbox-a")).toBeNull();
-    expect(await provider.get("agenthub-sandbox-b")).toBeNull();
+    expect(await provider.get(id1)).toBeNull();
+    expect(await provider.get(id2)).toBeNull();
   });
 
   it("should mark and clean up idle containers", async () => {
