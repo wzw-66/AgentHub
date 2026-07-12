@@ -100,10 +100,30 @@ describe("SandboxMiddleware", () => {
     const result = await middleware.beforeAgent!(context);
     // The context should have a sandboxType property (injected via middleware)
     expect(result).toBeDefined();
+    expect((result as any).sandboxType).toBe("docker");
   });
 
   it("should require a provider to be set", () => {
     // @ts-expect-error - testing that missing provider throws at runtime
     expect(() => new SandboxMiddleware({})).toThrow("SandboxProvider is required");
+  });
+
+  it("should release a sandbox by thread ID", async () => {
+    const middleware = new SandboxMiddleware({ provider: mockProvider });
+    await middleware.getOrCreateSandbox("release-thread");
+    expect(mockProvider.acquire).toHaveBeenCalledWith("release-thread");
+
+    await middleware.releaseSandbox("release-thread");
+    expect(mockProvider.release).toHaveBeenCalledWith("sandbox-1");
+  });
+
+  it("should release all sandboxes", async () => {
+    const middleware = new SandboxMiddleware({ provider: mockProvider });
+    await middleware.getOrCreateSandbox("thread-a");
+    await middleware.getOrCreateSandbox("thread-b");
+
+    // Each acquire gets "sandbox-1" (mock returns same ID) - that's fine
+    await middleware.releaseAll();
+    expect(mockProvider.release).toHaveBeenCalledTimes(2);
   });
 });
