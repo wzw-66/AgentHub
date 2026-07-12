@@ -94,7 +94,9 @@ export class AioSandbox implements Sandbox {
   async writeFile(path: string, content: string): Promise<void> {
     // Use printf to handle special characters safely
     const escaped = content.replace(/'/g, "'\\''");
-    const result = await this.exec("sh", ["-c", `printf '%s' '${escaped}' > "${path}"`]);
+    const escapedPath = path.replace(/'/g, "'\\''");
+    const cmd = `printf '%s' '${escaped}' > '${escapedPath}'`;
+    const result = await this.exec(cmd);
     if (result.exitCode !== 0) {
       throw new Error(`Failed to write file: ${path} — ${result.stderr}`);
     }
@@ -104,7 +106,9 @@ export class AioSandbox implements Sandbox {
     // For AioSandbox, Uint8Array content would need to be base64-decoded in the container
     // This is a simplified implementation: encode as hex and use xxd to decode
     const hex = Buffer.from(_content).toString("hex");
-    const result = await this.exec("sh", ["-c", `echo '${hex}' | xxd -r -p > "${_path}"`]);
+    const escapedPath = _path.replace(/'/g, "'\\''");
+    const cmd = `echo '${hex}' | xxd -r -p > '${escapedPath}'`;
+    const result = await this.exec(cmd);
     if (result.exitCode !== 0) {
       throw new Error(`Failed to update file: ${_path} — ${result.stderr}`);
     }
@@ -112,8 +116,8 @@ export class AioSandbox implements Sandbox {
 
   async listDir(path: string = "."): Promise<string[]> {
     const result = await this.exec("ls", ["-1", path]);
+    if (result.exitCode === 2) return [];
     if (result.exitCode !== 0) {
-      if (result.stderr.includes("No such file")) return [];
       throw new Error(`Failed to list directory: ${path} — ${result.stderr}`);
     }
     return result.stdout ? result.stdout.split("\n") : [];
