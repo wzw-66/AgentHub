@@ -47,7 +47,7 @@ export class FallbackSandboxProvider implements SandboxProvider {
 
       // warn mode — log and fallback
       console.warn(
-        `[FallbackSandboxProvider] AioSandbox unavailable (${(err as Error).message}), falling back to LocalSandbox`,
+        `[Sandbox] ⚠️ Docker unavailable (${(err as Error).message}), falling back to LocalSandbox`,
       );
       const id = await this.fallback.acquire(threadId);
       this.sandboxOrigin.set(id, "local");

@@ -585,6 +585,8 @@ async function runAgentExecution(
       // ── Sandbox: Full chain (Docker → warn fallback → local) ──────────
       let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
+        console.log(`[Sandbox] Initializing agent sandbox for conversation ${conversationId}, workspace: ${cwd}`);
+        console.log("[Sandbox] Attempting Docker container (AioSandbox)...");
         const aioProvider = new AioSandboxProvider({
           image: "docker/sandbox-templates:shell",
           workingDir: cwd,
@@ -604,11 +606,14 @@ async function runAgentExecution(
         // Log which sandbox type was acquired
         const origins = fallbackProvider.getOrigins();
         const sandboxType = Array.from(origins.values())[0] ?? "unknown";
+        console.log(`[Sandbox] ✅ Agent sandbox ready — type: ${sandboxType}`);
         log.info({ conversationId, sandboxType }, `Agent sandbox initialized: ${sandboxType}`);
 
         const toolRegistry = new ToolRegistry(sb);
         harness.setToolRegistry(toolRegistry);
         harness.setSandbox(sb);
+      } else {
+        console.log("[Sandbox] ⚠️  No workspace path configured — sandbox tools (exec/file) disabled");
       }
 
       // Middleware: blackboard for shared state, micro-compact for context
@@ -954,6 +959,8 @@ async function handleRegenerate(
       // ── Sandbox: Full chain (Docker → warn fallback → local) ──────────
       let sandboxMiddleware: SandboxMiddleware | undefined;
       if (cwd) {
+        console.log(`[Sandbox] Initializing agent sandbox (regenerate) for conversation ${conversationId}, workspace: ${cwd}`);
+        console.log("[Sandbox] Attempting Docker container (AioSandbox)...");
         const aioProvider = new AioSandboxProvider({
           image: "docker/sandbox-templates:shell",
           workingDir: cwd,
@@ -973,11 +980,14 @@ async function handleRegenerate(
         // Log which sandbox type was acquired
         const origins = fallbackProvider.getOrigins();
         const sandboxType = Array.from(origins.values())[0] ?? "unknown";
+        console.log(`[Sandbox] ✅ Agent sandbox ready (regenerate) — type: ${sandboxType}`);
         request.server.log.info({ conversationId, sandboxType }, `Agent sandbox initialized: ${sandboxType}`);
 
         const toolRegistry = new ToolRegistry(sb);
         harness.setToolRegistry(toolRegistry);
         harness.setSandbox(sb);
+      } else {
+        console.log("[Sandbox] ⚠️  No workspace path configured — sandbox tools (exec/file) disabled");
       }
       harness.use(new BlackboardMiddleware());
       harness.use(new MicroCompactMiddleware());
