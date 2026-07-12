@@ -108,4 +108,24 @@ describe("FallbackSandboxProvider", () => {
     const sb = await provider.get("unknown-id");
     expect(sb).toBeNull();
   });
+
+  it("should return sandbox type for acquired sandbox", async () => {
+    const provider = new FallbackSandboxProvider(mockPrimary, mockFallback, "strict");
+    const id = await provider.acquire("type-test");
+    expect(provider.getSandboxType(id)).toBe("docker");
+  });
+
+  it("should get all origins", async () => {
+    const provider = new FallbackSandboxProvider(mockPrimary, mockFallback, "warn");
+    await provider.acquire("origin-test");
+    const origins = provider.getOrigins();
+    expect(origins.size).toBe(1);
+  });
+
+  it("should set and get mode at runtime", async () => {
+    const provider = new FallbackSandboxProvider(mockPrimary, mockFallback, "strict");
+    expect(provider.getMode()).toBe("strict");
+    provider.setMode("force");
+    expect(provider.getMode()).toBe("force");
+  });
 });

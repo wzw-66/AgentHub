@@ -5,6 +5,8 @@
  * such as file I/O, command execution, and network requests.
  */
 export interface Sandbox {
+  /** Unique identifier for this sandbox instance. */
+  readonly id: string;
   /** Execute a command in the sandbox. */
   exec(command: string, args?: string[]): Promise<SandboxResult>;
   /** Read a file from the sandbox. */

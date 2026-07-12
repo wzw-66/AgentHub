@@ -2,7 +2,6 @@ import Docker from "dockerode";
 import { Writable } from "stream";
 import type { Sandbox, SandboxResult } from "./types.js";
 import type { DockerSandboxConfig } from "./docker-config.js";
-import { DEFAULT_DOCKER_CONFIG } from "./docker-config.js";
 
 /**
  * Container name prefix for all AgentHub sandbox containers.
@@ -22,18 +21,16 @@ export class AioSandbox implements Sandbox {
   readonly id: string;
   private container: Docker.Container;
   private docker: Docker;
-  private config: DockerSandboxConfig;
 
   constructor(
     docker: Docker,
     container: Docker.Container,
     containerId: string,
-    config: DockerSandboxConfig,
+    _config: DockerSandboxConfig,
   ) {
     this.docker = docker;
     this.container = container;
     this.id = containerId;
-    this.config = { ...DEFAULT_DOCKER_CONFIG, ...config };
   }
 
   /**
@@ -44,9 +41,9 @@ export class AioSandbox implements Sandbox {
   }
 
   async exec(command: string, args: string[] = []): Promise<SandboxResult> {
-    const fullCommand = args.length > 0 ? `${command} ${args.join(" ")}` : command;
+    const fullCmd = args.length > 0 ? [command, ...args] : [command];
     const exec = await this.container.exec({
-      Cmd: ["sh", "-c", fullCommand],
+      Cmd: fullCmd,
       AttachStdout: true,
       AttachStderr: true,
     });
@@ -72,7 +69,7 @@ export class AioSandbox implements Sandbox {
 
       const timeout = setTimeout(() => {
         reject(new Error("Command execution timed out"));
-      }, this.config.containerStopTimeout ?? 10_000);
+      }, 600_000); // 10 minute default per architecture doc
 
       stream.on("end", () => {
         clearTimeout(timeout);
@@ -105,7 +102,7 @@ export class AioSandbox implements Sandbox {
     const escaped = content.replace(/'/g, "'\\''");
     const escapedPath = path.replace(/'/g, "'\\''");
     const cmd = `printf '%s' '${escaped}' > '${escapedPath}'`;
-    const result = await this.exec(cmd);
+    const result = await this.exec("sh", ["-c", cmd]);
     if (result.exitCode !== 0) {
       throw new Error(`Failed to write file: ${path} — ${result.stderr}`);
     }
@@ -117,7 +114,7 @@ export class AioSandbox implements Sandbox {
     const hex = Buffer.from(_content).toString("hex");
     const escapedPath = _path.replace(/'/g, "'\\''");
     const cmd = `echo '${hex}' | xxd -r -p > '${escapedPath}'`;
-    const result = await this.exec(cmd);
+    const result = await this.exec("sh", ["-c", cmd]);
     if (result.exitCode !== 0) {
       throw new Error(`Failed to update file: ${_path} — ${result.stderr}`);
     }

@@ -6,6 +6,7 @@ import type { Sandbox, SandboxProvider } from "./types.js";
 export class SandboxManager {
   private provider: SandboxProvider | null = null;
   private sandboxIds: Map<string, string> = new Map(); // threadId -> sandboxId
+  private pendingAcquires: Map<string, Promise<string>> = new Map(); // dedup concurrent acquires
 
   constructor(provider?: SandboxProvider) {
     this.provider = provider ?? null;
@@ -27,8 +28,13 @@ export class SandboxManager {
       if (existing) return existing;
     }
 
-    // Acquire new sandbox
-    const sandboxId = await this.provider.acquire(threadId);
+    // Dedup concurrent acquires for the same thread
+    if (!this.pendingAcquires.has(threadId)) {
+      this.pendingAcquires.set(threadId, Promise.resolve(this.provider.acquire(threadId)));
+    }
+
+    const sandboxId = await this.pendingAcquires.get(threadId)!;
+    this.pendingAcquires.delete(threadId);
     this.sandboxIds.set(threadId, sandboxId);
 
     const sandbox = await this.provider.get(sandboxId);

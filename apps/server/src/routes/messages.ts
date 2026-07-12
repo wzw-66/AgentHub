@@ -588,7 +588,7 @@ async function runAgentExecution(
         const localProvider = new LocalSandboxProvider(cwd);
         sandboxMiddleware = new SandboxMiddleware({
           provider: localProvider,
-          lazyInit: true,
+          lazyInit: false,
           sandboxType: "local",
         });
         harness.use(sandboxMiddleware);
@@ -946,7 +946,7 @@ async function handleRegenerate(
         const localProvider = new LocalSandboxProvider(cwd);
         sandboxMiddleware = new SandboxMiddleware({
           provider: localProvider,
-          lazyInit: true,
+          lazyInit: false,
           sandboxType: "local",
         });
         harness.use(sandboxMiddleware);

@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { resolve, normalize, relative } from "node:path";
 import type { Sandbox, SandboxResult } from "./types.js";
@@ -12,9 +13,11 @@ import type { Sandbox, SandboxResult } from "./types.js";
  * - Synchronous operations for simplicity
  */
 export class LocalSandbox implements Sandbox {
+  readonly id: string;
   private allowedDir: string;
 
   constructor(allowedDir: string) {
+    this.id = `local-${randomUUID()}`;
     this.allowedDir = resolve(allowedDir);
   }
 
