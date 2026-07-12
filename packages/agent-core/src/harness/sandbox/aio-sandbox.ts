@@ -1,4 +1,5 @@
 import Docker from "dockerode";
+import { Writable } from "stream";
 import type { Sandbox, SandboxResult } from "./types.js";
 import type { DockerSandboxConfig } from "./docker-config.js";
 import { DEFAULT_DOCKER_CONFIG } from "./docker-config.js";
@@ -55,11 +56,19 @@ export class AioSandbox implements Sandbox {
     const stderrChunks: Buffer[] = [];
 
     return new Promise<SandboxResult>((resolve, reject) => {
-      this.docker.modem.demuxStream(stream, {
-        write: (chunk: Buffer) => stdoutChunks.push(chunk),
-      }, {
-        write: (chunk: Buffer) => stderrChunks.push(chunk),
+      const stdoutStream = new Writable({
+        write(chunk: Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+          stdoutChunks.push(chunk);
+          callback();
+        },
       });
+      const stderrStream = new Writable({
+        write(chunk: Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+          stderrChunks.push(chunk);
+          callback();
+        },
+      });
+      this.docker.modem.demuxStream(stream, stdoutStream, stderrStream);
 
       const timeout = setTimeout(() => {
         reject(new Error("Command execution timed out"));

@@ -25,7 +25,7 @@ export class SandboxMiddleware implements AgentMiddleware {
   readonly name = "sandbox";
   private provider: SandboxProvider;
   private lazyInit: boolean;
-  private sandboxType?: string;
+  private sandboxType: string | undefined;
   private sandboxCache: Map<string, string> = new Map(); // conversationId → sandboxId
 
   constructor(config: SandboxMiddlewareConfig) {
@@ -98,7 +98,7 @@ export class SandboxMiddleware implements AgentMiddleware {
    */
   async releaseAll(): Promise<void> {
     const ids = Array.from(this.sandboxCache.values());
-    await Promise.all(ids.map((id) => this.provider.release(id).catch(() => {})));
+    await Promise.all(ids.map((id) => Promise.resolve(this.provider.release(id)).catch(() => {})));
     this.sandboxCache.clear();
   }
 

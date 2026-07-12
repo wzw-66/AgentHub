@@ -78,8 +78,8 @@ export class FallbackSandboxProvider implements SandboxProvider {
 
   async shutdown(): Promise<void> {
     await Promise.all([
-      this.primary.shutdown?.().catch(() => {}),
-      this.fallback.shutdown?.().catch(() => {}),
+      Promise.resolve(this.primary.shutdown?.()).catch(() => {}),
+      Promise.resolve(this.fallback.shutdown?.()).catch(() => {}),
     ]);
     this.sandboxOrigin.clear();
   }
