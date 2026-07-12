@@ -162,6 +162,7 @@ export class AioSandboxProvider implements SandboxProvider {
   }
 
   private async pullImage(): Promise<void> {
+    console.log(`[Sandbox] Pulling image ${this.config.image}...`);
     return new Promise<void>((resolve, reject) => {
       this.docker.pull(this.config.image, {}, (err: Error | null, stream?: NodeJS.ReadableStream) => {
         if (err) {
