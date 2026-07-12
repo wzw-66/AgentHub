@@ -54,6 +54,11 @@ export class LocalSandbox implements Sandbox {
     writeFileSync(safePath, content, "utf-8");
   }
 
+  async updateFile(path: string, content: Uint8Array): Promise<void> {
+    const safePath = this.resolvePath(path);
+    writeFileSync(safePath, content);
+  }
+
   async listDir(path: string = "."): Promise<string[]> {
     const safePath = this.resolvePath(path);
     if (!existsSync(safePath)) {
@@ -75,5 +80,20 @@ export class LocalSandbox implements Sandbox {
       }
     }
     return resolved;
+  }
+
+  /**
+   * Map a local absolute path back to a virtual (workspace-relative) path.
+   * Used to make tool output paths model-friendly.
+   */
+  reverseResolvePath(localPath: string): string {
+    const normalized = normalize(localPath);
+    const rel = relative(this.allowedDir, normalized);
+    if (rel.startsWith("..")) {
+      // Path is outside allowedDir -- return as-is
+      return normalized;
+    }
+    // Path is inside allowedDir -- return relative, root becomes "."
+    return rel || ".";
   }
 }

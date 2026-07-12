@@ -11,6 +11,8 @@ export interface Sandbox {
   readFile(path: string): Promise<string>;
   /** Write a file in the sandbox. */
   writeFile(path: string, content: string): Promise<void>;
+  /** Write binary content to a file in the sandbox. */
+  updateFile(path: string, content: Uint8Array): Promise<void>;
   /** List directory contents. */
   listDir(path: string): Promise<string[]>;
 }

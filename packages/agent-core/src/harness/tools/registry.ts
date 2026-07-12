@@ -122,6 +122,18 @@ export class ToolRegistry {
     });
 
     this.register({
+      name: "update_file",
+      description: "Write binary content to a file in the workspace",
+      handler: async (args: Record<string, unknown>) => {
+        const path = String(args.path ?? "");
+        const contentStr = String(args.content ?? "");
+        const encoder = new TextEncoder();
+        await sandbox.updateFile(path, encoder.encode(contentStr));
+        return `File updated: ${path}`;
+      },
+    });
+
+    this.register({
       name: "list_dir",
       description: "List files in a directory",
       handler: async (args: Record<string, unknown>) => {

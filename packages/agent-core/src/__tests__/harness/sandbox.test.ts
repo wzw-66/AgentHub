@@ -49,6 +49,31 @@ describe("LocalSandbox", () => {
       try { await sandbox.exec("rm", ["-f", testPath]); } catch { /* ignore */ }
     }
   });
+
+  it("should write binary content via updateFile", async () => {
+    const testPath = ".harness-test-binary.bin";
+    try {
+      const encoder = new TextEncoder();
+      const content = encoder.encode("binary\x00data");
+      await sandbox.updateFile(testPath, content);
+      const result = await sandbox.readFile(testPath);
+      expect(result).toBe("binary\x00data");
+    } finally {
+      try { await sandbox.exec("rm", ["-f", testPath]); } catch { /* ignore */ }
+    }
+  });
+
+  it("should reverse-resolve local paths to virtual paths", async () => {
+    const localPath = process.cwd();
+    const virtual = sandbox.reverseResolvePath(localPath);
+    expect(virtual).toBe(".");
+  });
+
+  it("should reverse-resolve nested local paths", async () => {
+    const srcDir = `${process.cwd()}/src`;
+    const virtual = sandbox.reverseResolvePath(srcDir);
+    expect(virtual).toBe("src");
+  });
 });
 
 describe("SandboxManager", () => {
