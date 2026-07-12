@@ -16,7 +16,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@agenthub/shared": "workspace:*"
+    "@agenthub/shared": "workspace:*",
+    "dockerode": "^5.0.1"
   },
   "files": [
     "dist"
@@ -29,6 +30,7 @@
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/dockerode": "^4.0.1",
     "@types/node": "^25.9.1",
     "tsup": "^8.0.0",
     "typescript": "^6.0.3",
