@@ -139,6 +139,62 @@ describe("Market Repository (PublishedAgent)", () => {
     expect(testResults.every((a) => a.name.includes("Writer"))).toBe(true);
   });
 
+  it("should search published agents case-insensitively", async () => {
+    await createPublishedAgent(
+      { name: "[TEST] ClaudeCode Bot", provider: "Custom", creatorId: testUserId },
+      prisma
+    );
+
+    const lower = await listPublishedAgents({ q: "claudecode" }, prisma);
+    expect(lower.some((a) => a.name === "[TEST] ClaudeCode Bot")).toBe(true);
+
+    const upper = await listPublishedAgents({ q: "CLAUDECODE" }, prisma);
+    expect(upper.some((a) => a.name === "[TEST] ClaudeCode Bot")).toBe(true);
+  });
+
+  it("should filter published agents by tag", async () => {
+    await createPublishedAgent(
+      {
+        name: "[TEST] Tagged Agent",
+        provider: "Custom",
+        tags: ["coding", "favorite"],
+        creatorId: testUserId,
+      },
+      prisma
+    );
+    await createPublishedAgent(
+      {
+        name: "[TEST] Other Agent",
+        provider: "Custom",
+        tags: ["writing"],
+        creatorId: testUserId,
+      },
+      prisma
+    );
+
+    const results = await listPublishedAgents({ tag: "coding" }, prisma);
+    const testResults = results.filter((a) => a.name.startsWith("[TEST]"));
+
+    expect(testResults.length).toBe(1);
+    expect(testResults[0]!.name).toBe("[TEST] Tagged Agent");
+    expect(testResults[0]!.tags).toContain("coding");
+  });
+
+  it("should match tags by whole element, not substring", async () => {
+    await createPublishedAgent(
+      { name: "[TEST] Short Tag", provider: "Custom", tags: ["co"], creatorId: testUserId },
+      prisma
+    );
+    await createPublishedAgent(
+      { name: "[TEST] Long Tag", provider: "Custom", tags: ["coding"], creatorId: testUserId },
+      prisma
+    );
+
+    // "cod" 是 "coding" 的前缀、也是 "co" 的超串，但不是任何标签的完整值
+    const results = await listPublishedAgents({ tag: "cod" }, prisma);
+    expect(results.filter((a) => a.name.startsWith("[TEST]")).length).toBe(0);
+  });
+
   it("should list my published agents", async () => {
     await createPublishedAgent({ name: "[TEST] My Pub 1", provider: "Custom", creatorId: testUserId }, prisma);
     await createPublishedAgent({ name: "[TEST] My Pub 2", provider: "Custom", creatorId: testUserId }, prisma);

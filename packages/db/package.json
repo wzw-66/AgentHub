@@ -17,11 +17,12 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@agenthub/shared": "workspace:*",
-    "@prisma/client": "^6.0.0"
+    "@prisma/client": "^6.19.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "prisma": "^6.0.0",
+    "dotenv": "^16.0.0",
+    "prisma": "^6.19.3",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
     "typescript": "^6.0.3",
@@ -35,11 +36,11 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:push:test": "DATABASE_URL=$TEST_DATABASE_URL prisma db push",
-    "db:seed": "tsx src/seed.ts",
-    "db:studio": "prisma studio",
+    "db:generate": "node scripts/with-env.mjs prisma generate",
+    "db:push": "node scripts/with-env.mjs prisma db push",
+    "db:push:test": "node scripts/with-env.mjs --test prisma db push",
+    "db:seed": "node scripts/with-env.mjs tsx src/seed.ts",
+    "db:studio": "node scripts/with-env.mjs prisma studio",
     "lint": "tsc --noEmit"
   },
   "prisma": {

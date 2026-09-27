@@ -61,7 +61,7 @@ importers:
         version: 9.0.3
     devDependencies:
       '@prisma/client':
-        specifier: ^6.0.0
+        specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(typescript@6.0.3))(typescript@6.0.3)
       '@types/bcryptjs':
         specifier: ^2.4.0
@@ -76,7 +76,7 @@ importers:
         specifier: ^8.18.1
         version: 8.18.1
       prisma:
-        specifier: ^6.0.0
+        specifier: ^6.19.3
         version: 6.19.3(typescript@6.0.3)
       tsup:
         specifier: ^8.0.0
@@ -104,7 +104,7 @@ importers:
         version: link:../../packages/ui
       next:
         specifier: ^14.2.0
-        version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -186,14 +186,17 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@prisma/client':
-        specifier: ^6.0.0
+        specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(typescript@6.0.3))(typescript@6.0.3)
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
+      dotenv:
+        specifier: ^16.0.0
+        version: 16.6.1
       prisma:
-        specifier: ^6.0.0
+        specifier: ^6.19.3
         version: 6.19.3(typescript@6.0.3)
       tsup:
         specifier: ^8.0.0
@@ -5609,7 +5612,7 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  next@14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 14.2.35
       '@swc/helpers': 0.5.5
@@ -5619,7 +5622,7 @@ snapshots:
       postcss: 8.4.31
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
-      styled-jsx: 5.1.1(react@18.3.1)
+      styled-jsx: 5.1.1(@babel/core@7.29.7)(react@18.3.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 14.2.33
       '@next/swc-darwin-x64': 14.2.33
@@ -6144,10 +6147,12 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
-  styled-jsx@5.1.1(react@18.3.1):
+  styled-jsx@5.1.1(@babel/core@7.29.7)(react@18.3.1):
     dependencies:
       client-only: 0.0.1
       react: 18.3.1
+    optionalDependencies:
+      '@babel/core': 7.29.7
 
   sucrase@3.35.1:
     dependencies:

@@ -1,17 +1,7 @@
+# 数据库已迁移到 SQLite（文件位于 .agenthub/），不再需要本地数据库容器。
+# 本文件现在只用于 Agent 沙箱的镜像预热。
 version: "3.8"
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: agenthub-db
-    environment:
-      POSTGRES_USER: agenthub
-      POSTGRES_PASSWORD: agenthub_dev
-      POSTGRES_DB: agenthub
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
   # ── Agent Sandbox 初始化 ──────────────────────────────────────────
   # 预拉取 Docker 沙箱镜像，避免首次请求时等待 ~385MB 下载。
   # 运行: docker compose --profile sandbox up sandbox-init
@@ -21,6 +11,3 @@ services:
     entrypoint: ["echo", "docker/sandbox-templates:shell ready (image cached locally)"]
     profiles:
       - sandbox
-
-volumes:
-  pgdata:

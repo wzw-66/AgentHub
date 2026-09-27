@@ -23,3 +23,8 @@ build/
 Thumbs.db
 .agenthub/
 .claude/settings.local.json
+
+# SQLite — 测试库落在 schema 同目录（业务库在 .agenthub/，已被上一行覆盖）
+packages/db/prisma/*.db
+packages/db/prisma/*.db-wal
+packages/db/prisma/*.db-shm

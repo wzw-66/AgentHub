@@ -9,7 +9,7 @@ import type { FastifyInstance } from "fastify";
 
 const TEST_DATABASE_URL =
   process.env["TEST_DATABASE_URL"] ||
-  "postgresql://agenthub:agenthub_dev@localhost:5432/agenthub_test";
+  "file:./test.db";
 
 describe("Conversation API", () => {
   let app: FastifyInstance;

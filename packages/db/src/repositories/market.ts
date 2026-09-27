@@ -1,6 +1,7 @@
 import type { PublishedAgent, AgentProvider, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "../client";
 import type { PrismaClient } from "@prisma/client";
+import { asStringArray } from "@agenthub/shared";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,20 +38,29 @@ export async function listPublishedAgents(
   const where: Prisma.PublishedAgentWhereInput = {};
 
   if (options.q) {
-    where.name = { contains: options.q, mode: "insensitive" };
+    // 不用 mode: "insensitive" —— 那是 PostgreSQL/MongoDB 专属参数，SQLite 上会
+    // 抛 `Unknown argument 'mode'`。SQLite 的 LIKE 对 ASCII 默认不区分大小写。
+    where.name = { contains: options.q };
   }
   if (options.provider) {
     where.provider = options.provider;
   }
-  if (options.tag) {
-    where.tags = { has: options.tag };
-  }
 
-  return prisma.publishedAgent.findMany({
+  const rows = await prisma.publishedAgent.findMany({
     where,
     orderBy: [{ importCount: "desc" }, { createdAt: "desc" }],
     include: { creator: { select: { name: true } } },
   });
+
+  // tags 在 SQLite 上是 Json 列，Prisma 无数组成员过滤能力（array_contains /
+  // has / string_contains 实测均不可用），只能取回后在应用层过滤。
+  // 本函数无分页，数据量小，可接受。
+  if (options.tag) {
+    const tag = options.tag;
+    return rows.filter((row) => asStringArray(row.tags).includes(tag));
+  }
+
+  return rows;
 }
 
 export async function getPublishedAgent(

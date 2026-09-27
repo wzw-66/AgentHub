@@ -1,7 +1,7 @@
 import type { Conversation, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "../client";
 import type { PrismaClient } from "@prisma/client";
-import { ConversationType } from "@agenthub/shared";
+import { ConversationType, asStringArray } from "@agenthub/shared";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -82,17 +82,17 @@ export async function findSingleConversationByAgentId(
   agentId: string,
   prisma: PrismaClient = defaultPrisma
 ): Promise<Conversation | null> {
+  // contactIds 在 SQLite 上是 Json 列，无法用 `has` 过滤，改为应用层筛选。
+  // 单聊会话每个 agent 至多一条，且列表有 ownerId + type 索引，可接受。
   const conversations = await prisma.conversation.findMany({
     where: {
       ownerId: userId,
       type: ConversationType.Single,
-      contactIds: { has: agentId },
       isArchived: false,
     },
     orderBy: { lastActiveAt: "desc" },
-    take: 1,
   });
-  return conversations[0] ?? null;
+  return conversations.find((c) => asStringArray(c.contactIds).includes(agentId)) ?? null;
 }
 
 export async function createConversation(
@@ -136,7 +136,7 @@ export async function addConversationMembers(
   });
   if (!existing) throw new Error(`Conversation ${id} not found`);
 
-  const merged = [...new Set([...existing.contactIds, ...memberIds])];
+  const merged = [...new Set([...asStringArray(existing.contactIds), ...memberIds])];
   return prisma.conversation.update({
     where: { id },
     data: { contactIds: merged },
@@ -155,7 +155,7 @@ export async function removeConversationMembers(
   if (!existing) throw new Error(`Conversation ${id} not found`);
 
   const removeSet = new Set(memberIds);
-  const filtered = existing.contactIds.filter((id) => !removeSet.has(id));
+  const filtered = asStringArray(existing.contactIds).filter((id) => !removeSet.has(id));
   return prisma.conversation.update({
     where: { id },
     data: { contactIds: filtered },

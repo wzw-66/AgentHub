@@ -14,10 +14,9 @@
     "web:test": "pnpm --filter @agenthub/web test",
     "db:generate": "pnpm --filter @agenthub/db db:generate",
     "db:push": "pnpm --filter @agenthub/db db:push",
+    "db:push:test": "pnpm --filter @agenthub/db db:push:test",
     "db:seed": "pnpm --filter @agenthub/db db:seed",
     "db:studio": "pnpm --filter @agenthub/db db:studio",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
     "sandbox:pull": "docker compose --profile sandbox up sandbox-init"
   },
   "packageManager": "pnpm@9.15.4",

@@ -16,7 +16,7 @@ import {
 } from "@agenthub/db";
 import { createAdapter, AgentHarness, ToolRegistry, AioSandboxProvider, LocalSandboxProvider, FallbackSandboxProvider, SandboxMiddleware, BlackboardMiddleware, MicroCompactMiddleware } from "@agenthub/agent-core";
 import type { Chunk, Agent, Message as SharedMessage, ToolDefinition } from "@agenthub/shared";
-import { ChunkType } from "@agenthub/shared";
+import { ChunkType, asStringArray } from "@agenthub/shared";
 import { processChunk } from "../orchestrator/artifact-detector.js";
 import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
 import { TaskDispatcher } from "../orchestrator/dispatcher.js";
@@ -362,7 +362,7 @@ async function runOrchestration(
   };
 
   // Resolve agents from conversation contactIds only
-  const contactIds = conversation.contactIds ?? [];
+  const contactIds = asStringArray(conversation.contactIds);
   if (contactIds.length === 0) {
     log.warn({ conversationId }, "No contactIds in group conversation");
     return;
@@ -509,7 +509,7 @@ async function runAgentExecution(
   const conv = await getConversation(conversationId);
   if (!conv) { log.warn("Conversation not found"); return; }
 
-  const contactIds = conv.contactIds ?? [];
+  const contactIds = asStringArray(conv.contactIds);
   if (contactIds.length === 0) { log.warn("No contactIds"); return; }
 
   if (conv.type === "single") {
@@ -904,7 +904,7 @@ async function handleRegenerate(
   const conv = await getConversation(conversationId);
   if (!conv) return;
 
-  const contactIds = conv.contactIds ?? [];
+  const contactIds = asStringArray(conv.contactIds);
   if (contactIds.length === 0) return;
 
   if (conv.type === "single") {
