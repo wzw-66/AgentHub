@@ -19,6 +19,8 @@ Agent 需要做三件事：执行命令、读写文件、浏览目录。但 Agen
 | 启动速度 | 秒开            | 需要几秒创建容器                    |
 | 场景   | 开发调试          | 生产环境                        |
 
+> **当前生产链路是"降级链"**：`AioSandboxProvider`(Docker) 优先，容器创建失败时由 `FallbackSandboxProvider`（warn 模式）自动降级到 `LocalSandboxProvider`。
+
 ***
 
 ## 架构三层次
@@ -41,30 +43,53 @@ interface Sandbox {
 
 负责"创建和销毁沙箱"：
 
-- `create()` → 获取一个沙箱（本地模式直接返回，Docker 模式创建容器）
-- `destroy(sandbox)` → 释放单个沙箱
+- `acquire(threadId)` → 获取一个沙箱（本地模式直接返回，Docker 模式创建/复用容器）
+- `get(sandboxId)` → 按 ID 取回已创建的沙箱
+- `release(sandboxId)` → 释放单个沙箱
+- `shutdown()` → 一键清理所有
 
-### 第 3 层：管理器（SandboxManager）
+### 第 3 层：生命周期桥接（SandboxMiddleware）
 
-可选的缓存层，相当于"沙箱缓存池"：
+当前实现没有独立的 `SandboxManager`，而是由 `SandboxMiddleware` 承担"获取/复用/销毁"，相当于"沙箱缓存池"：
 
 ```typescript
-manager.getSandbox("default")  // 第一次创建，以后复用同一实例
-manager.destroyAll()           // 一键清理所有
+const sandboxMiddleware = new SandboxMiddleware({
+  provider: fallbackProvider,   // Docker → 本地 的降级链
+  lazyInit: false,              // eager：agent 开始前就获取沙箱
+});
+harness.use(sandboxMiddleware);
+
+const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId); // 同一 conversation 复用
+await sandboxMiddleware.releaseSandbox(conversationId);                // 释放单个
+await sandboxMiddleware.releaseAll();                                  // 一键清理所有
 ```
 
 ***
 
 ## 沙箱的调用单位
 
-### 当前实现：每次对话执行一个沙箱
+### 当前实现：Docker 优先 → 失败降级本地
 
 ```typescript
 // messages.ts
 async function runAgentExecution(conversationId, content, cm, log) {
-  // 每次调用都 new 一个沙箱
-  const harnessSandbox = new LocalSandbox(cwd);
-  const toolRegistry = new ToolRegistry(harnessSandbox);
+  // 1. Docker 沙箱（生产首选）
+  const aioProvider = new AioSandboxProvider({
+    image: "docker/sandbox-templates:shell",
+    workingDir: cwd,
+  });
+  // 2. 本地沙箱（兜底）
+  const localProvider = new LocalSandboxProvider(cwd);
+  // 3. 降级链：Docker 失败 → 本地，warn 模式会打印警告
+  const fallbackProvider = new FallbackSandboxProvider(aioProvider, localProvider, "warn");
+
+  // 4. 创建 SandboxMiddleware（eager：agent 开始前就获取沙箱）
+  const sandboxMiddleware = new SandboxMiddleware({ provider: fallbackProvider, lazyInit: false });
+  harness.use(sandboxMiddleware);
+
+  // 5. 获取沙箱（同一 conversationId → 同一容器），注册内置工具
+  const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId);
+  const toolRegistry = new ToolRegistry(sb);
   harness.setToolRegistry(toolRegistry);
 }
 ```
@@ -72,33 +97,38 @@ async function runAgentExecution(conversationId, content, cm, log) {
 ```
 用户消息 "读取 src/index.ts"
   └→ runAgentExecution("conv-1")
-       └→ new LocalSandbox(workspace)   ← 沙箱 A
-            ├─ turn 1: read_file → 沙箱 A
-            ├─ turn 2: execute_command → 沙箱 A
-            └─ turn 3: write_file → 沙箱 A
+       └→ acquire("conv-1") → 容器名 agenthub-sandbox-<hash>
+            └→ AioSandbox（Docker 容器）   ← 沙箱 A
+                 ├─ turn 1: read_file → docker exec cat
+                 ├─ turn 2: execute_command → docker exec
+                 └─ turn 3: write_file → docker exec printf
 
 用户消息 "再读 package.json"
-  └→ runAgentExecution("conv-1")       ← 又 new 一个
-       └→ new LocalSandbox(workspace)   ← 沙箱 B（全新的）
+  └→ runAgentExecution("conv-1")
+       └→ acquire("conv-1") → 容器名相同
+            └→ AioSandboxProvider 发现同名容器已存在 → 复用同一个容器
 ```
 
-粒度：同一用户消息内的多轮 tool-calling 共享沙箱，但不同消息之间不共享。
+粒度：同一用户消息内的多轮 tool-calling 共享沙箱；不同消息之间，**Docker 容器按 conversationId 确定性命名，也会复用同一个容器**（若已被 idle 超时回收则重建）。
 
-### 规划方案：SandboxManager + 确定性哈希
+### 已实现：确定性哈希 → 复用同一容器
+
+当初规划的 `SandboxManager + SHA256(thread_id)` 已经落地，只是哈希不在管理器里，而在**容器命名**上：
 
 ```typescript
-const sandboxId = SHA256(thread_id);
-SandboxManager.getSandbox(sandboxId);
-// 相同的 thread_id → 相同的 sandboxId → 同一个沙箱实例
+// AioSandbox.containerName(threadId) —— 确定性哈希
+// 相同 conversationId → 相同容器名 → 复用同一 Docker 容器
+const name = AioSandbox.containerName("conv-1");
+// → "agenthub-sandbox-1a2b3c4d5e6f7a8b"
 ```
 
-父 Agent 和子 Agent 只要传同一个 `thread_id`，就共享沙箱。
+父 Agent 和子 Agent 只要传同一个 `thread_id`，就会解析到同一个容器名，共享同一个沙箱文件系统。
 
 ***
 
 ## 沙箱不是"关卡"，是可选的"工具包"
 
-**沙箱不是中间件过滤器**，不会拦截所有工具调用。它只是 4 个内置工具内部使用的一个工具对象。
+**沙箱本身不是中间件过滤器**，不会拦截所有工具调用。它只是 4 个内置工具内部使用的一个工具对象。（注意区分：现在的 `SandboxMiddleware` 只负责沙箱的**生命周期**——创建/复用/销毁，并不参与工具调用过滤，工具调用仍然走下面的查找链路。）
 
 ```
 LLM 返回 ToolCall("read_file")
@@ -121,7 +151,7 @@ harness.registerTool("get_weather", async (toolName, args, context) => {
 });
 
 // 内置工具通过 ToolRegistry 走沙箱
-const toolRegistry = new ToolRegistry(sandbox);
+const toolRegistry = new ToolRegistry(sb);
 harness.setToolRegistry(toolRegistry);
 ```
 
@@ -136,7 +166,9 @@ interface ToolExecutionContext {
 
 ***
 
-## LocalSandbox 核心实现
+## LocalSandbox 核心实现（本地兜底路径）
+
+> 当 Docker 不可用、`FallbackSandboxProvider` 降级时使用。以下机制只在**宿主机**上生效；Docker 路径（AioSandbox）靠容器文件系统天然隔离，见下一节。
 
 ### 路径安全防护
 
@@ -214,6 +246,59 @@ private registerBuiltins(sandbox: Sandbox): void {
 
 ***
 
+## AioSandbox 核心实现（Docker）
+
+### 文件操作 = 容器内执行命令
+
+`AioSandbox` 不做宿主机路径解析，所有文件操作都通过 `docker exec` 在容器内完成——路径越界天然被容器文件系统挡住：
+
+```typescript
+class AioSandbox implements Sandbox {
+  // 读文件 → 容器内 cat
+  async readFile(path: string): Promise<string> {
+    const result = await this.exec("cat", [path]);
+    if (result.exitCode !== 0) throw new Error(`Failed to read file: ${path}`);
+    return result.stdout;
+  }
+
+  // 写文件 → 容器内 printf（shell 引号转义防注入）
+  async writeFile(path: string, content: string): Promise<void> {
+    const escaped = content.replace(/'/g, "'\\''");
+    const cmd = `printf '%s' '${escaped}' > '${path}'`;
+    await this.exec("sh", ["-c", cmd]);
+  }
+
+  // 列目录 → 容器内 ls -1
+  async listDir(path = "."): Promise<string[]> {
+    const result = await this.exec("ls", ["-1", path]);
+    return result.exitCode === 2 ? [] : result.stdout.split("\n");
+  }
+}
+```
+
+### 命令执行 = docker exec
+
+```typescript
+async exec(command: string, args: string[] = []): Promise<SandboxResult> {
+  const exec = await this.container.exec({
+    Cmd: [command, ...args],
+    AttachStdout: true, AttachStderr: true,
+  });
+  const stream = await exec.start({ Detach: false, Tty: false });
+  // modem.demuxStream 分离 stdout/stderr，exitCode 来自 exec.inspect()
+  return { stdout, stderr, exitCode };  // 10 分钟超时保护
+}
+```
+
+### 容器生命周期
+
+- **确定性命名**：`agenthub-sandbox-<hash(threadId)>`，同名容器跨消息复用；容器还在就能恢复（crash recovery）。
+- **常驻**：启动命令是 `sleep infinity`，保证容器随时可被 exec。
+- **资源限制**：HostConfig 支持 CPU / 内存 / 进程数 / DNS 限制、`ReadonlyRootfs`、网络 `none`（可完全断网）。
+- **回收**：10 分钟 idle 超时自动 `release()`（stop + remove）。
+
+***
+
 ## 完整端到端链路追踪
 
 场景：用户输入 "读取 src/index.ts 的内容"（single-agent 对话，Claude 提供商）
@@ -260,18 +345,27 @@ async function runAgentExecution(conversationId, content, cm, log) {
   // 2. 创建 Adapter（LLM 调用器）
   const adapter = createAdapter("claude", { cwd, timeout: 300_000 });
 
-  // 3. 创建沙箱 + 工具注册表
-  const harnessSandbox = new LocalSandbox(cwd);
-  const toolRegistry = new ToolRegistry(harnessSandbox);
-  //  ↑ 构造函数里自动注册 4 个内置工具
+  // 3. 创建沙箱降级链：Docker 优先，失败降级本地
+  const aioProvider = new AioSandboxProvider({
+    image: "docker/sandbox-templates:shell",
+    workingDir: cwd,
+  });
+  const localProvider = new LocalSandboxProvider(cwd);
+  const fallbackProvider = new FallbackSandboxProvider(aioProvider, localProvider, "warn");
 
-  // 4. 创建 Harness（执行引擎）
+  // 4. 创建 Harness（执行引擎）+ SandboxMiddleware
   const harness = new AgentHarness(adapter, { maxTurns: 10 });
+  const sandboxMiddleware = new SandboxMiddleware({ provider: fallbackProvider, lazyInit: false });
+  harness.use(sandboxMiddleware);
+
+  // 5. 获取沙箱（Docker 容器 or 本地），注册内置工具
+  const sb = await sandboxMiddleware.getOrCreateSandbox(conversationId);
+  const toolRegistry = new ToolRegistry(sb);
   harness.setToolRegistry(toolRegistry);
-  harness.setSandbox(harnessSandbox);
+  harness.setSandbox(sb);
   harness.use(new BlackboardMiddleware());
 
-  // 5. 定义工具的 JSON Schema（告诉 LLM 这些工具长什么样）
+  // 6. 定义工具的 JSON Schema（告诉 LLM 这些工具长什么样）
   const toolDefinitions = [
     { name: "read_file", description: "读取文件", inputSchema: { path: "string" } },
     { name: "execute_command", description: "执行命令", inputSchema: { command: "string" } },
@@ -279,7 +373,7 @@ async function runAgentExecution(conversationId, content, cm, log) {
     { name: "list_dir", description: "列目录", inputSchema: { path: "string" } },
   ];
 
-  // 6. 构建上下文
+  // 7. 构建上下文
   const context = {
     conversationId: "conv-1",
     message: "读取 src/index.ts 的内容",
@@ -288,7 +382,7 @@ async function runAgentExecution(conversationId, content, cm, log) {
     tools: toolDefinitions,    // ← LLM 会看到这些工具
   };
 
-  // 7. 启动执行引擎
+  // 8. 启动执行引擎
   for await (const chunk of harness.execute(context)) {
     // 这里开始接收流式输出的 Chunk
     // 逐个推送到 WebSocket
@@ -392,29 +486,28 @@ async function runAgentExecution(conversationId, content, cm, log) {
 │  // 查找注册表 → 找到 handler                              │
 │  handler = {                                              │
 │    name: "read_file",                                     │
-│    handler: async (args) => {                             │
-│      return sandbox.readFile(args.path)                   │
-│    }                                                      │
+│    handler: async (args) => sandbox.readFile(args.path)   │
 │  }                                                        │
 │                                                           │
 │  // 执行 handler                                          │
-│  → LocalSandbox.readFile("src/index.ts")                  │
+│  → AioSandbox.readFile("src/index.ts")（Docker 容器）      │
 └──────────────────────────┬───────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│ LocalSandbox.readFile("src/index.ts")                     │
+│ AioSandbox.readFile("src/index.ts")                       │
 │                                                           │
-│  // 路径安全检查                                           │
-│  resolvePath("src/index.ts")                              │
-│  ├─ normalize("src/index.ts")                             │
-│  ├─ resolve(workspaceDir, ...) → /workspace/project/src/  │
-│  ├─ relative(workspaceDir, resolved) → "src/index.ts"     │
-│  └─ 不以 ".." 开头 → ✅ 安全                               │
+│  // 没有宿主机路径解析 —— 直接在容器内执行                  │
+│  exec("cat", ["src/index.ts"])                            │
+│  ├─ container.exec({ Cmd: ["cat", "src/index.ts"] })      │
+│  ├─ 容器文件系统天然隔离，无需路径白名单                   │
+│  └─ exitCode 0 → 返回 stdout                              │
 │                                                           │
-│  // 读取文件                                              │
-│  return readFileSync("/workspace/project/src/index.ts")   │
 │  → "export function hello() { ... }"                      │
+│                                                           │
+│  ⚠ 若 Docker 不可用，FallbackSandboxProvider 已降级：      │
+│  这里会走 LocalSandbox 的宿主机路径安全检查                │
+│  （normalize → resolve → relative，见上文）                │
 └──────────────────────────┬───────────────────────────────┘
                            │
                            ▼
@@ -423,7 +516,7 @@ async function runAgentExecution(conversationId, content, cm, log) {
 │                                                           │
 │  结果: "export function hello() { ... }"                   │
 │                                                           │
-│  → LocalSandbox 返回                                       │
+│  → AioSandbox 返回                                         │
 │  → ToolRegistry 返回                                       │
 │  → AgentHarness 收到 result                                │
 │                                                           │
@@ -516,13 +609,14 @@ handleCreate (messages.ts)
   └─ runAgentExecution()  ← 后台异步
        │
        ├─ 创建 Adapter → claude -p --stream-json
-       ├─ 创建 LocalSandbox + ToolRegistry
+       ├─ 创建沙箱链：AioSandboxProvider(Docker) → FallbackSandboxProvider → LocalSandboxProvider
+       ├─ SandboxMiddleware 获取/复用沙箱（conversationId → 确定性容器名）
        ├─ 创建 AgentHarness
        └─ harness.execute(context)  ← 主循环
              │
              ├─ Turn 1: LLM 决定调 read_file
              │   ├─ ToolRegistry 查找到 handler
-             │   ├─ LocalSandbox.readFile()  ← 路径安全检查
+             │   ├─ AioSandbox.readFile()  ← docker exec cat（容器内隔离）
              │   └─ 结果注入下一轮上下文
              │
              ├─ Turn 2: LLM 看到文件内容
@@ -537,7 +631,7 @@ handleCreate (messages.ts)
 ```
 用户输入 → handleCreate → runAgentExecution → AgentHarness.execute()
   → ClaudeAdapter.execute() → claude CLI → LLM API
-  → ToolCall(Read) → AgentHarness 拦截 → ToolRegistry → LocalSandbox
+  → ToolCall(Read) → AgentHarness 拦截 → ToolRegistry → AioSandbox(Docker exec)
   → 结果注入下一轮 → LLM 生成最终回答
   → Text chunks → WebSocket → 前端显示
 ```
@@ -546,9 +640,10 @@ handleCreate (messages.ts)
 
 ## 关键设计要点
 
-1. **沙箱不是中间件**：它不拦截所有工具调用，只是 4 个内置工具内部使用的工具对象。自定义工具可以直接注册在 harness 上，完全绕过沙箱。
+1. **沙箱本身不是过滤器**：它不拦截所有工具调用，只是 4 个内置工具内部使用的工具对象。自定义工具可以直接注册在 harness 上，完全绕过沙箱。`SandboxMiddleware` 只负责沙箱生命周期，不做工具调用过滤。
 2. **AgentHarness 持有沙箱引用**：所有 turn 共享同一个 sandbox 实例，确保状态一致。
 3. **ToolRegistry 注册内置工具**：把 sandbox 的方法包装成 LLM 可调用的 Tool 对象，通过 toolDefinitions（JSON Schema）告诉 LLM 工具有哪些。
-4. **路径安全三行核心代码**：`normalize → resolve → relative` 判断是否越界。
-5. **别名映射**：LLM 返回的工具名（如 "Read"）通过别名表映射为规范名（"read\_file"），兼容不同 LLM 的命名差异。
-
+4. **降级链**：生产链路 `AioSandboxProvider(Docker) → FallbackSandboxProvider(warn) → LocalSandboxProvider`。Docker 失败自动降级，日志会打印 `[Sandbox] ⚠️ Docker unavailable...`。
+5. **Docker 路径靠容器隔离，本地路径靠路径白名单**：AioSandbox 的文件操作是 `docker exec` 在容器内执行，天然隔离；降级到 LocalSandbox 时才需要 `normalize → resolve → relative` 三行路径检查。
+6. **确定性复用**：`AioSandbox.containerName(threadId)` 用 conversationId 哈希出固定容器名，跨消息复用同一个容器。
+7. **别名映射**：LLM 返回的工具名（如 "Read"）通过别名表映射为规范名（"read\_file"），兼容不同 LLM 的命名差异。
