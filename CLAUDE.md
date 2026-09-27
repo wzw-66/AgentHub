@@ -26,12 +26,13 @@ AgentHub is a multi-Agent collaboration platform using IM chat as the core inter
 - `pnpm dev` — dev mode (watch)
 - `pnpm lint` — lint all packages (tsc --noEmit)
 - `pnpm test` — run all tests
-- `pnpm db:up` — `docker compose up -d`
-- `pnpm db:down` — `docker compose down`
 - `pnpm db:generate` — generate Prisma client
-- `pnpm db:push` — push schema to dev DB
+- `pnpm db:push` — push schema to dev DB (SQLite, no container needed)
+- `pnpm db:push:test` — push schema to test DB
 - `pnpm db:seed` — seed demo data
 - `pnpm db:studio` — open Prisma Studio
+
+**No database container is required** — the database is SQLite, stored in `.agenthub/`.
 
 ### Per-Package
 
@@ -74,12 +75,27 @@ pnpm --filter @agenthub/db db:seed        # seed demo data
 pnpm --filter @agenthub/db db:studio      # open Prisma Studio
 ```
 
-### Docker
+### Database files (SQLite)
+
+业务库与长期记忆库是两个独立文件，同放在 `.agenthub/`（整个目录已被 gitignore）：
 
 ```bash
-docker compose up -d         # start PostgreSQL
-docker compose down          # stop PostgreSQL
-docker compose exec postgres psql -U agenthub -d agenthub  # psql shell
+.agenthub/agenthub.db   # 业务库，由 Prisma 管理
+.agenthub/memory.db     # 长期记忆库，由 @agenthub/memory 用 better-sqlite3 + FTS5 管理
+```
+
+**必须保持两个文件。** `prisma db push` 不认识 FTS5 的影子表（`memory_fts_*`），
+会把它当 schema drift 删掉 —— 合并成一个文件会丢记忆索引。
+
+查看数据：`sqlite3 .agenthub/agenthub.db`，或用 `pnpm db:studio`。
+
+**已知限制：SQLite 是单写者。** 同一时刻只允许一个写事务，因此 server 不能多实例横向扩展。
+如需多实例，必须换回 client-server 型数据库。
+
+### Docker（仅沙箱镜像预热）
+
+```bash
+pnpm sandbox:pull            # 预拉取沙箱镜像
 ```
 
 ### Adding a New Package
@@ -100,7 +116,7 @@ docker compose exec postgres psql -U agenthub -d agenthub  # psql shell
 - **Building:** tsup (ESM + CJS dual output, dts generation)
 - **Testing:** Vitest (v3)
 - **Linting:** ESLint (v10) + @typescript-eslint + Prettier
-- **Database:** PostgreSQL 16 via Docker Compose, Prisma ORM (v6)
+- **Database:** SQLite via Prisma ORM (v6.19.3+), file at `.agenthub/agenthub.db`
 - **Server:** Fastify (v5) + JWT (jsonwebtoken) + bcryptjs
 - **Package manager:** pnpm
 
@@ -123,7 +139,7 @@ AgentHub/
 │   └── tsconfig/            # Shared TypeScript configs
 ├── docs/                    # Design docs (superpowers specs, architecture deep dives)
 ├── openspec/                # OpenSpec change management
-├── docker-compose.yaml      # PostgreSQL 16
+├── docker-compose.yaml      # Agent 沙箱镜像预热（数据库已迁至 SQLite）
 ├── turbo.json               # Task orchestration
 └── pnpm-workspace.yaml      # Workspace definition
 ```
@@ -298,8 +314,9 @@ Zero-dependency package with enums and TypeScript interfaces shared across all p
 
 ### Testing
 
-- **DB tests** use real PostgreSQL via `TEST_DATABASE_URL` (separate `agenthub_test` database). Global setup (`src/__tests__/setup.ts`) pushes schema via `npx prisma db push` before all tests. Each test manages its own data lifecycle.
-- **Server tests** require the test DB to be pushed beforehand (`pnpm --filter @agenthub/db db:push:test`). Setup is intentionally minimal.
+- **DB tests** use a real SQLite file via `TEST_DATABASE_URL` (default `file:./test.db`, resolved to `packages/db/prisma/test.db`). Global setup (`src/__tests__/setup.ts`) pushes schema via `prisma db push` before all tests. Each test manages its own data lifecycle.
+- **Server tests** require the test DB to be pushed beforehand (`pnpm db:push:test`). Setup is intentionally minimal.
+- **Both `packages/db` and `apps/server` set `fileParallelism: false`** — SQLite is single-writer, and every test file's `beforeAll` runs `prisma db push` against the same file. Parallel files cause `SQLITE_BUSY`.
 - **Agent-core tests** are unit tests — no external dependencies.
 - Test files co-located in `src/__tests__/` within each package.
 

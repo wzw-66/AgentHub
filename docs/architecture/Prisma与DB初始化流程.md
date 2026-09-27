@@ -4,7 +4,7 @@
 
 ## 1. 架构概览
 
-数据库层采用 **Prisma ORM** + **PostgreSQL**。整个流程可以分为四个阶段：**定义 (Define)**、**同步 (Sync)**、**实例化 (Instantiate)** 和 **导出 (Export)**。
+数据库层采用 **Prisma ORM** + **SQLite**（文件位于 `.agenthub/agenthub.db`）。整个流程可以分为四个阶段：**定义 (Define)**、**同步 (Sync)**、**实例化 (Instantiate)** 和 **导出 (Export)**。
 
 ---
 
@@ -23,8 +23,40 @@
 
 ### 第三步：数据库同步 (Sync/Migrate)
 运行 `pnpm db:push` 或 `prisma migrate dev`：
-- 将 Schema 的变更同步到物理数据库（PostgreSQL）。
+- 将 Schema 的变更同步到物理数据库（SQLite 文件 `.agenthub/agenthub.db`）。
 - 确保数据库表结构与代码定义保持一致。
+
+### 第三步补充：SQLite 的两个坑
+
+迁移到 SQLite 后，有两个不直观的行为需要留意：
+
+**1. `file:` 相对路径的基准是 schema 目录，不是 cwd。**
+
+`DATABASE_URL="file:../../../.agenthub/agenthub.db"` 中的相对路径，是相对
+`packages/db/prisma/schema.prisma` 所在目录解析的。所以 `file:./test.db` 会落在
+`packages/db/prisma/test.db`，而不是执行命令时所在的目录。
+
+**2. Prisma CLI 不会向上查找仓库根的 `.env`。**
+
+它只读 `(cwd)/.env` 和 `(schema 目录)/.env`。本仓库以根 `.env` 为唯一配置来源，
+因此 `packages/db` 的 db 脚本统一经由 `scripts/with-env.mjs` 加载根 `.env` 后再转发命令：
+
+```bash
+node scripts/with-env.mjs prisma db push
+node scripts/with-env.mjs --test prisma db push   # DATABASE_URL ← TEST_DATABASE_URL
+node scripts/with-env.mjs tsx src/seed.ts
+```
+
+**3. 业务库与记忆库必须分开两个文件。**
+
+`prisma db push` 不认识长期记忆模块的 FTS5 影子表（`memory_fts_data` /
+`memory_fts_config` / `_idx` / `_content` / `_docsize`），会把它判定为 schema drift
+并删除。合并成一个 `.db` 文件会让记忆索引随时可能被清掉，因此：
+
+```
+.agenthub/agenthub.db   # 业务库，Prisma 管理
+.agenthub/memory.db     # 记忆库，@agenthub/memory 用 better-sqlite3 管理
+```
 
 ### 第四步：单例实例化 (Instantiate)
 在 [client.ts](file:///d:/code/github/AgentHub/packages/db/src/client.ts) 中完成：
@@ -56,7 +88,7 @@
 ```mermaid
 graph TD
     A[schema.prisma] -->|prisma generate| B[Generated Prisma Client]
-    A -->|prisma db push| C[(PostgreSQL DB)]
+    A -->|prisma db push| C[(SQLite: .agenthub/agenthub.db)]
     B --> D[client.ts 单例模式]
     D --> E[Repositories 业务封装]
     E --> F[index.ts 统一入口]

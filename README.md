@@ -19,7 +19,9 @@
 
 - [Node.js](https://nodejs.org/) >= 18
 - [pnpm](https://pnpm.io/) 9.15.4
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+> 数据库是 SQLite（文件在 `.agenthub/`），**不需要 Docker**。
+> 仅当要预热 Agent 沙箱镜像时才需要 Docker Desktop（可选，`pnpm sandbox:pull`）。
 
 ### Setup
 
@@ -30,19 +32,16 @@ pnpm install
 # 2. Generate Prisma Client (首次启动或 schema 变更后需要)
 pnpm db:generate
 
-# 3. Start PostgreSQL
-docker compose up -d
+# 3. Push database schema (SQLite, 自动创建 .agenthub/agenthub.db)
+pnpm db:push
 
-# 4. Push database schema
-pnpm --filter @agenthub/db db:push
+# 4. (Optional) Seed demo data
+pnpm db:seed
 
-# 5. (Optional) Seed demo data
-pnpm --filter @agenthub/db db:seed
-
-# 6. Build all packages
+# 5. Build all packages
 pnpm build
 
-# 7. Run tests
+# 6. Run tests
 pnpm test
 ```
 
@@ -80,7 +79,7 @@ AgentHub/
 │   └── tsconfig/            # TypeScript 共享配置
 ├── docs/                    # 设计文档与技术详解
 ├── openspec/                # OpenSpec 变更管理
-├── docker-compose.yaml      # PostgreSQL 16 容器
+├── docker-compose.yaml      # Agent 沙箱镜像预热（数据库已迁至 SQLite）
 ├── turbo.json               # Turborepo 任务编排
 └── pnpm-workspace.yaml      # pnpm 工作空间
 ```
@@ -108,10 +107,10 @@ AgentHub/
 | UI Components | Radix UI + Prism React Renderer |
 | Backend | Fastify 5 + JWT + bcryptjs |
 | Real-time | SSE (Stream) + WebSocket (Presence/Status) |
-| Database | PostgreSQL 16 + Prisma ORM 6 |
+| Database | SQLite + Prisma ORM 6（文件位于 `.agenthub/agenthub.db`） |
 | Building | tsup / Next.js Build |
 | Testing | Vitest + Testing Library |
-| Container | Docker Compose |
+| Container | Docker Compose（仅沙箱镜像预热，可选） |
 
 ## Core Features
 
