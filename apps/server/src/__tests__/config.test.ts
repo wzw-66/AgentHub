@@ -80,14 +80,33 @@ describe("LLM config has no silent fallbacks", () => {
   });
 });
 
+describe("apiKey stays optional so the degraded mode is reachable", () => {
+  it("does not throw when API_KEY is absent", async () => {
+    process.env["LLM_BASE_URL"] = "https://example.test";
+    process.env["LLM_MODEL"] = "deepseek-v4-flash";
+
+    const { config } = await loadConfig();
+    expect(config.llm.apiKey).toBeUndefined();
+    // 配置里其它字段仍然可读 —— 缺 key 不该拖垮整个 config.llm
+    expect(config.llm.model).toBe("deepseek-v4-flash");
+    expect(config.llm.baseUrl).toBe("https://example.test");
+  });
+
+  it("does not throw when API_KEY is present but empty", async () => {
+    process.env["API_KEY"] = "";
+    process.env["LLM_BASE_URL"] = "https://example.test";
+    process.env["LLM_MODEL"] = "deepseek-v4-flash";
+
+    const { config } = await loadConfig();
+    expect(config.llm.apiKey).toBeFalsy();
+  });
+});
+
 describe("assertLlmConfig", () => {
   it("names the missing variable so the user can act on it", async () => {
     const { assertLlmConfig } = await loadConfig();
 
     // 逐个补齐，验证失败信息指向的是当下真正缺失的那个变量。
-    expect(() => assertLlmConfig()).toThrow(/API_KEY/);
-
-    process.env["API_KEY"] = "k";
     expect(() => assertLlmConfig()).toThrow(/LLM_BASE_URL/);
 
     process.env["LLM_BASE_URL"] = "https://example.test";
@@ -95,11 +114,22 @@ describe("assertLlmConfig", () => {
   });
 
   it("passes once the required variables are present", async () => {
-    process.env["API_KEY"] = "k";
     process.env["LLM_BASE_URL"] = "https://example.test";
     process.env["LLM_MODEL"] = "deepseek-v4-flash";
 
     const { assertLlmConfig } = await loadConfig();
     expect(() => assertLlmConfig()).not.toThrow();
+  });
+
+  it("does not require API_KEY — that would make the degraded mode unreachable", async () => {
+    // API_KEY 刻意保持可选：缺失时 LLMIntentAnalyzer 走显式降级
+    // （派发全部 agent）并打 warning，而不是让进程起不来。
+    process.env["LLM_BASE_URL"] = "https://example.test";
+    process.env["LLM_MODEL"] = "deepseek-v4-flash";
+    // API_KEY 在 beforeEach 里已被删除
+
+    const { assertLlmConfig, config } = await loadConfig();
+    expect(() => assertLlmConfig()).not.toThrow();
+    expect(config.llm.apiKey).toBeUndefined();
   });
 });

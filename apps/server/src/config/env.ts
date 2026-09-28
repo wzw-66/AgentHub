@@ -42,9 +42,16 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/** 启动时调用，把配置缺失提前到进程启动阶段而非首次请求。 */
+/**
+ * 启动时调用，把配置缺失提前到进程启动阶段而非首次请求。
+ *
+ * 只断言 LLM_BASE_URL / LLM_MODEL：变量名不匹配正是 spec §4.9 的缺陷，
+ * 缺失必须是显式失败。API_KEY 刻意不在此列 —— 它的名字从没错过，
+ * 而且 LLMIntentAnalyzer 依赖「没有 key」走一条**显式降级**路径
+ * （见 intent-analyzer.ts 的 fallbackResult：无法调用 LLM 时把全部 agent
+ * 并行派发）。把它变成启动期错误会让那条降级路径在生产中不可达。
+ */
 export function assertLlmConfig(): void {
-  requireEnv("API_KEY");
   requireEnv("LLM_BASE_URL");
   requireEnv("LLM_MODEL");
 }
@@ -70,8 +77,12 @@ export const config = {
   },
 
   llm: {
-    get apiKey(): string {
-      return requireEnv("API_KEY");
+    /**
+     * 可选：缺失时 LLMIntentAnalyzer 会走显式降级路径（派发全部 agent），
+     * 并在降级时打 warning。刻意不用 requireEnv —— 见 assertLlmConfig 的说明。
+     */
+    get apiKey(): string | undefined {
+      return env["API_KEY"];
     },
     get baseUrl(): string {
       return requireEnv("LLM_BASE_URL");

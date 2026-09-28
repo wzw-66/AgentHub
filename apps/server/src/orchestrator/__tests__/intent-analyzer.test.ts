@@ -1,14 +1,36 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import { LLMIntentAnalyzer, decomposeMessage } from "../intent-analyzer.js";
 import type { Agent } from "@agenthub/shared";
 import { AgentProvider } from "@agenthub/shared";
 
-// config.llm 现在把这三个变量视为必填（spec §4.9），构造 LLMIntentAnalyzer
-// 会在缺配置时抛错。用例本身仍然通过 defineProperty 控制 apiKey 的取值，
-// 这里只是保证构造成功。
-process.env["API_KEY"] = "test-key";
-process.env["LLM_BASE_URL"] = "https://api.test";
-process.env["LLM_MODEL"] = "test-model";
+// LLM_BASE_URL / LLM_MODEL 现在是必填（spec §4.9），构造 LLMIntentAnalyzer
+// 缺了它们会抛错。API_KEY 则刻意保持**未设置** —— 本文件里的降级用例要走的
+// 正是「没有 key」这条真实生产路径，其余用例再用 defineProperty 注入 key。
+// 保存并还原，避免污染同进程内的其它测试文件（对齐 config.test.ts 的做法）。
+const LLM_ENV_KEYS = ["API_KEY", "LLM_BASE_URL", "LLM_MODEL"] as const;
+const savedLlmEnv: Record<string, string | undefined> = {};
+const LLM_ENV_FIXTURE: Record<string, string | undefined> = {
+  API_KEY: undefined,
+  LLM_BASE_URL: "https://api.test",
+  LLM_MODEL: "test-model",
+};
+
+beforeAll(() => {
+  for (const key of LLM_ENV_KEYS) {
+    savedLlmEnv[key] = process.env[key];
+    const value = LLM_ENV_FIXTURE[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
+afterAll(() => {
+  for (const key of LLM_ENV_KEYS) {
+    const value = savedLlmEnv[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
 
 const mockAgents: Agent[] = [
   {
@@ -54,11 +76,11 @@ describe("LLMIntentAnalyzer", () => {
     });
 
     it("falls back to all agents when no API key configured", async () => {
-      // 不通过 env 模拟「没配 key」——现在那是启动期错误。
-      // 降级路径由实例上的 apiKey 为空来触发。
+      // 真实生产路径：API_KEY 未设置（见文件顶部 fixture），
+      // 构造函数直接读到 undefined，无需 defineProperty 伪造。
+      expect(process.env["API_KEY"]).toBeUndefined();
+
       const analyzer = new LLMIntentAnalyzer({ timeout: 1000 });
-      // Mock the apiKey to be undefined
-      Object.defineProperty(analyzer, "apiKey", { value: undefined });
 
       const result = await analyzer.analyze("帮我开发一个程序", mockAgents);
 

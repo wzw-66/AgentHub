@@ -50,7 +50,12 @@ export class LLMIntentAnalyzer {
     agents: Agent[],
   ): Promise<LLMIntentResult | null> {
     if (!this.apiKey) {
-      // No API key configured — fallback to assigning all agents
+      // 显式降级，不是静默兜底：没有 key 就无法调用 LLM 做意图分析。
+      // 静默降级正是 §4.9 那一类缺陷，所以这里必须让人看得见。
+      console.warn(
+        "[IntentAnalyzer] API_KEY is not set — intent analysis is degraded: " +
+          "all agents will be assigned in parallel without LLM planning.",
+      );
       return this.fallbackResult(content, agents);
     }
 
