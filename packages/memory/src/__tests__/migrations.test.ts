@@ -106,16 +106,34 @@ describe("migrate", () => {
     db.close();
   });
 
-  it("rebuilds memory_fts on content_seg and tags_seg", () => {
+  it("leaves memory_fts and its triggers untouched — retargeting them is v3", () => {
     const dbPath = freshDbPath();
     const db = makeLegacyV0Db(dbPath);
     migrate(db);
 
     const cols = db.prepare("PRAGMA table_info(memory_fts)").all() as Array<{ name: string }>;
-    const names = cols.map((c) => c.name);
-    expect(names).toContain("content_seg");
-    expect(names).toContain("tags_seg");
-    expect(names).not.toContain("content");
+    expect(cols.map((c) => c.name)).toEqual(["content", "tags"]);
+
+    const triggers = db
+      .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'mem_fts_%'")
+      .all() as Array<{ name: string; sql: string }>;
+    expect(triggers.map((t) => t.name).sort()).toEqual(["mem_fts_ad", "mem_fts_ai", "mem_fts_au"]);
+    for (const trigger of triggers) {
+      expect(trigger.sql).not.toContain("content_seg");
+      expect(trigger.sql).not.toContain("tags_seg");
+    }
+
+    // 关键：迁移没有清空索引 —— 老库原有的记忆仍然检索得到
+    const legacyHits = db.prepare("SELECT rowid FROM memory_fts WHERE content MATCH 'Legacy'").all();
+    expect(legacyHits.length).toBe(1);
+
+    // 新写入的行也照旧进索引（触发器未受影响）
+    db.prepare(`
+      INSERT INTO memory_records (id, user_id, agent_id, type, content)
+      VALUES ('post-migrate-1', 'u1', 'a1', 'fact', 'Post migration content')
+    `).run();
+    const freshHits = db.prepare("SELECT rowid FROM memory_fts WHERE content MATCH 'Post'").all();
+    expect(freshHits.length).toBe(1);
 
     db.close();
   });
@@ -172,9 +190,11 @@ describe("migrate", () => {
     const db = makeLegacyV0Db(dbPath);
     // legacy schema 就是 v1 的 schema，直接声明成 v1，让 migrate 从 v2 开始跑
     db.pragma("user_version = 1");
-    // 预置一个让 v2 失败的冲突对象：SQLite 对 view 只接受 DROP VIEW，
-    // `DROP TABLE memory_fts` 必然报错，于是 v2 在事务中途失败。
-    db.exec("DROP TABLE memory_fts; CREATE VIEW memory_fts AS SELECT 1 AS x;");
+    // 预置一个让 v2 末尾失败的冲突对象：索引名与 memory_embeddings 表名冲突时，
+    // 连 `CREATE TABLE IF NOT EXISTS` 也绕不过（SQLite: "there is already an index
+    // named memory_embeddings"）。失败点刻意放在两条 ALTER TABLE **之后** ——
+    // 这样「回滚」必须撤销已经加上的列，而不只是「什么都没做」。
+    db.exec("CREATE INDEX memory_embeddings ON memory_records(id);");
 
     expect(currentVersion(db)).toBe(1);
     expect(() => migrate(db)).toThrow(/version 2/);
