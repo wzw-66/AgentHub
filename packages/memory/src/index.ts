@@ -10,4 +10,10 @@ export { createJiebaSegmenter } from "./segmenter.js";
 export type { Segmenter } from "./segmenter.js";
 export { buildFtsQuery } from "./fts-query.js";
 export { reindexMemories, isBm25Ready, REINDEX_TIMEOUT_MS } from "./worker.js";
-export type { MemoryScope } from "./types.js";
+export {
+  normalize,
+  assertFiniteVector,
+  buildFingerprint,
+} from "./embedding.js";
+export type { EmbeddingProvider, EmbeddingFingerprint } from "./embedding.js";
+export type { MemoryScope, EmbeddingMode } from "./types.js";

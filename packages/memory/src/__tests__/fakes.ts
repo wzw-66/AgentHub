@@ -1,4 +1,11 @@
 import type { Segmenter } from "../segmenter.js";
+import type { EmbeddingMode } from "../types.js";
+import {
+  buildFingerprint,
+  normalize,
+  assertFiniteVector,
+  type EmbeddingProvider,
+} from "../embedding.js";
 
 /** 一段既非空白、也非 CJK 的连续字符（CJK Ext-A / 基本区 / 兼容区）。 */
 const NON_CJK_RUN = /^[^\s㐀-䶿一-鿿豈-﫿]+/;
@@ -52,5 +59,106 @@ export class FakeSegmenter implements Segmenter {
     }
 
     return terms.filter((t) => t.trim().length > 0);
+  }
+}
+
+/** 非对称实现下查询侧的前缀（E5 风格），文档侧不加。 */
+export const FAKE_QUERY_PREFIX = "query: ";
+
+/**
+ * 确定性 embedding provider。
+ *
+ * 不依赖网络、不依赖真实模型 —— 用字符的 char code 累加进一个伪随机状态，
+ * 同样的文本永远得到同样的向量（spec §13 的测试前提）。
+ *
+ * `mode: "asymmetric"` 时查询侧加 `FAKE_QUERY_PREFIX`、文档侧不加，两个方法
+ * 因此走**不同的代码路径** —— 这是 spec §13 验收「接口确实不对称」的手段；
+ * 若实现退化成单一的 `embed(text)`，同一段文本两侧的向量就会相同，测试会红。
+ */
+export class FakeEmbeddingProvider implements EmbeddingProvider {
+  readonly id = "fake";
+  readonly model: string;
+  readonly dim: number;
+  readonly mode: EmbeddingMode;
+  readonly fingerprint: string;
+
+  embeddedCount = 0;
+
+  private readonly actualDim: number;
+  private readonly injectNaN: boolean;
+  private readonly failuresRemaining: number;
+  private calls = 0;
+
+  constructor(options: {
+    dim: number;
+    model?: string;
+    mode?: EmbeddingMode;
+    /** 故意返回错误长度，用于测试 dim 校验 */
+    actualDim?: number;
+    /** 故意返回 NaN，用于测试有限性校验 */
+    injectNaN?: boolean;
+    /** 前 N 次调用抛错，用于测试重试 */
+    failuresRemaining?: number;
+  }) {
+    this.dim = options.dim;
+    this.actualDim = options.actualDim ?? options.dim;
+    this.injectNaN = options.injectNaN ?? false;
+    this.failuresRemaining = options.failuresRemaining ?? 0;
+    this.mode = options.mode ?? "symmetric";
+    this.model = options.model ?? "fake-embedding";
+    this.fingerprint = buildFingerprint(this.model, this.dim, this.mode);
+  }
+
+  private makeVector(text: string): Float32Array {
+    const raw = new Float32Array(this.actualDim);
+    let state = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      state = (state ^ text.charCodeAt(i)) * 16777619;
+    }
+    for (let i = 0; i < this.actualDim; i++) {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      raw[i] = (state / 0xffffffff) * 2 - 1;
+    }
+    if (this.injectNaN && this.actualDim > 0) raw[0] = NaN;
+    return raw;
+  }
+
+  /** 查询侧的文本变换：只有非对称实现才与前缀有关。 */
+  private queryText(text: string): string {
+    return this.mode === "asymmetric" ? FAKE_QUERY_PREFIX + text : text;
+  }
+
+  private guard(vec: Float32Array, context: string): Float32Array {
+    if (vec.length !== this.dim) {
+      throw new Error(
+        `Embedding dim mismatch: provider returned ${vec.length} but is configured for ${this.dim}`,
+      );
+    }
+    assertFiniteVector(vec, context);
+    return normalize(vec);
+  }
+
+  private maybeFail(): void {
+    this.calls++;
+    if (this.calls <= this.failuresRemaining) {
+      throw new Error("FakeEmbeddingProvider: simulated failure");
+    }
+  }
+
+  async embedDocuments(texts: string[]): Promise<Float32Array[]> {
+    this.maybeFail();
+    const out = texts.map((t, i) => this.guard(this.makeVector(t), `doc[${i}]`));
+    this.embeddedCount += texts.length;
+    return out;
+  }
+
+  async embedQuery(text: string): Promise<Float32Array> {
+    this.maybeFail();
+    this.embeddedCount += 1;
+    return this.guard(this.makeVector(this.queryText(text)), "query");
+  }
+
+  async healthCheck(): Promise<{ ok: boolean }> {
+    return { ok: true };
   }
 }

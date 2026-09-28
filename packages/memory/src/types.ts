@@ -33,6 +33,15 @@ export type MemoryScope =
   | { conversationId: string }
   | { allConversations: true };
 
+/**
+ * 声明实现是否区分查询与文档的嵌入方式。
+ *
+ * `bge-m3` 是对称的；`bge-large-zh`、E5 系、`jina-v3`、Cohere v4 不是。
+ * 即使实现是对称的，检索层也永远调 `embedQuery`、worker 永远调 `embedDocuments` ——
+ * 这样换成非对称模型时调用方一行都不用改（spec §8.1）。
+ */
+export type EmbeddingMode = "symmetric" | "asymmetric";
+
 export interface MemoryConfig {
   dbPath?: string;
   llm?: {
