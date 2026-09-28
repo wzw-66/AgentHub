@@ -15,6 +15,7 @@ afterAll(() => {
 
 const MOCK_INPUT = {
   userId: "user-1",
+  conversationId: "conv-1",
   agentId: "agent-1",
   type: "fact" as const,
   content: "The project uses TypeScript 6 with strict mode",
@@ -36,7 +37,7 @@ describe("createMemory", () => {
     expect(result.updatedAt).toBeTruthy();
   });
 
-  it("creates with optional sourceMessageId and conversationId", () => {
+  it("creates with sourceMessageId and conversationId", () => {
     const result = createMemory({
       ...MOCK_INPUT,
       content: "memory with source",
@@ -50,11 +51,40 @@ describe("createMemory", () => {
   it("defaults importance to 1 when not provided", () => {
     const result = createMemory({
       userId: "user-1",
+      conversationId: "conv-1",
       agentId: "agent-1",
       type: "context",
       content: "default importance",
     }, db);
     expect(result.importance).toBe(1);
+  });
+});
+
+describe("conversation scoping in createMemory", () => {
+  it("persists conversation_id as a non-null value equal to the input", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-abc",
+      agentId: "agent-1",
+      type: "fact",
+      content: "conversation id round-trip",
+    }, db);
+
+    expect(created.conversationId).toBe("conv-abc");
+
+    // 直接查库，确认落库的是真实值而非依赖 rowToMemoryRecord 的转换
+    const raw = db
+      .prepare("SELECT conversation_id FROM memory_records WHERE id = ?")
+      .get(created.id) as { conversation_id: string | null };
+    expect(raw.conversation_id).toBe("conv-abc");
+    expect(raw.conversation_id).not.toBeNull();
+  });
+
+  it("rejects a missing conversationId at compile time", () => {
+    // @ts-expect-error conversationId 必填：漏传必须是编译错误，不能静默写入孤儿记忆
+    const buildOrphan = () => createMemory({ userId: "u", agentId: "a", type: "fact", content: "orphan" }, db);
+    // 只验证类型层面被拦截，不实际执行 —— 类型测试由 `tsc --noEmit` 把关
+    expect(typeof buildOrphan).toBe("function");
   });
 });
 
@@ -86,6 +116,7 @@ describe("listMemories", () => {
   it("filters by agentId when provided", () => {
     createMemory({
       userId: "user-1",
+      conversationId: "conv-1",
       agentId: "filter-agent",
       type: "fact",
       content: "filter by agent",
@@ -98,6 +129,7 @@ describe("listMemories", () => {
   it("filters by type when provided", () => {
     createMemory({
       userId: "user-1",
+      conversationId: "conv-1",
       agentId: "agent-1",
       type: "preference",
       content: "type filter test",

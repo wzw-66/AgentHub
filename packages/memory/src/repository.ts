@@ -22,7 +22,7 @@ export function createMemory(input: CreateMemoryInput, customDb?: Database): Mem
     input.content,
     tagsJson,
     input.sourceMessageId ?? null,
-    input.conversationId ?? null,
+    input.conversationId,
     input.importance ?? 1,
     now,
     now,

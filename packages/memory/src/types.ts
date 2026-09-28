@@ -2,12 +2,13 @@ import type { MemoryType } from "@agenthub/shared";
 
 export interface CreateMemoryInput {
   userId: string;
+  /** 必填 —— 检索作用域的唯一依据（spec §1.1）。原调用方从不传，故该列恒为 NULL。 */
+  conversationId: string;
   agentId: string;
   type: MemoryType;
   content: string;
   tags?: string[];
   sourceMessageId?: string;
-  conversationId?: string;
   importance?: number;
 }
 
