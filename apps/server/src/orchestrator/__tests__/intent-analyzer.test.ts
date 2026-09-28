@@ -3,6 +3,13 @@ import { LLMIntentAnalyzer, decomposeMessage } from "../intent-analyzer.js";
 import type { Agent } from "@agenthub/shared";
 import { AgentProvider } from "@agenthub/shared";
 
+// config.llm 现在把这三个变量视为必填（spec §4.9），构造 LLMIntentAnalyzer
+// 会在缺配置时抛错。用例本身仍然通过 defineProperty 控制 apiKey 的取值，
+// 这里只是保证构造成功。
+process.env["API_KEY"] = "test-key";
+process.env["LLM_BASE_URL"] = "https://api.test";
+process.env["LLM_MODEL"] = "test-model";
+
 const mockAgents: Agent[] = [
   {
     id: "agent_1",
@@ -47,12 +54,8 @@ describe("LLMIntentAnalyzer", () => {
     });
 
     it("falls back to all agents when no API key configured", async () => {
-      // Temporarily clear the API key
-      const origEnv = process.env["API_KEY"];
-      process.env["API_KEY"] = "";
-
-      // Re-create analyzer (it reads config at construction time)
-      // Since config reads env at call time, we just test the fallback path
+      // 不通过 env 模拟「没配 key」——现在那是启动期错误。
+      // 降级路径由实例上的 apiKey 为空来触发。
       const analyzer = new LLMIntentAnalyzer({ timeout: 1000 });
       // Mock the apiKey to be undefined
       Object.defineProperty(analyzer, "apiKey", { value: undefined });
@@ -62,8 +65,6 @@ describe("LLMIntentAnalyzer", () => {
       expect(result).not.toBeNull();
       expect(result!.assignedAgents).toHaveLength(3);
       expect(result!.order).toBe("parallel");
-
-      process.env["API_KEY"] = origEnv;
     });
 
     it("returns correct result on successful LLM call", async () => {

@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config as appConfig } from "./config/env";
+import { config as appConfig, assertLlmConfig } from "./config/env";
 import { buildApp } from "./app";
 import { setDbPath } from "@agenthub/memory";
 import { ConnectionManager } from "./realtime/connection-manager";
@@ -14,6 +14,9 @@ dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 setDbPath(path.resolve(__dirname, "../../../.agenthub/memory.db"));
 
 async function main() {
+  // 配置缺失在启动时暴露，而不是在第一次请求时
+  assertLlmConfig();
+
   const cm = new ConnectionManager();
   const app = await buildApp(cm);
 
