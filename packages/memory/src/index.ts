@@ -6,4 +6,7 @@ export { createMemory, getMemory, listMemories, deleteMemory } from "./repositor
 export { searchMemories } from "./search.js";
 export { extractMemories } from "./extractor.js";
 export { buildScopeClause } from "./scope.js";
+export { createJiebaSegmenter } from "./segmenter.js";
+export type { Segmenter } from "./segmenter.js";
+export { buildFtsQuery } from "./fts-query.js";
 export type { MemoryScope } from "./types.js";
