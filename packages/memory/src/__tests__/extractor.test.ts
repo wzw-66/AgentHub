@@ -16,6 +16,16 @@ const MOCK_PARAMS = {
   agentResponse: "Got it! I'll use tabs when writing code for you.",
 };
 
+/**
+ * 显式 LLM 配置 —— extractor 不再有 process.env 兜底（spec §4.9），
+ * endpoint / model 必须由调用方（服务端 config.llm）显式传入。
+ */
+const LLM_CONFIG = {
+  apiKey: "test-key",
+  endpoint: "https://fake-api.test/v1/chat/completions",
+  model: "test-model",
+};
+
 beforeAll(() => {
   db = createTestDb();
 });
@@ -49,11 +59,7 @@ describe("extractMemories", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await extractMemories(MOCK_PARAMS, {
-      apiKey: "test-key",
-      endpoint: "https://fake-api.test/v1/chat/completions",
-      model: "test-model",
-    }, db);
+    await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
 
     // Verify the fetch was called
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -105,10 +111,7 @@ describe("extractMemories", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await extractMemories(MOCK_PARAMS, {
-      apiKey: "test-key",
-      endpoint: "https://fake-api.test/v1/chat/completions",
-    }, db);
+    await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
 
     // Verify the memory was deleted
     expect(getMemory(created.id, db)).toBeNull();
@@ -146,7 +149,7 @@ describe("extractMemories", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await extractMemories(MOCK_PARAMS, { apiKey: "test-key" }, db);
+    await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
 
     // Verify the old memory is gone
     expect(getMemory(created.id, db)).toBeNull();
@@ -181,7 +184,7 @@ describe("extractMemories", () => {
 
     // Should not throw — extraction is non-blocking
     await expect(
-      extractMemories(MOCK_PARAMS, { apiKey: "test-key" }, db),
+      extractMemories(MOCK_PARAMS, LLM_CONFIG, db),
     ).resolves.toBeUndefined();
 
     vi.unstubAllGlobals();
@@ -197,7 +200,7 @@ describe("extractMemories", () => {
     vi.stubGlobal("fetch", mockFetch);
 
     await expect(
-      extractMemories(MOCK_PARAMS, { apiKey: "test-key" }, db),
+      extractMemories(MOCK_PARAMS, LLM_CONFIG, db),
     ).resolves.toBeUndefined();
 
     vi.unstubAllGlobals();
@@ -222,7 +225,7 @@ describe("extractMemories", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await extractMemories(MOCK_PARAMS, { apiKey: "test-key" }, db);
+    await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
 
     const after = listMemories({ userId: "user-extract" }, db);
     expect(after.data.length).toBe(before.data.length);
@@ -257,7 +260,7 @@ describe("extractMemories conversation scoping", () => {
 
     await extractMemories(
       { ...MOCK_PARAMS, conversationId: "conv-scoped-42" },
-      { apiKey: "test-key" },
+      LLM_CONFIG,
       db,
     );
 
@@ -317,11 +320,79 @@ describe("extractMemories conversation scoping", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await extractMemories(MOCK_PARAMS, { apiKey: "test-key" }, db);
+    await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
 
     expect(capturedPrompt).toContain("Marmot");
     expect(capturedPrompt).not.toContain("Quokka");
     expect(capturedPrompt).not.toContain("Numbat");
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("extractor LLM config resolution", () => {
+  it("throws a descriptive error when no llm config is available", async () => {
+    // 无 process.env 兜底，无 llmConfig —— 必须显式失败，不能猜测一个模型
+    await expect(extractMemories(MOCK_PARAMS, undefined, db)).rejects.toThrow(/llm/i);
+  });
+
+  it("ignores process.env entirely, even when LLM_BASE_URL / LLM_MODEL are set", async () => {
+    process.env["LLM_BASE_URL"] = "https://should-not-be-used.test";
+    process.env["LLM_MODEL"] = "should-not-be-used-model";
+    process.env["API_KEY"] = "should-not-be-used-key";
+    try {
+      // 若还残留任何 process.env 读取，这里就会拿着 env 值发请求而不是抛错
+      await expect(extractMemories(MOCK_PARAMS, undefined, db)).rejects.toThrow(/llm/i);
+    } finally {
+      delete process.env["LLM_BASE_URL"];
+      delete process.env["LLM_MODEL"];
+      delete process.env["API_KEY"];
+    }
+  });
+
+  it("uses the endpoint and model it was given, not environment defaults", async () => {
+    process.env["LLM_BASE_URL"] = "https://should-not-be-used.test";
+    process.env["LLM_MODEL"] = "should-not-be-used-model";
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "[]" } }] }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await extractMemories(
+      MOCK_PARAMS,
+      { apiKey: "k", endpoint: "https://explicit.test/v1/chat/completions", model: "explicit-model" },
+      db,
+    );
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, { body: string }];
+    expect(url).toBe("https://explicit.test/v1/chat/completions");
+    expect(JSON.parse(init.body).model).toBe("explicit-model");
+
+    delete process.env["LLM_BASE_URL"];
+    delete process.env["LLM_MODEL"];
+    vi.unstubAllGlobals();
+  });
+
+  it("omits the Authorization header when apiKey is an empty string", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "[]" } }] }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await extractMemories(
+      MOCK_PARAMS,
+      { apiKey: "", endpoint: "https://local.test/v1/chat/completions", model: "local-model" },
+      db,
+    );
+
+    const [, init] = mockFetch.mock.calls[0] as [string, { headers: Record<string, string> }];
+    // `?? ""` 会让空串存活并拼出 `Bearer `（无凭据的畸形头）—— 比不带 header 更糟。
+    // apiKey 本来就是可选的（本地端点不需要鉴权），空串应当等价于"没有 key"。
+    expect(init.headers["Authorization"]).toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
     vi.unstubAllGlobals();
   });
 });

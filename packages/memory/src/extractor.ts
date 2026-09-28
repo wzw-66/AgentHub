@@ -47,22 +47,31 @@ async function callLLM(
   prompt: string,
   llmConfig?: { apiKey?: string; endpoint?: string; model?: string },
 ): Promise<string> {
-  const apiKey = llmConfig?.apiKey ?? process.env["API_KEY"] ?? "";
-  const baseUrl = process.env["LLM_BASE_URL"]?.replace(/\/+$/, "");
-  const defaultEndpoint = baseUrl ? baseUrl + "/v1/chat/completions" : undefined;
-  const endpoint =
-    llmConfig?.endpoint ??
-    defaultEndpoint ??
-    "https://api.deepseek.com/v1/chat/completions";
-  const model = llmConfig?.model ?? process.env["LLM_MODEL"] ?? "deepseek-chat";
+  // 不再读 process.env —— 那会绕开服务端的配置解析，形成第二个真相源（spec §4.9）。
+  // 也不再兜底 model/endpoint —— 猜测一个模型正是 §4.9 那个 bug 的成因。
+  const apiKey = llmConfig?.apiKey;
+  const endpoint = llmConfig?.endpoint;
+  const model = llmConfig?.model;
+
+  if (!endpoint || !model) {
+    throw new Error(
+      "extractMemories requires an explicit llm config ({ endpoint, model }). " +
+        "It no longer falls back to process.env — pass config.llm from the server.",
+    );
+  }
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // apiKey 刻意可选：本地端点（Ollama / LM Studio）不需要鉴权。
+  // 空串必须等同于"没有 key"—— `?? ""` 会让它存活并拼出 `Bearer `（无凭据的畸形头），
+  // 比不发这个 header 更糟。
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
 
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages: [
