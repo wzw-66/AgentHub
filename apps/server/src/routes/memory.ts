@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { MemoryType } from "@agenthub/shared";
 import {
   createMemory,
+  getDatabase,
   getMemory,
   listMemories,
   searchMemories,
@@ -15,9 +16,10 @@ type CreateMemoryBody = {
   agentId: string;
   type: MemoryType;
   content: string;
+  /** 必填 —— 检索作用域的唯一依据（spec §1.1）。缺失会写入一条永不召回的孤儿记忆。 */
+  conversationId: string;
   tags?: string[];
   sourceMessageId?: string;
-  conversationId?: string;
   importance?: number;
 };
 
@@ -51,7 +53,9 @@ function validateCreateBody(body: unknown): body is CreateMemoryBody {
     typeof b.content === "string" &&
     b.content.length > 0 &&
     typeof b.type === "string" &&
-    VALID_MEMORY_TYPES.includes(b.type)
+    VALID_MEMORY_TYPES.includes(b.type) &&
+    typeof b.conversationId === "string" &&
+    b.conversationId.length > 0
   );
 }
 
@@ -100,7 +104,16 @@ async function handleList(
     offset: parseIntParam(query.offset, 0),
   });
 
-  return reply.status(200).send(result);
+  // 无主记忆（conversation_id IS NULL）在任何会话作用域下都检索不到 —— 这是
+  // 迁移已知的、被接受的损失（spec §9.6），但损失必须可见：部署方靠这个计数
+  // 判断是否需要跑那次一次性回填。按请求者过滤，不是一个全局计数。
+  const orphanRow = getDatabase()
+    .prepare(
+      "SELECT COUNT(*) AS count FROM memory_records WHERE user_id = ? AND conversation_id IS NULL",
+    )
+    .get(request.userId!) as { count: number };
+
+  return reply.status(200).send({ ...result, orphanCount: orphanRow.count });
 }
 
 async function handleSearch(
@@ -116,6 +129,9 @@ async function handleSearch(
   const results = searchMemories({
     query: query.q,
     userId: request.userId!,
+    // Web UI 的手动搜索语义就是「翻所有记忆」，不受会话作用域限制（spec §4.2、§11）。
+    // 这是唯一该传 allConversations 的地方 —— 自动注入提示词的检索一律传 conversationId。
+    scope: { allConversations: true },
     agentId: query.agentId,
     limit: parseIntParam(query.limit, 50),
     offset: parseIntParam(query.offset, 0),
