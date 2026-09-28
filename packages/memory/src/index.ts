@@ -14,6 +14,11 @@ export {
   normalize,
   assertFiniteVector,
   buildFingerprint,
+  createOpenAICompatibleEmbeddingProvider,
 } from "./embedding.js";
-export type { EmbeddingProvider, EmbeddingFingerprint } from "./embedding.js";
+export type {
+  EmbeddingProvider,
+  EmbeddingFingerprint,
+  OpenAICompatibleEmbeddingOptions,
+} from "./embedding.js";
 export type { MemoryScope, EmbeddingMode } from "./types.js";

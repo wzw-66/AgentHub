@@ -90,3 +90,123 @@ export function assertFiniteVector(vec: Float32Array, context: string): void {
     }
   }
 }
+
+export interface OpenAICompatibleEmbeddingOptions {
+  /** 端点根，例如 "http://127.0.0.1:11434/v1"。代码会拼上 "/embeddings"。 */
+  baseUrl: string;
+  /** Ollama 不校验 key，但传空串会让部分客户端报错 —— 用 "EMPTY"。 */
+  apiKey: string;
+  model: string;
+  /** 期望维度。会与端点实际返回的长度校验，不符即抛错（spec §8.1）。 */
+  dim: number;
+  mode?: EmbeddingMode;
+  /** MRL 降维参数，仅部分模型支持（如 Qwen3 系）。不传则用模型原生维度。 */
+  dimensions?: number;
+  /** 非对称模型的查询侧前缀。`bge-m3` 不需要。 */
+  queryPrefix?: string;
+  /** 非对称模型的文档侧前缀。 */
+  documentPrefix?: string;
+  /** 注入点，仅测试用。 */
+  fetchImpl?: typeof fetch;
+}
+
+interface EmbeddingApiResponse {
+  data: Array<{ embedding: number[]; index?: number }>;
+}
+
+/**
+ * OpenAI 兼容的 embedding provider。
+ *
+ * Ollama 的 `/v1/embeddings` 就是 OpenAI 格式，所以本地部署 bge-m3 时
+ * 这个实现一行都不用改，只换配置（spec §10.1）。
+ *
+ * - **不内部重试** —— 重试策略统一由 worker 与检索层决定（spec §8.1）
+ * - **按 `data[].index` 对齐** —— OpenAI 兼容层不保证返回顺序与 input 一致
+ * - **校验 dim 与有限性** —— 两者都是静默数据损坏点（spec §8.1）
+ */
+export function createOpenAICompatibleEmbeddingProvider(
+  options: OpenAICompatibleEmbeddingOptions,
+): EmbeddingProvider {
+  const mode: EmbeddingMode = options.mode ?? "symmetric";
+  const doFetch = options.fetchImpl ?? fetch;
+  const endpoint = `${options.baseUrl.replace(/\/+$/, "")}/embeddings`;
+
+  /** `label` 只用于非有限值报错里的定位（`doc[2]` / `query[0]`）。 */
+  async function embed(texts: string[], label: "doc" | "query" | "health" = "doc"): Promise<Float32Array[]> {
+    const body: Record<string, unknown> = { model: options.model, input: texts };
+    if (options.dimensions !== undefined) body["dimensions"] = options.dimensions;
+
+    const response = await doFetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const detail = typeof response.text === "function" ? await response.text() : "";
+      throw new Error(
+        `Embedding request failed: HTTP ${response.status} from ${endpoint}${detail ? ` — ${detail}` : ""}`,
+      );
+    }
+
+    const payload = (await response.json()) as EmbeddingApiResponse;
+
+    // 按 index 对齐，不依赖数组顺序
+    const ordered = new Array<Float32Array>(texts.length);
+    payload.data.forEach((item, position) => {
+      const target = item.index ?? position;
+      ordered[target] = Float32Array.from(item.embedding);
+    });
+
+    return ordered.map((vec, i) => {
+      if (!vec) {
+        throw new Error(
+          `Embedding response for model "${options.model}" is missing an entry for input index ${i}.`,
+        );
+      }
+      if (vec.length !== options.dim) {
+        throw new Error(
+          `Embedding dim mismatch for model "${options.model}": the endpoint returned ` +
+            `${vec.length}-dimensional vectors but this provider is configured for dim=${options.dim}. ` +
+            `Fix the configuration — the read path parses dim floats, so a mismatch would ` +
+            `silently truncate the stored vector.`,
+        );
+      }
+      // 必须在 normalize 之前：NaN 能原样穿过 normalize，之后再也认不出来。
+      assertFiniteVector(vec, `${label}[${i}]`);
+      return normalize(vec);
+    });
+  }
+
+  return {
+    id: "openai-compatible",
+    model: options.model,
+    dim: options.dim,
+    mode,
+    fingerprint: buildFingerprint(options.model, options.dim, mode),
+
+    async embedDocuments(texts: string[]): Promise<Float32Array[]> {
+      const prefix = options.documentPrefix ?? "";
+      return embed(texts.map((t) => `${prefix}${t}`));
+    },
+
+    async embedQuery(text: string): Promise<Float32Array> {
+      const prefix = options.queryPrefix ?? "";
+      const [vec] = await embed([`${prefix}${text}`], "query");
+      if (!vec) throw new Error("Embedding request returned no vector for the query");
+      return vec;
+    },
+
+    async healthCheck(): Promise<{ ok: boolean; detail?: string }> {
+      try {
+        await embed(["health"], "health");
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, detail: (err as Error).message };
+      }
+    },
+  };
+}
