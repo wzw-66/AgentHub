@@ -2,6 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Database as DatabaseType } from "better-sqlite3";
 import { createTestDb, destroyTestDb } from "./setup.js";
 import { createMemory, getMemory, listMemories, deleteMemory } from "../repository.js";
+import { FakeSegmenter } from "./fakes.js";
+
+// 词表刻意**不含**「代码风格」：FakeSegmenter 是最长匹配，词表里有整词就不会切开它，
+// 那样 tags_seg 断言会永远拿不到「代码 风格」—— 也就测不出「中文 tag 必须被切成
+// 查询侧能匹配到的词」这个性质本身。这里放的是 jieba 会切出的子词。
+const seg = new FakeSegmenter(["缩进", "用户", "偏好", "代码", "风格"]);
 
 let db: DatabaseType;
 
@@ -85,6 +91,85 @@ describe("conversation scoping in createMemory", () => {
     const buildOrphan = () => createMemory({ userId: "u", agentId: "a", type: "fact", content: "orphan" }, db);
     // 只验证类型层面被拦截，不实际执行 —— 类型测试由 `tsc --noEmit` 把关
     expect(typeof buildOrphan).toBe("function");
+  });
+});
+
+describe("segmented columns", () => {
+  it("populates content_seg with space-joined terms", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-seg",
+      agentId: "agent-1",
+      type: "preference",
+      content: "用户偏好缩进",
+    }, db, seg);
+
+    const raw = db
+      .prepare("SELECT content_seg FROM memory_records WHERE id = ?")
+      .get(created.id) as { content_seg: string | null };
+    expect(raw.content_seg).toBe("用户 偏好 缩进");
+  });
+
+  it("populates tags_seg by segmenting every tag and flattening", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-seg",
+      agentId: "agent-1",
+      type: "preference",
+      content: "用户偏好缩进",
+      tags: ["代码风格", "偏好"],
+    }, db, seg);
+
+    const raw = db
+      .prepare("SELECT tags_seg FROM memory_records WHERE id = ?")
+      .get(created.id) as { tags_seg: string | null };
+    // 「代码风格」必须被切开，否则 unicode61 下它是一个 token，
+    // 而查询侧的「代码 风格」永远匹配不到它（spec §8.3）
+    expect(raw.tags_seg).toBe("代码 风格 偏好");
+  });
+
+  it("stores an empty string, not null, when content yields no terms", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-seg",
+      agentId: "agent-1",
+      type: "fact",
+      content: "   ",
+    }, db, seg);
+
+    const raw = db
+      .prepare("SELECT content_seg FROM memory_records WHERE id = ?")
+      .get(created.id) as { content_seg: string | null };
+    expect(raw.content_seg).toBe("");
+  });
+
+  it("stores an empty string, not null, when a memory has no tags", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-seg",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+
+    const raw = db
+      .prepare("SELECT tags_seg FROM memory_records WHERE id = ?")
+      .get(created.id) as { tags_seg: string | null };
+    expect(raw.tags_seg).toBe("");
+  });
+
+  it("keeps the original content and tags untouched for display", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-seg",
+      agentId: "agent-1",
+      type: "preference",
+      content: "用户偏好缩进",
+      tags: ["代码风格"],
+    }, db, seg);
+
+    expect(created.content).toBe("用户偏好缩进");
+    expect(created.tags).toEqual(["代码风格"]);
   });
 });
 
