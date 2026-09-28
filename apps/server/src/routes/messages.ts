@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { resolve } from "node:path";
-import { WORKSPACE_ROOT } from "../config/env.js";
+import { WORKSPACE_ROOT, config as appConfig } from "../config/env.js";
 import {
   listMessages,
   createMessage as dbCreateMessage,
@@ -22,7 +22,8 @@ import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
 import { TaskDispatcher } from "../orchestrator/dispatcher.js";
 import { ResultAggregator } from "../orchestrator/aggregator.js";
 import { createMessage, createArtifact } from "@agenthub/db";
-import { extractMemories, initSchema } from "@agenthub/memory";
+import { initSchema } from "@agenthub/memory";
+import { triggerMemoryExtraction } from "../services/memory-trigger.js";
 import type { PushSSEFn } from "../orchestrator/types.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -437,14 +438,19 @@ async function runOrchestration(
         log.info({ agentId: subtask.agentId }, "Agent message saved");
 
         // ── Long-term memory extraction for this agent's response ──
-        extractMemories({
+        triggerMemoryExtraction({
           userId: conversation.ownerId,
+          conversationId,
           agentId: subtask.agentId,
           agentName: subtask.agentName ?? subtask.agentId,
           userMessage: message.content,
           agentResponse: result.content,
-        }).catch((err) => {
-          log.error({ err, agentId: subtask.agentId }, "Memory extraction failed");
+          llm: {
+            apiKey: appConfig.llm.apiKey,
+            endpoint: appConfig.llm.endpoint,
+            model: appConfig.llm.model,
+          },
+          log,
         });
 
         return msg.id;
@@ -765,14 +771,19 @@ async function runAgentExecution(
         messageId = saved.id;
 
         // ── Long-term memory extraction ─────────────────────────────
-        extractMemories({
+        triggerMemoryExtraction({
           userId: conv.ownerId,
+          conversationId,
           agentId: agent.id,
           agentName: agent.name,
           userMessage: content,
           agentResponse: finalResponse,
-        }).catch((err) => {
-          log.error({ err }, "Memory extraction failed");
+          llm: {
+            apiKey: appConfig.llm.apiKey,
+            endpoint: appConfig.llm.endpoint,
+            model: appConfig.llm.model,
+          },
+          log,
         });
       }
 
