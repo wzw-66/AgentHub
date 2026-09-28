@@ -127,6 +127,8 @@ function parseExtractionResponse(response: string): ExtractedMemory[] | null {
 export async function extractMemories(
   params: {
     userId: string;
+    /** 必填 —— 写入与去重检索的作用域（spec §1.1、§4.7） */
+    conversationId: string;
     agentId: string;
     agentName: string;
     userMessage: string;
@@ -138,10 +140,13 @@ export async function extractMemories(
   const db = customDb || getDatabase();
 
   // 1. Search existing relevant memories
+  // 作用域限定在 (用户, 本会话)：去重候选若跨租户或跨会话，LLM 会看到
+  // 别人的记忆并把它们当作可 update/delete 的对象（spec §4.8）。
   const existingMemories = searchMemories(
     {
       query: params.userMessage,
-      agentId: params.agentId,
+      userId: params.userId,
+      scope: { conversationId: params.conversationId },
       limit: 5,
     },
     db,
@@ -180,6 +185,7 @@ export async function extractMemories(
           createMemory(
             {
               userId: params.userId,
+              conversationId: params.conversationId,
               agentId: params.agentId,
               type: op.type,
               content: op.content,
@@ -203,6 +209,7 @@ export async function extractMemories(
             return createMemory(
               {
                 userId: params.userId,
+                conversationId: params.conversationId,
                 agentId: params.agentId,
                 type,
                 content,
