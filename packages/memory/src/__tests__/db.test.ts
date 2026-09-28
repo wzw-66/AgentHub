@@ -49,13 +49,15 @@ describe("schema", () => {
 describe("FTS5 trigger behavior", () => {
   it("automatically syncs inserted record to FTS index", () => {
     const id = "test-fts-insert-1";
+    // v3 起索引的是分词后的 content_seg / tags_seg，不再是 content / tags ——
+    // 写入侧的分词由 createMemory 负责，这里为了只测触发器而手工填好字段。
     testDb.prepare(`
-      INSERT INTO memory_records (id, user_id, agent_id, type, content)
-      VALUES (?, 'user1', 'agent1', 'fact', 'Test content for FTS')
+      INSERT INTO memory_records (id, user_id, agent_id, type, content, content_seg, tags_seg)
+      VALUES (?, 'user1', 'agent1', 'fact', 'Test content for FTS', 'Test content for FTS', '')
     `).run(id);
 
     const result = testDb.prepare(
-      "SELECT rowid FROM memory_fts WHERE content MATCH 'Test'"
+      "SELECT rowid FROM memory_fts WHERE content_seg MATCH 'Test'"
     ).get();
     expect(result).toBeTruthy();
   });

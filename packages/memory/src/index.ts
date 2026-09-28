@@ -9,4 +9,5 @@ export { buildScopeClause } from "./scope.js";
 export { createJiebaSegmenter } from "./segmenter.js";
 export type { Segmenter } from "./segmenter.js";
 export { buildFtsQuery } from "./fts-query.js";
+export { reindexMemories, isBm25Ready, REINDEX_TIMEOUT_MS } from "./worker.js";
 export type { MemoryScope } from "./types.js";

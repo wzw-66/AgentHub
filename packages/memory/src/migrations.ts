@@ -11,10 +11,10 @@ import type { Database } from "./db.js";
  * v2 是 P1 的实际变更（`content_seg` / `tags_seg` 列 + `memory_embeddings` 表）。
  * 两者共用同一条代码路径，不需要「新库/老库」分支。
  *
- * **v3 已被预留**：`memory_fts` 的 DROP/重建 + 三个触发器改指向 `content_seg` /
- * `tags_seg`，由 Task 13 与 `reindexMemories` 一起加入。刻意不放在 v2 ——
- * 重建虚表会让索引瞬间变空，只有在同一处紧接着 `rebuild` 才能把「索引未就绪」
- * 的窗口关掉；拆到两个 task 会留下「搜索静默返回空」的中间状态。
+ * **v3**：`memory_fts` 的 DROP/重建 + 三个触发器改指向 `content_seg` / `tags_seg`。
+ * 刻意不放在 v2 —— 重建虚表会让索引瞬间变空，只有在同一处紧接着 `rebuild`
+ * 才能把「索引未就绪」的窗口关掉；拆到两个迁移会留下「搜索静默返回空」的中间状态。
+ * 注意 v3 只做**结构**：索引重建后是空的，灌数据是 `reindexMemories` 的职责。
  *
  * `MIGRATIONS` 是**只追加**列表：新增迁移在末尾追加一项即可，不要改动已发布项。
  */
@@ -82,7 +82,7 @@ const MIGRATIONS: Migration[] = [
 
       // 纯 DDL，不回填 —— content_seg / tags_seg 的数据由 reindexMemories 负责（spec §9.4）。
       // memory_fts 与 mem_fts_* 触发器在本迁移里保持原样（仍索引 content / tags）；
-      // 换列是 v3，与 reindexMemories 同批，见文件头注释。
+      // 换列是 v3，见文件头注释。
       db.exec(`
         CREATE TABLE IF NOT EXISTS memory_embeddings (
           memory_id   TEXT PRIMARY KEY REFERENCES memory_records(id) ON DELETE CASCADE,
@@ -95,7 +95,51 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    up(db) {
+      // 把 FTS 索引从原始 `content` / `tags` 换到分词后的 `content_seg` / `tags_seg`。
+      // `IF NOT EXISTS` 做不到这件事（对已存在的虚表静默跳过），必须 DROP 再建；
+      // 外部内容表契约（content= / content_rowid=）与 unicode61 分词器保持不变，
+      // 只有被索引的列变了 —— spec §9.4。
+      //
+      // 触发器必须先删再建：`CREATE TRIGGER` 没有 `OR REPLACE`，同名触发器会
+      // 直接报 "trigger mem_fts_ai already exists" 让整个迁移回滚。
+      //
+      // 注意本迁移结束时 memory_fts 是**空的**（刚建出来），而 memory_records 有数据。
+      // 这个窗口必须由调用方紧接着 `reindexMemories` 关掉，见 worker.ts。
+      db.exec(`
+        DROP TRIGGER IF EXISTS mem_fts_ai;
+        DROP TRIGGER IF EXISTS mem_fts_ad;
+        DROP TRIGGER IF EXISTS mem_fts_au;
+        DROP TABLE IF EXISTS memory_fts;
+
+        CREATE VIRTUAL TABLE memory_fts USING fts5(
+          content_seg, tags_seg,
+          content='memory_records',
+          content_rowid='rowid',
+          tokenize='unicode61'
+        );
+
+        CREATE TRIGGER mem_fts_ai AFTER INSERT ON memory_records BEGIN
+          INSERT INTO memory_fts(rowid, content_seg, tags_seg) VALUES (new.rowid, new.content_seg, new.tags_seg);
+        END;
+
+        CREATE TRIGGER mem_fts_ad AFTER DELETE ON memory_records BEGIN
+          INSERT INTO memory_fts(memory_fts, rowid, content_seg, tags_seg) VALUES('delete', old.rowid, old.content_seg, old.tags_seg);
+        END;
+
+        CREATE TRIGGER mem_fts_au AFTER UPDATE ON memory_records BEGIN
+          INSERT INTO memory_fts(memory_fts, rowid, content_seg, tags_seg) VALUES('delete', old.rowid, old.content_seg, old.tags_seg);
+          INSERT INTO memory_fts(rowid, content_seg, tags_seg) VALUES (new.rowid, new.content_seg, new.tags_seg);
+        END;
+      `);
+    },
+  },
 ];
+
+/** 本文件已知的最高版本号，也是 `migrate()` 敢碰的上限。 */
+const NEWEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.version;
 
 export function currentVersion(db: Database): number {
   const row = db.pragma("user_version") as Array<{ user_version: number }> | number;
@@ -106,6 +150,15 @@ export function currentVersion(db: Database): number {
 export function migrate(db: Database): { from: number; to: number } {
   const from = currentVersion(db);
   let version = from;
+
+  // 比本文件更新的库：说明这份代码比库旧（回滚了版本、或两个版本共用了一个库文件）。
+  // 不抛的话下面会安静地返回 {from, to: from}，服务带着「以为迁移过了」的假设继续跑。
+  if (from > NEWEST_VERSION) {
+    throw new Error(
+      `Memory database is at schema version ${from}, but this build only knows up to ` +
+        `${NEWEST_VERSION}. Refusing to touch it — the database was migrated by a newer build.`,
+    );
+  }
 
   for (const migration of MIGRATIONS) {
     if (migration.version <= version) continue;

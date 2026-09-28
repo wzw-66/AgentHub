@@ -106,34 +106,62 @@ describe("migrate", () => {
     db.close();
   });
 
-  it("leaves memory_fts and its triggers untouched — retargeting them is v3", () => {
+  it("retargets memory_fts at the segmented columns and recreates all three triggers", () => {
     const dbPath = freshDbPath();
     const db = makeLegacyV0Db(dbPath);
     migrate(db);
 
     const cols = db.prepare("PRAGMA table_info(memory_fts)").all() as Array<{ name: string }>;
-    expect(cols.map((c) => c.name)).toEqual(["content", "tags"]);
+    expect(cols.map((c) => c.name)).toEqual(["content_seg", "tags_seg"]);
 
+    // 外部内容表契约与分词器不变，只有被索引的列变了
+    const ftsSql = (
+      db.prepare("SELECT sql FROM sqlite_master WHERE name = 'memory_fts'").get() as { sql: string }
+    ).sql;
+    expect(ftsSql).toContain("content='memory_records'");
+    expect(ftsSql).toContain("content_rowid='rowid'");
+    expect(ftsSql).toContain("tokenize='unicode61'");
+
+    // 三个触发器都必须被重建并指向新列 —— CREATE TRIGGER 没有 OR REPLACE，
+    // 漏掉 DROP 会让迁移直接报 "trigger ... already exists"
     const triggers = db
       .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'mem_fts_%'")
       .all() as Array<{ name: string; sql: string }>;
     expect(triggers.map((t) => t.name).sort()).toEqual(["mem_fts_ad", "mem_fts_ai", "mem_fts_au"]);
     for (const trigger of triggers) {
-      expect(trigger.sql).not.toContain("content_seg");
-      expect(trigger.sql).not.toContain("tags_seg");
+      expect(trigger.sql).toContain("content_seg");
+      expect(trigger.sql).toContain("tags_seg");
     }
 
-    // 关键：迁移没有清空索引 —— 老库原有的记忆仍然检索得到
-    const legacyHits = db.prepare("SELECT rowid FROM memory_fts WHERE content MATCH 'Legacy'").all();
-    expect(legacyHits.length).toBe(1);
+    // 关键：迁移是**纯 DDL** —— 重建出来的索引是空的，老库原有的记忆此刻检索不到。
+    // 这就是 spec §9.4 的「索引未就绪」窗口，必须由 reindexMemories 关掉。
+    const legacyHits = db.prepare("SELECT rowid FROM memory_fts WHERE memory_fts MATCH 'Legacy'").all();
+    expect(legacyHits.length).toBe(0);
 
-    // 新写入的行也照旧进索引（触发器未受影响）
+    // 触发器本身是好的：迁移后的新写入照常进索引
     db.prepare(`
-      INSERT INTO memory_records (id, user_id, agent_id, type, content)
-      VALUES ('post-migrate-1', 'u1', 'a1', 'fact', 'Post migration content')
+      INSERT INTO memory_records (id, user_id, agent_id, type, content, content_seg)
+      VALUES ('post-migrate-1', 'u1', 'a1', 'fact', 'Post migration content', 'Post migration content')
     `).run();
-    const freshHits = db.prepare("SELECT rowid FROM memory_fts WHERE content MATCH 'Post'").all();
+    const freshHits = db
+      .prepare("SELECT rowid FROM memory_fts WHERE content_seg MATCH 'Post'")
+      .all();
     expect(freshHits.length).toBe(1);
+
+    db.close();
+  });
+
+  it("refuses to touch a database migrated by a newer build", () => {
+    const dbPath = freshDbPath();
+    const db = makeLegacyV0Db(dbPath);
+    // 一个比本文件更新的库：安静跳过会让服务带着「以为迁移过了」的假设继续跑
+    db.pragma("user_version = 99");
+
+    expect(() => migrate(db)).toThrow(/version 99/);
+    // 关键：一个字节都不许动
+    expect(currentVersion(db)).toBe(99);
+    const cols = db.prepare("PRAGMA table_info(memory_records)").all() as Array<{ name: string }>;
+    expect(cols.map((c) => c.name)).not.toContain("content_seg");
 
     db.close();
   });
@@ -159,7 +187,7 @@ describe("migrate", () => {
     expect(names).toContain("content_seg");
     expect(names).toContain("tags_seg");
     // 全新库与老库走同一条路径，落点版本必须一致
-    expect(currentVersion(db)).toBe(2);
+    expect(currentVersion(db)).toBe(3);
 
     // 新库与老库迁移后应可写入
     const created = createMemory(
@@ -180,7 +208,7 @@ describe("migrate", () => {
 
     expect(currentVersion(db)).toBe(0);
     expect(() => migrate(db)).not.toThrow();
-    expect(currentVersion(db)).toBe(2);
+    expect(currentVersion(db)).toBe(3);
 
     db.close();
   });
