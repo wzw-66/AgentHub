@@ -58,7 +58,15 @@ describe("extractMemories", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     // Verify the memory was persisted
-    const results = searchMemories({ query: "tabs", userId: "user-extract", agentId: "agent-extract" }, db);
+    const results = searchMemories(
+      {
+        query: "tabs",
+        userId: "user-extract",
+        scope: { conversationId: "conv-extract" },
+        agentId: "agent-extract",
+      },
+      db,
+    );
     expect(results.length).toBe(1);
     expect(results[0]!.content).toContain("tabs");
     expect(results[0]!.type).toBe("preference");
@@ -141,7 +149,15 @@ describe("extractMemories", () => {
     expect(getMemory(created.id, db)).toBeNull();
 
     // Verify the new memory exists with updated content
-    const updatedResults = searchMemories({ query: "Updated content", userId: "user-extract", agentId: "agent-extract" }, db);
+    const updatedResults = searchMemories(
+      {
+        query: "Updated content",
+        userId: "user-extract",
+        scope: { conversationId: "conv-extract" },
+        agentId: "agent-extract",
+      },
+      db,
+    );
     expect(updatedResults.length).toBe(1);
     expect(updatedResults[0]!.content).toBe("Updated content with new preference");
     expect(updatedResults[0]!.type).toBe("preference");
