@@ -154,8 +154,12 @@ export function createOpenAICompatibleEmbeddingProvider(
 
     const payload = (await response.json()) as EmbeddingApiResponse;
 
-    // 按 index 对齐，不依赖数组顺序
-    const ordered = new Array<Float32Array>(texts.length);
+    // 按 index 对齐，不依赖数组顺序。
+    //
+    // 必须**填实**每个槽位：`new Array(n)` 是稀疏数组，而 `Array.prototype.map`
+    // 会跳过空洞、不调用回调 —— 那样下面的缺失项校验就成了死代码，端点少回
+    // 一条时既不校验也不抛错，而是返回带洞的数组，`undefined` 直接混进写入路径。
+    const ordered = new Array<Float32Array | undefined>(texts.length).fill(undefined);
     payload.data.forEach((item, position) => {
       const target = item.index ?? position;
       ordered[target] = Float32Array.from(item.embedding);

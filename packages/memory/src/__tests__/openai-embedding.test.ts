@@ -81,11 +81,33 @@ describe("createOpenAICompatibleEmbeddingProvider", () => {
     });
     const provider = makeProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
 
-    const [a, b, c] = await provider.embedDocuments(["a", "b", "c"]);
+    const vecs = await provider.embedDocuments(["a", "b", "c"]);
+    const [a, b, c] = vecs;
 
     expect([...a!]).toEqual([1, 0, 0]);
     expect([...b!]).toEqual([0, 1, 0]);
     expect([...c!]).toEqual([0, 0, 1]);
+
+    // 结果数组必须是实心（dense）的。`map` 会跳过稀疏数组的空洞，
+    // 空洞不进回调就等于绕过全部校验；`Array.from` 会把空洞显形为 undefined。
+    expect(Array.from(vecs).every((v) => v instanceof Float32Array)).toBe(true);
+  });
+
+  it("rejects when the endpoint returns fewer entries than inputs", async () => {
+    // 缺失项必须是错误，不能是空洞：空洞会被 map 跳过，于是既不校验 dim、
+    // 也不校验有限性，而 undefined 会以 Float32Array[] 的类型混进写入路径。
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse([[1, 0, 0]])) // 3 个输入只回了 1 个
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: [] }) }); // 一个都没回
+    const provider = makeProvider({ dim: 3, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await expect(provider.embedDocuments(["a", "b", "c"])).rejects.toThrow(
+      /missing an entry for input index 1/,
+    );
+    await expect(provider.embedDocuments(["a"])).rejects.toThrow(
+      /missing an entry for input index 0/,
+    );
   });
 
   it("rejects when the endpoint returns a different dimension than configured", async () => {
@@ -142,8 +164,17 @@ describe("createOpenAICompatibleEmbeddingProvider", () => {
       text: async () => "input length exceeds maximum context length",
     });
     const provider = makeProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const long = "x".repeat(100_000);
 
-    await expect(provider.embedDocuments(["x".repeat(100_000)])).rejects.toThrow(/400/);
+    await expect(provider.embedDocuments([long])).rejects.toThrow(/400/);
+
+    // 端点必须收到**完整**原文。只断言「抛了 400」是不够的：一个先截断、
+    // 再把截断后的文本发出去（并因此仍然拿到 400）的实现会照样通过。
+    // 断言请求体里是未截断的原文，截断才变得可检出。
+    const [, init] = fetchImpl.mock.calls[0] as [string, { body: string }];
+    const sent = JSON.parse(init.body) as { input: string[] };
+    expect(sent.input).toEqual([long]);
+    expect(sent.input[0]!.length).toBe(100_000);
   });
 
   it("applies a query prefix in asymmetric mode but not to documents", async () => {
