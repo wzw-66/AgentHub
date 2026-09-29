@@ -249,6 +249,18 @@ describe("deleteMemory", () => {
 });
 
 describe("updateMemory", () => {
+  /**
+   * 按 memory_id 计数，而**不是** `index.size()`。
+   *
+   * `size()` 是 `SELECT COUNT(*) FROM memory_embeddings`（全表），所以它断言的是
+   * 「此刻全库有几行」，与本用例那条记忆无关：`keeps the vector row when only
+   * importance changes` 会留下自己那一行，任何插在它后面的用例一断言就会拿到
+   * 上一条的残留值，失败信息还会指向错误的原因。
+   */
+  const vectorRowCount = (memoryId: string): number =>
+    (db.prepare("SELECT COUNT(*) AS count FROM memory_embeddings WHERE memory_id = ?")
+      .get(memoryId) as { count: number }).count;
+
   it("keeps the id and created_at, and refreshes updated_at", async () => {
     const created = createMemory({
       userId: "user-1",
@@ -312,11 +324,11 @@ describe("updateMemory", () => {
     }, db, seg);
     const index = createBlobVectorIndex(db);
     index.upsert(created.id, new Float32Array([1, 0, 0]), "fp", "m");
-    expect(index.size()).toBe(1);
+    expect(vectorRowCount(created.id)).toBe(1);
 
     updateMemory(created.id, { content: "完全不同的一段内容" }, db, seg);
 
-    expect(index.size()).toBe(0);
+    expect(vectorRowCount(created.id)).toBe(0);
   });
 
   it("keeps the vector row when only importance changes", () => {
@@ -332,7 +344,7 @@ describe("updateMemory", () => {
 
     updateMemory(created.id, { importance: 9 }, db, seg);
 
-    expect(index.size()).toBe(1);
+    expect(vectorRowCount(created.id)).toBe(1);
   });
 
   it("returns null for a non-existent id", () => {
@@ -358,14 +370,36 @@ describe("updateMemory", () => {
     expect(updated!.importance).toBe(7);
   });
 
-  // 下面两条用**按 memory_id 计数**而不是 index.size()：后者是全表 COUNT(*)，
-  // 而同级更早的用例会留下自己的向量行 —— 用全表计数就等于断言一个与本人
-  // 无关的常量，既测不出东西，还会随用例顺序漂移。
-  const vectorRowCount = (memoryId: string): number =>
-    (db.prepare("SELECT COUNT(*) AS count FROM memory_embeddings WHERE memory_id = ?")
-      .get(memoryId) as { count: number }).count;
+  it("deletes only the updated memory's vector row", () => {
+    const target = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+    const bystander = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+    const index = createBlobVectorIndex(db);
+    index.upsert(target.id, new Float32Array([1, 0, 0]), "fp", "m");
+    index.upsert(bystander.id, new Float32Array([0, 1, 0]), "fp", "m");
+    expect(vectorRowCount(target.id)).toBe(1);
+    expect(vectorRowCount(bystander.id)).toBe(1);
 
-  it("drops the vector row when tags change (tags_seg is indexed too)", () => {
+    updateMemory(target.id, { content: "完全不同的一段内容" }, db, seg);
+
+    // spec §9.5 要求删的是「**该 id** 的向量行」。少了 WHERE 的 DELETE 同样
+    // 能让上面单行的用例通过（那些用例库里只有一行），只有这里会红。
+    expect(vectorRowCount(target.id)).toBe(0);
+    expect(vectorRowCount(bystander.id)).toBe(1);
+  });
+
+  it("drops the vector row when tags change (belt-and-braces)", () => {
     const created = createMemory({
       userId: "user-1",
       conversationId: "conv-upd",
@@ -377,6 +411,10 @@ describe("updateMemory", () => {
     createBlobVectorIndex(db).upsert(created.id, new Float32Array([1, 0, 0]), "fp", "m");
     expect(vectorRowCount(created.id)).toBe(1);
 
+    // 注：tags 从不进入向量文本 —— worker 只嵌入 `content`（worker.ts:275/:295），
+    // 所以这次删向量在语义上是**多余的**，最多让 worker 白算一次；tags 变更对
+    // 检索的真正影响走 tags_seg + FTS 触发器。保留它是为了统一「派生数据变更
+    // 即失效」这条规则，不要据此推断 tags 参与向量。
     updateMemory(created.id, { tags: ["格式"] }, db, seg);
 
     expect(vectorRowCount(created.id)).toBe(0);

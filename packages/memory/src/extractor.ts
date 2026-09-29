@@ -214,6 +214,11 @@ export async function extractMemories(
         // 就地更新，**不是** delete + create：id 与 created_at 必须保留，
         // 否则 sourceMessageId 的溯源链断裂、记忆年龄归零（spec §9.5）。
         // 内容/tags 变更时 updateMemory 会删掉向量行，由 worker 异步补算。
+        //
+        // `importance` 只在 LLM 给出时才进 patch —— patch 里缺席即「不改这一列」。
+        // `?? 1` 会把最常见的「LLM 没重申重要度」变成「重置为 1」，正好抵消
+        // updateMemory「不改未提及字段」的契约；`?? 1` 只对**新行**成立，
+        // 所以它留在上面的 add 分支。
         if (op.id && op.type && op.content) {
           updateMemory(
             op.id,
@@ -221,7 +226,7 @@ export async function extractMemories(
               type: op.type,
               content: op.content,
               ...(op.tags !== undefined ? { tags: op.tags } : {}),
-              importance: op.importance ?? 1,
+              ...(op.importance !== undefined ? { importance: op.importance } : {}),
             },
             db,
           );

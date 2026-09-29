@@ -195,6 +195,46 @@ describe("extractMemories", () => {
     vi.unstubAllGlobals();
   });
 
+  it("preserves the stored importance when the LLM update omits it", async () => {
+    const created = createMemory({
+      userId: "user-extract",
+      conversationId: "conv-extract",
+      agentId: "agent-extract",
+      type: "fact",
+      content: "Memory whose importance was considered",
+      importance: 6,
+    }, db);
+
+    // LLM 只改措辞，没有重申 importance —— 这是最常见的一种 update
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify([{
+              action: "update",
+              id: created.id,
+              type: "fact",
+              content: "Reworded, importance not restated",
+              reason: "Wording clarified",
+            }]),
+          },
+        }],
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
+
+    const updated = getMemory(created.id, db);
+    expect(updated).not.toBeNull();
+    expect(updated!.content).toBe("Reworded, importance not restated");
+    // 缺席 ≠ 重置为 1：patch 里没有 importance，这一列就不该被写
+    expect(updated!.importance).toBe(6);
+
+    vi.unstubAllGlobals();
+  });
+
   it("handles LLM API failure gracefully (no throw)", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,

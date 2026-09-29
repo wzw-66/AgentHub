@@ -121,10 +121,16 @@ export function deleteMemory(id: string, customDb?: Database): void {
  * （`sourceMessageId` 溯源链断裂）、`created_at` 重置（丢失记忆年龄）、
  * 向量行成孤儿污染检索。
  *
- * 内容或 tags 变更时**删除向量行而非重算** —— 使 `updateMemory` 保持同步，
+ * 内容变更时**删除该 id 的向量行而非重算** —— 使 `updateMemory` 保持同步，
  * 并复用待嵌入队列（`listPendingEmbeddings` 是 LEFT JOIN 指纹），由 worker
  * 异步补齐（spec §9.5）。指纹是 `model:dim:mode`，它检测不到内容变化，
  * 所以「失效」这件事只能由写入方显式做。
+ *
+ * **tags 变更时也删，但那属于保险而非必需：** worker 只对 `content` 做嵌入
+ * （worker.ts 的 `embedDocuments(items.map((item) => item.content))`），tags
+ * 从不进入向量文本，因此 tags 变更最多让 worker 白算一次；它对检索的真正影响
+ * 由 `tags_seg` + FTS 触发器承担。保留是为了统一「派生数据变更即失效」这一条
+ * 规则，**不要据此推断 tags 参与向量**。
  *
  * 返回 `null` 表示 id 不存在 —— 与 `getMemory` 的约定一致，不抛错。
  */
@@ -179,6 +185,8 @@ export function updateMemory(
     if (contentChanged || tagsChanged) {
       // 删行即「重新入队」：worker 按「缺向量或有旧指纹」挑选待嵌入项。
       // 不在这里重算 —— 那会把网络调用带进同步签名（spec §9.5）。
+      // WHERE 不可省：只能删**该 id** 的行（spec §9.5），否则一次编辑会清空
+      // 整个向量索引，把全库记忆打回待嵌入。
       db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
     }
   });
