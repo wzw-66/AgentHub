@@ -118,23 +118,33 @@ async function handleList(
     )
     .get(request.userId!) as { count: number };
 
-  // 待嵌入计数（spec §12）。**这是「这个模型的队列」，不是一个全局积压数** ——
-  // 判据是「没有一条指纹匹配的向量行」，所以它必须拿到当前配置的指纹，否则换了
-  // 模型以后旧向量会被当成已完成的工作，队列看起来是空的而索引里全是另一个向量
-  // 空间的数据。指纹走 `buildFingerprint`，与 provider 用的是同一个定义。
+  // 待嵌入计数（spec §12）。两个要点，字段名里的 `global` 与 `pending` 各占一个：
+  //
+  // **`pending`：这是「这个模型的队列」** —— 判据是「没有一条指纹匹配的向量行」，
+  // 所以它必须拿到当前配置的指纹，否则换了模型以后旧向量会被当成已完成的工作，
+  // 队列看起来是空的而索引里全是另一个向量空间的数据。指纹走 `buildFingerprint`，
+  // 与 provider 用的是同一个定义。
+  //
+  // **`global`：这个计数刻意是进程级的，不按请求者过滤**（与上面那个按
+  // `request.userId` 过滤的 `orphanCount` 不同）。理由是它的用途是**运维可观测性** ——
+  // spec §12 要它「使『向量路落后多少』可观测」—— 而 worker 是无用户概念的单进程，
+  // 它要消化的就是整个记忆库的积压。按请求者切一刀只会得到一个对不上 worker 实际
+  // 进度的小数字，反而误导；而且 `memory_embeddings` 没有 user 列，按用户过滤得给
+  // `pendingEmbeddingCount` 加参数，偏离 spec §6.2/§8.6 钉死的签名。泄露的是一个
+  // 计数，不是别人的记忆内容。
   //
   // 向量路未配置时传 `undefined`：那时没有任何指纹算「匹配」，计数退化为
   // 「从未算过向量的记忆条数」。这不是 0 —— 造一个假的 0 正是本项目要根除的
   // 静默错误值。语义与 worker 的 `pendingCount()` 在未配置时一致。
   const embedding = appConfig.embedding;
-  const pendingCount = pendingEmbeddingCount(
+  const globalPendingCount = pendingEmbeddingCount(
     db,
     embedding ? buildFingerprint(embedding.model, embedding.dim, embedding.mode) : undefined,
   );
 
   return reply
     .status(200)
-    .send({ ...result, orphanCount: orphanRow.count, pendingCount });
+    .send({ ...result, orphanCount: orphanRow.count, globalPendingCount });
 }
 
 async function handleSearch(

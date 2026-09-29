@@ -18,18 +18,21 @@ const TEST_DATABASE_URL = process.env["TEST_DATABASE_URL"] || "file:./test.db";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * 读 `/api/memory/list` 的 `pendingCount`。
+ * 读 `/api/memory/list` 的 `globalPendingCount`。
+ *
+ * 字段名里的 `global` 是承重的：它与同响应里的 `orphanCount` 作用域不同
+ * （那个按请求者过滤，这个按整个记忆库），名字必须自己说清楚。
  *
  * 刻意只读**路由响应**、不调 `pendingEmbeddingCount` 做对照 —— 拿被测实现去
  * 校验被测实现，两处一起错的时候测试照样绿。
  */
-async function listPendingCount(
+async function listGlobalPendingCount(
   app: FastifyInstance,
   auth: { authorization: string },
 ): Promise<number> {
   const res = await app.inject({ method: "GET", url: "/api/memory/list", headers: auth });
   expect(res.statusCode).toBe(200);
-  return (res.json() as { pendingCount: number }).pendingCount;
+  return (res.json() as { globalPendingCount: number }).globalPendingCount;
 }
 
 const EMBEDDING_KEYS = [
@@ -151,7 +154,7 @@ describe("Memory API", () => {
     const db = getDatabase();
     const savedEmbedding = saveAndClearEmbedding();
     try {
-      const baseline = await listPendingCount(app, auth);
+      const baseline = await listGlobalPendingCount(app, auth);
 
       const memory = createMemory(
         {
@@ -165,7 +168,7 @@ describe("Memory API", () => {
       );
 
       // 真值会随队列走 —— 硬编码的 0 在这一步就会露馅。
-      expect(await listPendingCount(app, auth)).toBe(baseline + 1);
+      expect(await listGlobalPendingCount(app, auth)).toBe(baseline + 1);
 
       // 有了一条向量行，队列就前进。**必须等于基线而不是基线+1减去别的数**：
       // 计数按「没有匹配的向量行」判据，不按「有没有向量行」猜。
@@ -175,7 +178,7 @@ describe("Memory API", () => {
         "any-fingerprint",
         "any-model",
       );
-      expect(await listPendingCount(app, auth)).toBe(baseline);
+      expect(await listGlobalPendingCount(app, auth)).toBe(baseline);
     } finally {
       restoreEmbedding(savedEmbedding);
     }
@@ -205,16 +208,16 @@ describe("Memory API", () => {
         db,
       );
       const vec = new Float32Array([1, 0, 0, 0]);
-      const baseline = await listPendingCount(app, auth);
+      const baseline = await listGlobalPendingCount(app, auth);
 
       // 指纹匹配 → 队列前进
       index.upsert(memory.id, vec, "bge-m3:1024:symmetric", "bge-m3");
-      expect(await listPendingCount(app, auth)).toBe(baseline - 1);
+      expect(await listGlobalPendingCount(app, auth)).toBe(baseline - 1);
 
       // 同一模型名、不同维度/模式是**另一个向量空间**：旧向量不算数，该条重新入队。
       // 若路由只判「有没有向量行」，这一步会错误地保持 baseline - 1。
       index.upsert(memory.id, vec, "bge-m3:1024:asymmetric", "bge-m3");
-      expect(await listPendingCount(app, auth)).toBe(baseline);
+      expect(await listGlobalPendingCount(app, auth)).toBe(baseline);
     } finally {
       restoreEmbedding(savedEmbedding);
     }
