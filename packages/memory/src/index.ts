@@ -9,7 +9,7 @@ export {
   deleteMemory,
   getMemoriesByIds,
 } from "./repository.js";
-export { searchMemories, configureSearch } from "./search.js";
+export { searchMemories, configureSearch, resetSearchDepsForTesting } from "./search.js";
 export { fuseRankedLists, RRF_K } from "./fusion.js";
 export { extractMemories } from "./extractor.js";
 export { buildScopeClause } from "./scope.js";

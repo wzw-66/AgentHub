@@ -321,6 +321,47 @@ describe("hybrid retrieval", () => {
     expect(ids).not.toContain(outside.id);
   });
 
+  it("applies agentId to the vector leg too, not just to BM25", async () => {
+    configureSearch({ segmenter: seg, vectorIndex, embeddingProvider: provider, minSimilarity: 0 });
+
+    const wanted = createMemory({
+      userId: "user-agent-filter",
+      conversationId: "conv-agent-filter",
+      agentId: "agent-wanted",
+      type: "fact",
+      content: "Wombat note owned by the wanted agent",
+    }, db, seg);
+    const other = createMemory({
+      userId: "user-agent-filter",
+      conversationId: "conv-agent-filter",
+      agentId: "agent-unwanted",
+      type: "fact",
+      content: "Wombat note owned by another agent",
+    }, db, seg);
+
+    // 两条都被嵌入，且向量与查询完全相同 —— 唯一能区分它们的就是 agentId。
+    // 查询串与两条正文**没有任何共同词项**，所以 BM25 榜单必为空：
+    // 命中只可能来自向量路，而向量路的 filter 是冻结的 `{ userId, scope }`，
+    // 它表达不了 agentId。若 agentId 只在 BM25 路上生效，`other` 就会漏出来。
+    const vec = await provider.embedQuery("Zebra Quokka");
+    vectorIndex.upsert(wanted.id, vec, provider.fingerprint, provider.model);
+    vectorIndex.upsert(other.id, vec, provider.fingerprint, provider.model);
+
+    const results = await searchMemories(
+      {
+        query: "Zebra Quokka",
+        userId: "user-agent-filter",
+        scope: { conversationId: "conv-agent-filter" },
+        agentId: "agent-wanted",
+      },
+      db,
+    );
+
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain(wanted.id);
+    expect(ids).not.toContain(other.id);
+  });
+
   it("returns an empty array when both legs are empty", async () => {
     configureSearch({ segmenter: seg, vectorIndex, embeddingProvider: provider, minSimilarity: 0 });
     const results = await searchMemories(

@@ -40,8 +40,10 @@ let deps: SearchDeps | undefined;
  * 用模块级注入而非函数参数，是为了让三个调用点（server 路由、orchestrator、
  * extractor）的签名保持简单 —— 它们关心的只有 query / userId / scope。
  *
- * 生产接线在 `apps/server/src/index.ts`：`segmenter` 与 worker 用的必须是
- * **同一个**实例，否则两路的过滤与向量空间会不一致。
+ * 生产接线在 `apps/server/src/index.ts`：`vectorIndex` 与 `embeddingProvider`
+ * 必须与嵌入 worker 用的是**同一个实例**，否则检索会去查一个 worker 从没写过的
+ * 向量空间。`segmenter` 的一致性要求则是对**写入侧**而言的 —— 查询与写入必须用
+ * 同一种切分，否则索引里的词项与查询切出的词项对不上（spec §8.3）。
  */
 export function configureSearch(options: {
   segmenter: Segmenter;
@@ -106,22 +108,47 @@ export async function searchMemories(
 
   const fused = fuseRankedLists([bm25List, vectorList]);
 
-  const page = fused.slice(offset, offset + limit);
+  // ── 请求级过滤：user + scope + agentId，**一次性、对两路统一生效** ──────────
+  //
+  // agentId 只能在这里生效：向量路的 `filter` 是冻结的 `{ userId, scope }`
+  // （spec §8.4），表达不了 agent；而 agentId 是 `searchMemories` 契约里保留的
+  // 展示层筛选（spec §11，MemoryPanel 的「Agent: [全部 ▼]」）。只把它加在 BM25 路
+  // 会让「按 Agent 筛选」漏出别的 agent 的记忆，还会让被过滤掉的 BM25 命中
+  // 被未过滤的向量命中挤下去 —— 两路各自的过滤条件一旦分家就会漂移。
+  //
+  // 它同时是纵深防御：两路都已按 user/scope 过滤过，这里再查一次是防止将来
+  // 某一 leg 的过滤被改错。位置在**切片之前** —— 被滤掉的条目必须由后面的条目
+  // 补位，否则调用方拿到的是短页（filter 放在 slice 之后就会丢掉这个性质）。
+  const allowed = allowedMemoryIds(options, db);
+  const permitted = fused.filter((entry) => allowed.has(entry.memoryId));
+
+  const page = permitted.slice(offset, offset + limit);
   if (page.length === 0) return [];
 
   // 回查完整记录，保持融合后的顺序
-  const records = getMemoriesByIds(page.map((p) => p.memoryId), db);
+  return getMemoriesByIds(page.map((p) => p.memoryId), db);
+}
 
-  // 纵深防御：回查时再按作用域与租户过滤一次。
-  // 两个 leg 都已过滤过，这里是防止将来某一 leg 的过滤被改错。
+/**
+ * 本次请求允许出现的 id 全集：user + scope +（可选）agentId。
+ *
+ * 这是 agentId 的**唯一**生效点 —— 两路各加一次就会漂移，而向量路根本加不了。
+ */
+function allowedMemoryIds(options: SearchOptions, db: Database): Set<string> {
   const scope = buildScopeClause(options.scope);
-  const allowed = new Set(
-    (db
-      .prepare(`SELECT id FROM memory_records r WHERE r.user_id = ? AND ${scope.sql}`)
-      .all(options.userId, ...scope.params) as Array<{ id: string }>).map((r) => r.id),
-  );
+  const conditions = ["r.user_id = ?", scope.sql];
+  const values: unknown[] = [options.userId, ...scope.params];
 
-  return records.filter((r) => allowed.has(r.id));
+  if (options.agentId) {
+    conditions.push("r.agent_id = ?");
+    values.push(options.agentId);
+  }
+
+  const rows = db
+    .prepare(`SELECT id FROM memory_records r WHERE ${conditions.join(" AND ")}`)
+    .all(...values) as Array<{ id: string }>;
+
+  return new Set(rows.map((r) => r.id));
 }
 
 /** BM25 路：预分词 + OR 查询。任一步失败都返回空榜单，不影响向量路。 */
@@ -144,14 +171,10 @@ function runBm25Leg(
 
     // 作用域片段来自 `buildScopeClause`，它以 `r.` 为前缀 ——
     // 所以这里的别名必须是 `r`，与向量路共用同一份过滤实现（spec §8.4）。
+    // agentId **不在这里**过滤：它由 `allowedMemoryIds` 对两路统一施加。
     const scope = buildScopeClause(options.scope);
     const conditions = ["r.user_id = ?", scope.sql];
     const values: unknown[] = [ftsQuery, options.userId, ...scope.params];
-
-    if (options.agentId) {
-      conditions.push("r.agent_id = ?");
-      values.push(options.agentId);
-    }
 
     const rows = db
       .prepare(`
