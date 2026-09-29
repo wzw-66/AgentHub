@@ -162,6 +162,16 @@ export function createOpenAICompatibleEmbeddingProvider(
     const ordered = new Array<Float32Array | undefined>(texts.length).fill(undefined);
     payload.data.forEach((item, position) => {
       const target = item.index ?? position;
+      // 越界下标同样能造出空洞，而且绕开上面的缺失项校验：对 3 个输入写
+      // `ordered[5]` 会把长度撑到 6，在 3、4 处留下**新**洞；`map` 跳过这些
+      // 新洞、既不校验也不抛错，undefined 照样走到写入路径 —— 与「少回一条」
+      // 是同一种损坏，只是触发方式不同。所以越界必须在写入**之前**拦下。
+      if (target < 0 || target >= texts.length) {
+        throw new Error(
+          `Embedding response for model "${options.model}" has an out-of-range index ${target} ` +
+            `for a batch of ${texts.length} input(s) — the endpoint returned a malformed response.`,
+        );
+      }
       ordered[target] = Float32Array.from(item.embedding);
     });
 

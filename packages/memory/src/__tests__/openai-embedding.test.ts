@@ -110,6 +110,50 @@ describe("createOpenAICompatibleEmbeddingProvider", () => {
     );
   });
 
+  it("rejects an out-of-range index instead of leaving holes", async () => {
+    // 越界 index 会把结果数组**撑长**：对 3 个输入写 index 5，长度变 6，
+    // 在 3、4 处留下新洞。`map` 跳过这些新洞，于是既不校验也不抛错，
+    // 洞（= undefined）照样能走到写入路径 —— 与「少回一条」是同一种损坏，
+    // 只是触发方式不同，所以必须在写入之前就按越界拒绝。
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [
+          { embedding: [1, 0, 0], index: 0 },
+          { embedding: [0, 1, 0], index: 1 },
+          { embedding: [0, 0, 1], index: 2 },
+          { embedding: [0, 0, 1], index: 5 },
+        ],
+      }),
+    });
+    const provider = makeProvider({ dim: 3, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await expect(provider.embedDocuments(["a", "b", "c"])).rejects.toThrow(/index 5/);
+  });
+
+  it("rejects an index equal to the batch length (boundary)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse([[1, 0, 0], [0, 1, 0]], [0, 2]));
+    const provider = makeProvider({ dim: 3, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await expect(provider.embedDocuments(["a", "b"])).rejects.toThrow(/index 2/);
+  });
+
+  it("resolves a dense array with no undefined entries on the in-range path", async () => {
+    // 反面对照：输入与 index 一一对应时必须实心。`Array.from` 会把洞显形为
+    // undefined —— 裸 `.every()` 会跳过洞并因此为带洞数组放行，那正是最初
+    // 漏掉这个 bug 的原因。
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
+    const provider = makeProvider({ dim: 3, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    const vecs = await provider.embedDocuments(["a", "b", "c"]);
+    const dense = Array.from(vecs) as Array<Float32Array | undefined>;
+
+    expect(dense).toHaveLength(3);
+    expect(dense.some((v) => v === undefined)).toBe(false);
+    expect(dense.every((v) => v instanceof Float32Array)).toBe(true);
+  });
+
   it("rejects when the endpoint returns a different dimension than configured", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(makeResponse([[1, 0, 0, 0, 0]]));
     const provider = makeProvider({ dim: 3, fetchImpl: fetchImpl as unknown as typeof fetch });
