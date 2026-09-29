@@ -59,6 +59,16 @@
 `EMBEDDING_*` 环境变量，端点由 `EMBEDDING_BASE_URL` 决定（代码只负责拼上 `/embeddings`）。
 因此上表里任何一个 OpenAI 兼容端点都是**换配置，不是改代码**。
 
+**`EMBEDDING_BASE_URL` 与 `LLM_BASE_URL` 的形式不同**（两者都是 spec 定死的约定，
+不要为了「统一」而改动其一）：
+
+| 变量 | 期望形式 | 代码拼接 | 最终请求 |
+|------|----------|----------|----------|
+| `LLM_BASE_URL` | **站点根**，如 `https://api.deepseek.com` | `+/v1/chat/completions` | `https://api.deepseek.com/v1/chat/completions` |
+| `EMBEDDING_BASE_URL` | **已含 `/v1`**，如 `http://127.0.0.1:11434/v1` | `+/embeddings` | `http://127.0.0.1:11434/v1/embeddings` |
+
+写错形式的症状是 404（`.../v1/v1/...` 或 `.../embeddings`），而不是清晰报错。
+
 ## 推荐路径：本地 Ollama
 
 唯一同时满足「零 key、零代码改动、零容器」的选项。
@@ -136,15 +146,28 @@ semantic recall is DISABLED, falling back to BM25 only.
 
 ### 怎么确认向量路是开是关
 
-启动日志里二选一，没有第三种：
+启动日志里三选一：
 
 ```
-[memory] embedding enabled: bge-m3 (1024d, symmetric)      # 开
+[memory] embedding enabled: bge-m3 (1024d, symmetric)      # 开且端点健康
 [memory] ... semantic recall is DISABLED, falling back to BM25 only.   # 关（或配置非法）
+[memory] embedding health check FAILED: <detail> — the vector leg is wired but
+currently returns nothing ...                              # 开，但端点不可用
 ```
 
-端点本身是否可用，直接打一发（provider 上虽然有 `healthCheck()`，
-但**服务端目前没有任何地方调用它** —— 不要指望启动时报出端点不可达）：
+第三条是**配置齐了、端点和模型却不能用的状态** —— 它以前与第一条长得一模一样：
+启动期从不调用 provider 的 `healthCheck()`，于是一个拼错的 `EMBEDDING_MODEL`
+或一个没起来的端点，在日志里看起来完全健康，而真实签名只有
+`{"processed":0,"failed":2} pending: 2`（spec §12）—— 向量路永远回空榜单，
+只有盯着 worker 计数才看得出来。
+
+现在 `apps/server/src/index.ts` 在打「enabled」之前先 `await checkEmbeddingHealth(...)`
+（实现在 `apps/server/src/services/memory-startup.ts`）：健康才打第一条，
+不健康就打第三条（含 `detail`），并说清后果是「每次检索都在无声地只用 BM25」。
+**它不阻止启动**（spec §10.3：向量路是可选能力）——worker 照常起、照常重试，
+端点恢复后自愈。
+
+想手工确认端点，也可以直接打一发：
 
 ```bash
 curl -s http://127.0.0.1:11434/v1/embeddings \
@@ -154,6 +177,10 @@ curl -s http://127.0.0.1:11434/v1/embeddings \
 
 返回 `{"data":[{"embedding":[...]}]}` 即正常；`404` 说明模型没 pull，
 `Connection refused` 说明 `ollama serve` 没跑。
+
+注意请求本身有 **5 秒超时**（`EMBEDDING_REQUEST_TIMEOUT_MS`）：一个接受连接后
+永不回应的端点不会把读路径挂住 5 分钟（undici 默认 `headersTimeout`），
+而是在 5 秒后与其它 leg 失败一样退化为 BM25。
 
 ## 已知问题：`bge-m3` 对某些技术文档返回 NaN
 
@@ -185,7 +212,8 @@ worker 每轮重试，所以它不会永久丢失，但也可能一直失败。
 
 ## 换模型 / 换维度的代价
 
-向量行的指纹是 **`${model}:${dim}:${mode}`**（`memory_embeddings.fingerprint`），
+向量行的指纹是 **`${model}:${dim}:${mode}`**，配了前缀时再追加一段前缀内容的短哈希
+`${model}:${dim}:${mode}:${prefixDigest}`（`memory_embeddings.fingerprint`）。
 它同时是「待嵌入队列」的前进判据与失效判据 —— 两者是同一个值，不可能漂移。
 
 | 改动 | 是否自动重算 |
@@ -193,18 +221,28 @@ worker 每轮重试，所以它不会永久丢失，但也可能一直失败。
 | `EMBEDDING_MODEL` | 是（全部旧向量作废并重新入队） |
 | `EMBEDDING_DIM`（含通过 `EMBEDDING_DIMENSIONS` 改变实际宽度） | 是 |
 | `EMBEDDING_MODE` | 是 |
-| `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` | **不会** —— 前缀不进指纹 |
+| `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` | 是（前缀**内容**进指纹；两侧都为空时指纹与旧版逐字相同） |
+
+**前缀曾经不进指纹，那是个静默失效点**：`mode` 只区分 symmetric/asymmetric，
+区分不了「前缀是什么」，于是改前缀既不报错也不重算 —— 老文档带着旧前缀的向量继续匹配、
+新文档用新前缀，两套向量永久混在同一个索引里，召回率静默降一档
+（spec §8.1 的原话是「不会报错，它只会安静地把召回率拉低一档」）。
+
+**副作用：升级到本版本时会发生一次全量重嵌。** 旧指纹不含前缀分量，任何已存库的
+旧指纹都不再匹配新值 —— 这正是旧指纹一直没能触发的那次重嵌，是正确结果而非意外。
+不带前缀的默认配置指纹仍是 `${model}:${dim}:${mode}`，与旧版逐字相同，所以只影响
+配了前缀的库。
 
 **重算是真实成本，不是免费的**：worker 默认每 5 秒一批 32 条，且**一轮没跑完会跳过
 下一个 tick**（至多一轮在飞）。1 万条 = 313 轮；本地推理下每轮通常超过 5 秒，
 所以「26 分钟」是**乐观下界**，真实耗时按每轮实测时长乘 313 估。大规模库上换模型前先评估。
 
-**改了前缀必须手动作废旧向量**，否则新旧前缀的向量会混在同一个索引里，
-而队列看起来是空的：
+**不再需要手动作废旧向量**（旧版文档要求的那条 `DELETE FROM memory_embeddings`
+已删）：前缀改动现在与其它指纹改动一样自动入队。确实想手工强制重算时删表仍然有效 ——
+下次启动/下一轮 worker 会把全部记忆重新入队（LEFT JOIN 判据天然自愈）：
 
 ```bash
 sqlite3 .agenthub/memory.db "DELETE FROM memory_embeddings;"
-# 下次启动/下一轮 worker 会把全部记忆重新入队（LEFT JOIN 判据天然自愈）
 ```
 
 ## 与数据库的关系（两条硬约束）

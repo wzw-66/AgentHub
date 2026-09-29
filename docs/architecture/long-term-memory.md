@@ -19,6 +19,30 @@
 > 早期版本的本文档称「让 AI Agent 能跨对话记住用户偏好」—— 那是**错的**，
 > 与本模块的实际作用域相反。
 
+## 升级（从本分支之前的版本）
+
+三件事会发生，都不是错误，但都要预期到：
+
+**1. `.env` 变量改名（不改会起不来）。** LLM 配置读的是 `LLM_BASE_URL` / `LLM_MODEL`，
+不是 `BASE_URL` / `MODEL` —— 后者是历史遗留的死键，没有任何代码读取。
+两个新名字是**启动期硬依赖**（缺失即抛错，见 `assertLlmConfig`），
+所以一个沿用旧变量名的 checkout 启动时会直接报缺失，而不是静默回落到别的模型。
+另外两个 URL 的形式不同，别「统一」：`LLM_BASE_URL` 是站点根（代码拼
+`/v1/chat/completions`），`EMBEDDING_BASE_URL` 已含 `/v1`（代码只拼 `/embeddings`）。
+
+**2. 升级后会有一次全量重嵌。** `memory_embeddings.fingerprint` 的判据变了：
+配了前缀时现在追加前缀内容的哈希（见 `memory_embeddings` 一节）。任何已存库的旧指纹
+都不再匹配新值，队列于是把全部记忆重新入队 —— 这是**正确结果**，正是旧指纹一直没能
+触发的那次重嵌（旧版本下改前缀完全不重算，新旧前缀的向量永久混用）。
+成本与估时见 `docs/architecture/embedding-setup.md`「换模型 / 换维度的代价」。
+不带前缀的默认配置指纹逐字不变，所以只影响配了前缀的库。
+
+**3. `conversation_id IS NULL` 的旧记忆**（改造前写入、无会话归属的行）在任何会话
+作用域下都检索不到 —— 这是 spec §9.6 已知且接受的损失，但它**必须可见**：
+`GET /api/memory/list` 的 `orphanCount` 就是那个信号（按请求者过滤）。
+非零即说明该部署需要跑一次 spec §9.6 的 option-A 一次性回填（把这些行归到某个会话），
+否则它们**永久不可达**。这是运维触发条件，不是常规状态。
+
 ## Status
 
 - **Status:** Implemented（混合检索：BM25 + 向量 + RRF）
@@ -141,7 +165,7 @@ CREATE VIRTUAL TABLE memory_fts USING fts5(
 ```sql
 CREATE TABLE memory_embeddings (
   memory_id   TEXT PRIMARY KEY REFERENCES memory_records(id) ON DELETE CASCADE,
-  fingerprint TEXT NOT NULL,   -- `${model}:${dim}:${mode}` —— 向量空间的指纹
+  fingerprint TEXT NOT NULL,   -- `${model}:${dim}:${mode}[:${prefixDigest}]` —— 向量空间的指纹
   model       TEXT NOT NULL,
   dim         INTEGER NOT NULL,
   vec         BLOB NOT NULL,   -- Float32Array 的原始字节
@@ -152,6 +176,13 @@ CREATE TABLE memory_embeddings (
 `fingerprint` 是**唯一**的向量失效判据。不能用 `model` 代替：同一个模型名可能服务
 多个输出维度（如 Qwen3-Embedding 的 MRL），只比 `model` 会让不同维度的向量混进
 同一个索引而不触发重算。
+
+配了 `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` 时，指纹追加一段
+前缀内容的短哈希（`buildFingerprint(..., prefixDigest(...))`）；两侧都为空时指纹
+与不加该分量时**逐字相同**。`mode`（symmetric/asymmetric）区分不了「前缀是什么」，
+所以前缀内容必须是判据的一部分，否则改前缀不触发重算、新旧前缀的向量永久混用
+（spec §6.2「维度或前缀模式变更同样自动作废」）。**这是对 spec §8.1 签名的有意扩展**：
+§8.1 的 `${model}:${dim}:${mode}` 兑现不了 §6.2 的这一半，补上前缀分量正是让 §6.2 成真。
 
 ### 迁移机制：`PRAGMA user_version`
 
@@ -309,6 +340,15 @@ patch 里缺席即「不改这一列」，`?? 1` 会把「LLM 没重申重要度
 - 一批里的一条坏向量**不影响同批其他条**：整批 reject 时拆成单条重试。
   `bge-m3` + Ollama 对某些技术文档返回 NaN（见 `embedding-setup.md`），
   `assertFiniteVector` 拒收这类向量 —— 该条记忆停留在「只有 BM25 可召回」的状态。
+- **启动期会验活一次**：打「embedding enabled」之前先 `await provider.healthCheck()`
+  （`checkEmbeddingHealth`，在 `services/memory-startup.ts`）。不健康就打一条带
+  `detail` 的 warning 说明「向量路接线是通的但当下回不来任何东西、检索静默退化为
+  BM25」，**不阻止启动**（spec §10.3）。没有这一步的话，一个拼错的 `EMBEDDING_MODEL`
+  在启动日志里与健康状态长得一模一样。
+- **每次请求有 5 秒超时**（`EMBEDDING_REQUEST_TIMEOUT_MS`）。检索在聊天关键路径上
+  （注入记忆在 `harness.execute` 之前），一个接受连接后永不回应的端点会把读路径挂到
+  undici 默认的 `headersTimeout`（约 5 分钟）—— 而消息早已落库并返回 201，
+  可见症状是「agent 对每条消息都静默地永不回复」。超时后按普通的 leg 失败处理。
 
 ## 公开 API
 
@@ -423,7 +463,7 @@ function migrate(db: Database): { from: number; to: number };
 
 | 变量 | 必填？ | 说明 |
 |------|--------|------|
-| `LLM_BASE_URL` | 是 | 启动期硬依赖，缺失即抛错 |
+| `LLM_BASE_URL` | 是 | 启动期硬依赖，缺失即抛错。**站点根**（如 `https://api.deepseek.com`），代码拼 `/v1/chat/completions` |
 | `LLM_MODEL` | 是 | 同上。**不是 `BASE_URL` / `MODEL`** —— 那两个是历史遗留的死键 |
 | `API_KEY` | 否 | 缺失时 `LLMIntentAnalyzer` 走**显式降级**路径（全部 agent 并行派发） |
 
@@ -431,13 +471,13 @@ function migrate(db: Database): { from: number; to: number };
 
 | 变量 | 必填？ | 说明 |
 |------|--------|------|
-| `EMBEDDING_BASE_URL` | 启用向量路则必填 | OpenAI 兼容端点根，代码拼 `/embeddings` |
+| `EMBEDDING_BASE_URL` | 启用向量路则必填 | OpenAI 兼容端点根，**已含 `/v1`**（如 `http://127.0.0.1:11434/v1`），代码只再拼 `/embeddings` |
 | `EMBEDDING_API_KEY` | 同上 | 独立于 `API_KEY`；Ollama 不校验，但实现要求非空 |
 | `EMBEDDING_MODEL` | 同上 | **无默认值** |
 | `EMBEDDING_DIM` | 同上 | **无默认值**；与端点实际返回的长度校验，不符即抛错 |
 | `EMBEDDING_MODE` | 否 | `symmetric`（默认）/ `asymmetric` |
 | `EMBEDDING_DIMENSIONS` | 否 | MRL 降维（仅部分模型支持） |
-| `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` | 否 | 非对称模型的查询/文档侧前缀 |
+| `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` | 否 | 非对称模型的查询/文档侧前缀。**内容进指纹**：改动会触发一次全量重嵌 |
 
 **四个必填变量缺任意一个 → `config.embedding` 整体为 `undefined`**，向量路关闭，
 退化为纯 BM25，启动时打一条 warning 说明缺什么、后果是什么。**不做部分兜底，
