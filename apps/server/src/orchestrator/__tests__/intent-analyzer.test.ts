@@ -209,6 +209,7 @@ describe("decomposeMessage", () => {
     content: "@产品经理 @设计师 @前端开发 帮我设计一个登录页面",
     agents: mockAgents,
     conversationId: "conv_1",
+    userId: "user_1",
     parentMessageId: "msg_1",
   };
 

@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { triggerMemoryExtraction, pendingExtractionCount } from "../services/memory-trigger.js";
-import { searchMemories, getDatabase, setDbPath, closeDatabase, initSchema } from "@agenthub/memory";
+import {
+  searchMemories,
+  getDatabase,
+  setDbPath,
+  closeDatabase,
+  initSchema,
+  reindexMemories,
+  createJiebaSegmenter,
+} from "@agenthub/memory";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
@@ -14,6 +22,10 @@ beforeEach(() => {
   setDbPath(dbPath);
   // 服务端没有全局 schema setup；记忆库的表由调用方显式建（`routes/memory.ts` 亦然）。
   initSchema();
+  // BM25 路按 `isBm25Ready()` 决定是否跳过（未就绪时跳过并打 warning，spec §7.7）。
+  // 生产里该标志由启动期的 `initializeMemory` 打开；这里走同一条数据路径，
+  // 而不是去摆布标志位 —— 测试与生产用同一个入口。
+  reindexMemories(createJiebaSegmenter(), getDatabase());
 });
 
 afterEach(() => {
@@ -57,7 +69,7 @@ describe("triggerMemoryExtraction", () => {
     // fire-and-forget —— 等到信号量归零
     await vi.waitFor(() => expect(pendingExtractionCount()).toBe(0));
 
-    const found = searchMemories(
+    const found = await searchMemories(
       { query: "Numbat", userId: "user-trigger", scope: { conversationId: "conv-trigger-7" } },
       getDatabase(),
     );
@@ -94,7 +106,7 @@ describe("triggerMemoryExtraction", () => {
     });
     await vi.waitFor(() => expect(pendingExtractionCount()).toBe(0));
 
-    const elsewhere = searchMemories(
+    const elsewhere = await searchMemories(
       { query: "Ocelot", userId: "user-trigger", scope: { conversationId: "conv-somewhere-else" } },
       getDatabase(),
     );

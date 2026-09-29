@@ -157,7 +157,7 @@ async function handleSearch(
     return reply.status(400).send({ error: "Query parameter 'q' is required" });
   }
 
-  const results = searchMemories({
+  const results = await searchMemories({
     query: query.q,
     userId: request.userId!,
     // Web UI 的手动搜索语义就是「翻所有记忆」，不受会话作用域限制（spec §4.2、§11）。

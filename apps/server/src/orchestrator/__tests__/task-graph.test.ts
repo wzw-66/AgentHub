@@ -7,6 +7,7 @@ function makeSubTask(id: string, dependsOn: string[] = []): SubTask {
     id,
     parentMessageId: "msg_1",
     conversationId: "conv_1",
+    userId: "user_1",
     agentId: `agent_${id}`,
     agentName: `Agent${id}`,
     instruction: "do something",

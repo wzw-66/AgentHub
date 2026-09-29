@@ -8,6 +8,8 @@ import {
   closeDatabase,
   setDbPath,
   getDatabase,
+  reindexMemories,
+  createJiebaSegmenter,
 } from "@agenthub/memory";
 import path from "node:path";
 import os from "node:os";
@@ -76,6 +78,11 @@ describe("Memory API", () => {
     await prisma.$connect();
     app = await createTestApp();
     await app.ready();
+
+    // `app.ready()` 会注册 `routes/memory.ts`，它顺带跑 `initSchema()`。
+    // 接着走生产启动的同一条数据路径把 BM25 索引顶到就绪：`isBm25Ready()` 为 false
+    // 时检索会**跳过** BM25 路（spec §7.7），下面的搜索断言就会拿到空数组。
+    reindexMemories(createJiebaSegmenter(), getDatabase());
 
     const user = await createTestUser(prisma, "test.mem.route@example.com");
     auth = getAuthHeader(user.id);

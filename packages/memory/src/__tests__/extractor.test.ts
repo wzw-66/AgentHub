@@ -1,11 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Database as DatabaseType } from "better-sqlite3";
-import { createTestDb, destroyTestDb } from "./setup.js";
+import { createTestDb, destroyTestDb, TEST_VOCABULARY } from "./setup.js";
 import { extractMemories } from "../extractor.js";
 import { createMemory, getMemory, listMemories } from "../repository.js";
-import { searchMemories } from "../search.js";
+import { configureSearch, resetSearchDepsForTesting, searchMemories } from "../search.js";
+import { setBm25ReadyForTesting } from "../worker.js";
+import { FakeSegmenter } from "./fakes.js";
 
 let db: DatabaseType;
+
+/**
+ * 与 `createTestDb` 写库时用的分词器**同一份词表** —— 写入侧与查询侧必须一致，
+ * 否则索引里的词项与查询切出的词项对不上，命中会被静默丢掉（spec §8.3）。
+ */
+const seg = new FakeSegmenter(TEST_VOCABULARY);
 
 const MOCK_PARAMS = {
   userId: "user-extract",
@@ -28,9 +36,14 @@ const LLM_CONFIG = {
 
 beforeAll(() => {
   db = createTestDb();
+  // 索引就绪是显式的：createTestDb 只跑 DDL 迁移，不跑启动期的回填
+  // （生产里那一步是 initializeMemory → reindexMemories）。
+  setBm25ReadyForTesting(true);
+  configureSearch({ segmenter: seg });
 });
 
 afterAll(() => {
+  resetSearchDepsForTesting();
   destroyTestDb(db);
 });
 
@@ -65,7 +78,7 @@ describe("extractMemories", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     // Verify the memory was persisted
-    const results = searchMemories(
+    const results = await searchMemories(
       {
         query: "tabs",
         userId: "user-extract",
@@ -155,7 +168,7 @@ describe("extractMemories", () => {
     expect(getMemory(created.id, db)).toBeNull();
 
     // Verify the new memory exists with updated content
-    const updatedResults = searchMemories(
+    const updatedResults = await searchMemories(
       {
         query: "Updated content",
         userId: "user-extract",

@@ -2,8 +2,14 @@ export { getDatabase, closeDatabase, setDbPath } from "./db.js";
 export type { Database } from "./db.js";
 export { initSchema } from "./schema.js";
 export { migrate, currentVersion } from "./migrations.js";
-export { createMemory, getMemory, listMemories, deleteMemory } from "./repository.js";
-export { searchMemories } from "./search.js";
+export {
+  createMemory,
+  getMemory,
+  listMemories,
+  deleteMemory,
+  getMemoriesByIds,
+} from "./repository.js";
+export { searchMemories, configureSearch } from "./search.js";
 export { fuseRankedLists, RRF_K } from "./fusion.js";
 export { extractMemories } from "./extractor.js";
 export { buildScopeClause } from "./scope.js";

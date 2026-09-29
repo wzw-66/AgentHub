@@ -11,6 +11,13 @@ export interface SubTask {
   id: string;
   parentMessageId: string;
   conversationId: string;
+  /**
+   * 会话所有者的 user id —— 记忆检索的租户边界（spec §4.8）。
+   *
+   * 必填：`searchMemories` 缺了它要么编译不过，要么在运行时抛进 catch，
+   * 让记忆注入静默失效。
+   */
+  userId: string;
   /** Target agent ID */
   agentId: string;
   /** Agent display name */

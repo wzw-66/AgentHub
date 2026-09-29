@@ -113,3 +113,22 @@ export function deleteMemory(id: string, customDb?: Database): void {
   const db = customDb || getDatabase();
   db.prepare("DELETE FROM memory_records WHERE id = ?").run(id);
 }
+
+/**
+ * 按 id 批量取回完整记录，**保持传入的顺序**。
+ *
+ * 融合层只产出 id 与分数，需要回查完整记录。SQL 的 `IN` 不保证顺序，
+ * 所以在 JS 侧重排 —— 顺序就是融合的结论，不能被数据库打乱。
+ */
+export function getMemoriesByIds(ids: string[], customDb?: Database): MemoryRecord[] {
+  if (ids.length === 0) return [];
+  const db = customDb || getDatabase();
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db
+    .prepare(`SELECT * FROM memory_records WHERE id IN (${placeholders})`)
+    .all(...ids) as Record<string, unknown>[];
+
+  const byId = new Map(rows.map((r) => [r["id"] as string, rowToMemoryRecord(r)]));
+  return ids.map((id) => byId.get(id)).filter((m): m is MemoryRecord => m !== undefined);
+}

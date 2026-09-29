@@ -399,6 +399,7 @@ async function runOrchestration(
     content: message.content,
     agents,
     conversationId,
+    userId: conversation.ownerId,
     parentMessageId: messageId,
     history: [],
   });

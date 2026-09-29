@@ -132,9 +132,12 @@ export class SubTaskExecutor {
     // Inject relevant memories only on the FIRST SubTask
     if (!this._memoryInjected) {
       try {
-        const memories = searchMemories({
+        const memories = await searchMemories({
           query: subtask.instruction,
-          agentId: subtask.agentId,
+          // 租户边界与作用域都是必填：少了它们，检索要么编译不过，要么
+          // 在运行时把别人的记忆或别的会话的记忆拼进提示词（spec §1.1、§4.8）。
+          userId: subtask.userId,
+          scope: { conversationId: subtask.conversationId },
           limit: 5,
         });
         if (memories.length > 0) {
@@ -144,8 +147,11 @@ export class SubTaskExecutor {
               .join("\n\n"),
           );
         }
-      } catch {
-        // Non-blocking — memories are a hint, not a requirement
+      } catch (err) {
+        // Non-blocking — memories are a hint, not a requirement. 但**不能静默**：
+        // 一个裸 catch 会让作用域/租户传错这类 bug 退化成「没有相关记忆」，
+        // 与真正的「没有匹配」在日志里长得一模一样。
+        console.error("[orchestrator] memory retrieval failed; continuing without memories:", err);
       }
       this._memoryInjected = true;
     }

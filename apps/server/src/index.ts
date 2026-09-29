@@ -5,6 +5,7 @@ import { config as appConfig, assertLlmConfig } from "./config/env";
 import { buildApp } from "./app";
 import {
   setDbPath,
+  configureSearch,
   createJiebaSegmenter,
   createOpenAICompatibleEmbeddingProvider,
   createMemoryVectorIndex,
@@ -30,30 +31,43 @@ async function main() {
   // 窗口才不会暴露给请求（spec §7.7、§9.4）。
   //
   // 重建失败不阻止启动（记忆是辅助能力，爆炸半径不成比例），但绝不静默降级：
-  // initializeMemory 会在失败时打 ERROR 并留下 isBm25Ready() === false。
-  // **BM25 路跳过该标志的开关还没有接线 —— 那是 Task 20 的事**（它会把
-  // searchMemories 改成双路，并按 isBm25Ready() 决定跳过 BM25 路 + 打 warning）。
-  // 在那之前，检索侧不会读这个标志，降级只体现在日志与标志本身。
-  await initializeMemory(createJiebaSegmenter());
+  // initializeMemory 会在失败时打 ERROR 并留下 isBm25Ready() === false，
+  // 检索侧据此跳过 BM25 路并打 warning（见 search.ts 的 runBm25Leg）。
+  const segmenter = createJiebaSegmenter();
+  await initializeMemory(segmenter);
 
   const cm = new ConnectionManager();
   const app = await buildApp(cm);
+
+  // ─── Search wiring：两路必须共用同一组实例 ──────────────────────────────────
+  // 分词器、向量索引、embedding provider 三者在「检索」与「嵌入 worker」之间
+  // 必须**是同一组实例**：索引换一个实例就等于换了一个向量空间，检索会查到
+  // 一个工人从没写过的索引；分词器不一致则写入侧与查询侧的词项对不上。
+  //
+  // 不接线的话检索会退化成「懒加载默认分词器 + 向量路关闭」—— 单测全绿，
+  // 功能没接上。
+  const embeddingConfig = appConfig.embedding;
+  const vectorIndex = embeddingConfig ? createMemoryVectorIndex() : undefined;
+  const embeddingProvider = embeddingConfig
+    ? createOpenAICompatibleEmbeddingProvider(embeddingConfig)
+    : undefined;
+
+  configureSearch({
+    segmenter,
+    ...(vectorIndex ? { vectorIndex } : {}),
+    ...(embeddingProvider ? { embeddingProvider } : {}),
+  });
 
   // ─── Embedding worker（可选能力）────────────────────────────────────────────
   // 未配置时**不启动** worker，只打一条 warning 说清缺什么、后果是什么（spec §10.3）。
   // 降级是显式、有日志、可预期的：`/api/memory/search` 照常可用，只是没有语义召回。
   // 刻意不给缺失的变量兜底值 —— 见 config/env.ts 的 embedding getter。
   let embeddingWorker: { stop(): void } | undefined;
-  const embeddingConfig = appConfig.embedding;
-  if (embeddingConfig) {
-    const provider = createOpenAICompatibleEmbeddingProvider(embeddingConfig);
-    embeddingWorker = startEmbeddingWorker({
-      provider,
-      index: createMemoryVectorIndex(),
-    });
+  if (embeddingProvider && vectorIndex) {
+    embeddingWorker = startEmbeddingWorker({ provider: embeddingProvider, index: vectorIndex });
     app.log.info(
-      `[memory] embedding enabled: ${embeddingConfig.model} ` +
-        `(${embeddingConfig.dim}d, ${embeddingConfig.mode})`,
+      `[memory] embedding enabled: ${embeddingConfig!.model} ` +
+        `(${embeddingConfig!.dim}d, ${embeddingConfig!.mode})`,
     );
   } else {
     // 「缺失」与「非法」共用这条 warning（两者都让 config.embedding 为 undefined），

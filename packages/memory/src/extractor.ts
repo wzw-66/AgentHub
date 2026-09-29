@@ -151,7 +151,11 @@ export async function extractMemories(
   // 1. Search existing relevant memories
   // 作用域限定在 (用户, 本会话)：去重候选若跨租户或跨会话，LLM 会看到
   // 别人的记忆并把它们当作可 update/delete 的对象（spec §4.8）。
-  const existingMemories = searchMemories(
+  //
+  // 查询串是**原始**用户消息，分词由搜索层内部的 buildFtsQuery 负责 —— v3 之后
+  // `memory_fts` 索引的是分词后的列，把原始消息直接丢给 MATCH 会让多词中文查询
+  // 匹配不到任何东西，去重候选静默变少（spec §8.3）。
+  const existingMemories = await searchMemories(
     {
       query: params.userMessage,
       userId: params.userId,

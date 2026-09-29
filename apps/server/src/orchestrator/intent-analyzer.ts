@@ -260,6 +260,8 @@ export async function decomposeMessage(params: {
   content: string;
   agents: Agent[];
   conversationId: string;
+  /** 会话所有者 —— 每个 SubTask 的记忆检索都以它为租户边界（spec §4.8） */
+  userId: string;
   parentMessageId: string;
   history?: Message[];
   analyzer?: LLMIntentAnalyzer;
@@ -268,6 +270,7 @@ export async function decomposeMessage(params: {
     content,
     agents,
     conversationId,
+    userId,
     parentMessageId,
     history,
     analyzer,
@@ -333,6 +336,7 @@ export async function decomposeMessage(params: {
       id: `subtask_${parentMessageId}_${agent.id}`,
       parentMessageId,
       conversationId,
+      userId,
       agentId: agent.id,
       agentName: agent.name,
       instruction: assignment.instruction,
