@@ -74,10 +74,18 @@ export async function buildMemoryContext(params: {
 
     // 检索结果已按相关度排序，所以「下一条塞不下」就是停止点，不是跳过点 ——
     // 继续往后找小的条目会把低相关度的记忆排到高相关度的前面。
+    //
+    // **例外：还一条都没塞进去时，超预算的那条要跳过而不是停止。** 否则一条
+    // 过大的记忆（很常见：一段长决策正文）会把这一轮的**全部**匹配一起压掉，
+    // 即使后面还有完全塞得下的小条目。「停止，不重排」的 rationale 只在已经有
+    // 内容可注入时才成立 —— 那时提前停下是保护排序，此时停下是产出空集。
     for (const memory of memories) {
       const line = `[Memory - ${memory.type}] ${memory.content}`;
       const cost = estimateTokens(line);
-      if (used + cost > budget) break;
+      if (used + cost > budget) {
+        if (lines.length === 0) continue;
+        break;
+      }
       lines.push(line);
       used += cost;
     }

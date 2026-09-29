@@ -88,6 +88,28 @@ describe("buildMemoryContext", () => {
     expect(entries.length).toBeGreaterThan(0);
   });
 
+  it("skips an oversized top match instead of letting it suppress every other match", async () => {
+    // 最相关的那条恰好超大。旧实现在这里 `break`，于是这一轮一条都注入不了 ——
+    // 即使后面还有完全塞得下的小条目。一条长记忆不该把整轮的匹配一起压掉。
+    seed(`缩进 ${"缩进 ".repeat(9)}${"非常冗长的正文 ".repeat(60)}`);
+    const small = seed("缩进 简短");
+
+    // 前提：超大那条确实排在前面，否则本用例走不到 head-of-line 那条路径
+    // （前提不成立时这里先红，不会伪装成一个「已经修好了」的绿）
+    const ranked = await searchMemories(
+      { query: "缩进", userId: "u1", scope: { conversationId: "c1" } },
+      db,
+    );
+    expect(ranked[0]!.id).not.toBe(small.id);
+
+    const out = await buildMemoryContext({
+      userId: "u1", conversationId: "c1", query: "缩进", tokenBudget: 40, customDb: db,
+    });
+
+    expect(out).toBeDefined();
+    expect(out).toContain("简短");
+  });
+
   it("returns undefined rather than an empty string when nothing fits", async () => {
     seed("用户偏好缩进 with a very long tail that definitely exceeds a tiny budget");
     const out = await buildMemoryContext({
