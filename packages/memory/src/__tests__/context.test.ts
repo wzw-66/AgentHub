@@ -96,6 +96,30 @@ describe("buildMemoryContext", () => {
     expect(out).toBeUndefined();
   });
 
+  it("logs the difference between 'nothing matched' and 'everything suppressed by budget'", async () => {
+    // 两种情况都返回 undefined，调用方分不出来 —— 但日志必须分得出来，否则
+    // 「一条过大的记忆压掉了本轮全部记忆」会伪装成「没有相关记忆」。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // ① 一条都没匹配上 → 不告警。
+      await buildMemoryContext({
+        userId: "u1", conversationId: "c1", query: "缩进", customDb: db,
+      });
+      expect(warn).not.toHaveBeenCalled();
+
+      // ② 匹配到了、但第一条就超预算 → 必须告警，且说清是预算太小。
+      seed("用户偏好缩进 with a very long tail that definitely exceeds a tiny budget");
+      const out = await buildMemoryContext({
+        userId: "u1", conversationId: "c1", query: "缩进", tokenBudget: 1, customDb: db,
+      });
+      expect(out).toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain("tokenBudget=1");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("uses 800 tokens as the default budget", async () => {
     // 每条约 400 字符 ≈ 100 tokens；10 条 ≈ 1000 tokens，塞不进默认的 800。
     for (let i = 0; i < 10; i++) seed(`用户偏好缩进 ${i} ` + "pad ".repeat(93));

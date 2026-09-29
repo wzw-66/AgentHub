@@ -18,6 +18,7 @@ import {
 } from "@agenthub/memory";
 import type { Segmenter } from "@agenthub/memory";
 import { SubTaskExecutor } from "../orchestrator/executor.js";
+import { pendingExtractionCount } from "../services/memory-trigger.js";
 import type { SubTask } from "../orchestrator/types.js";
 import path from "node:path";
 import os from "node:os";
@@ -162,8 +163,14 @@ describe("memory injection into the agent system prompt", () => {
   });
 
   afterEach(async () => {
-    // 记忆抽取是 fire-and-forget，会往临时记忆库写东西 —— 先关掉它再删库。
     await app.close();
+
+    // 记忆抽取是 fire-and-forget：它可能在 `fetch` 被 stub 的窗口关闭之后才真正
+    // 发起请求。**先排空再撤 stub** —— 否则真实 `fetch` 会短暂复活，测试就有机会
+    // 打出网络请求（constraints：测试不得依赖网络，这条是绝对的，不是尽力而为）。
+    // 排空同时也保证下面的删库不会撞上一次仍在写入的提取。
+    await vi.waitFor(() => expect(pendingExtractionCount()).toBe(0), { timeout: 5000 });
+
     await prisma.message.deleteMany({ where: { conversationId } });
     await prisma.conversation.deleteMany({ where: { ownerId: userId } });
     await prisma.contact.deleteMany({ where: { userId } });
@@ -192,7 +199,8 @@ describe("memory injection into the agent system prompt", () => {
   it("injects long-term memories into the single-agent system prompt", async () => {
     seed("User prefers tab indentation in this project");
     // 抽取会打 LLM —— stub 掉，测试绝不发网络请求。
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network in tests")));
+    const mockFetch = vi.fn().mockRejectedValue(new Error("no network in tests"));
+    vi.stubGlobal("fetch", mockFetch);
 
     const res = await app.inject({
       method: "POST",
@@ -208,6 +216,11 @@ describe("memory injection into the agent system prompt", () => {
     expect(systemPrompt).toBeDefined();
     expect(systemPrompt).toContain("[Memory - preference]");
     expect(systemPrompt).toContain("User prefers tab indentation in this project");
+
+    // 抽取**确实被触发了**（它走了 stubbed fetch）。这条断言让 afterEach 的排空
+    // 成为承重的而不是空转：如果提取根本没跑，`pendingExtractionCount()` 恒为 0，
+    // 那个 waitFor 就什么都没保护到。
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalled());
   });
 
   it("injects exactly the block the shared helper produces for the same inputs", async () => {

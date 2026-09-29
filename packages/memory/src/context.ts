@@ -23,9 +23,11 @@ const CHARS_PER_TOKEN = 4;
  * 上限（spec §8.7），精度不重要。真正的收敛点还是 `tokenBudget` 这个参数本身，
  * 换掉这个函数的估算方式不会改变接口。
  *
- * 已知偏差：中文的字符/token 比低于英文（一个汉字常常就是一个 token），所以对
- * 中文记忆这是**低估**。方向是安全的 —— 低估只会让注入比预算略多，而预算本就是
- * 一个数量级上的护栏，不是硬配额。
+ * 已知偏差：中文的字符/token 比远低于英文（一个汉字常常就是一个 token），所以对
+ * 纯中文记忆这是**低估**，且量级不小 —— 按 4 字符/token 估，一段纯汉字正文的实际
+ * token 数约为估算值的 **4 倍**：默认 800 的预算，最坏情况下真正注入的约 3200 token。
+ * 方向是安全的（只会偏多，不会偏少），但别把这当成噪声：要收紧就得换估算方式或调低
+ * 默认预算，而不是指望它「差不多」。
  */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
@@ -78,6 +80,18 @@ export async function buildMemoryContext(params: {
       if (used + cost > budget) break;
       lines.push(line);
       used += cost;
+    }
+
+    // 「检索到 0 条」与「检索到了、但第一条就超预算」都返回 `undefined`，调用方
+    // 看不出区别 —— 而这正是本项目反复栽的那类静默失效（一条过大的记忆会把这一轮
+    // 的**全部**记忆一起压掉）。所以两者必须在日志里长得不一样。
+    if (memories.length > 0 && lines.length === 0) {
+      console.warn(
+        `[memory] ${memories.length} memory(ies) matched but none fit tokenBudget=${budget}` +
+          ` (the top memory alone estimates at ${estimateTokens(
+            `[Memory - ${memories[0]!.type}] ${memories[0]!.content}`,
+          )}); injecting nothing this turn`,
+      );
     }
 
     return lines.length > 0 ? lines.join("\n\n") : undefined;
