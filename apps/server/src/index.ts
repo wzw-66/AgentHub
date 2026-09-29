@@ -56,9 +56,14 @@ async function main() {
         `(${embeddingConfig.dim}d, ${embeddingConfig.mode})`,
     );
   } else {
+    // 「缺失」与「非法」共用这条 warning（两者都让 config.embedding 为 undefined），
+    // 所以措辞必须覆盖后者，否则一个拼错的 EMBEDDING_MODE 会得到一句
+    // 「变量没配全」的误导性提示 —— 明明都配了。
     app.log.warn(
       "[memory] EMBEDDING_BASE_URL / EMBEDDING_API_KEY / EMBEDDING_MODEL / EMBEDDING_DIM " +
-        "not all set — semantic recall is DISABLED, falling back to BM25 only.",
+        "not all set to valid values (EMBEDDING_MODE must be symmetric or asymmetric when " +
+        "set; EMBEDDING_DIM / EMBEDDING_DIMENSIONS must be positive integers) — " +
+        "semantic recall is DISABLED, falling back to BM25 only.",
     );
   }
 

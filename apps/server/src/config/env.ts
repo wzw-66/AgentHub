@@ -43,6 +43,19 @@ function requireEnv(name: string): string {
 }
 
 /**
+ * 严格解析一个正整数环境变量。
+ *
+ * `Number.parseInt` 对这四个无兜底变量太宽容：`"1024abc"` → `1024`、`"1e3"` → `1`。
+ * 两者都会被**接受**，于是 dim 静默地不是用户写的那个值 —— 与 `?? "deepseek-chat"`
+ * 同一类缺陷，只是藏在一个数字里。容忍首尾空白（`.env` 里手打的空格），其余一律
+ * 作废整条配置。
+ */
+function parsePositiveInt(raw: string): number | undefined {
+  const value = Number(raw.trim());
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+/**
  * 启动时调用，把配置缺失提前到进程启动阶段而非首次请求。
  *
  * 只断言 LLM_BASE_URL / LLM_MODEL：变量名不匹配正是 spec §4.9 的缺陷，
@@ -105,6 +118,11 @@ export const config = {
    * 未配置时向量路整体关闭，退化为纯 BM25 并打 warning（spec §10.3）：
    * 降级是显式、有日志、可预期的，兜底是隐式、无日志、不可预期的。
    *
+   * **「配置错了」与「没有配置」走同一条路**（整条配置 undefined + 那条 warning）：
+   * 一个认不出的 `EMBEDDING_MODE`、一个非整数的 dim、一个非法的 MRL 维度，都
+   * 不是「用默认值继续」，而是「这个配置不可用」。可选带默认值的契约是
+   * 「省略 ⇒ 默认」，不是「认不出 ⇒ 默认」。
+   *
    * 刻意不用 `requireEnv`（那会抛错、让进程起不来）：向量路是**可选能力**，
    * 缺失是合法状态而非错误。LLM 的必填项与它不同 —— 那是启动期硬依赖。
    */
@@ -127,12 +145,32 @@ export const config = {
 
     if (!baseUrl || !apiKey || !model || !dimRaw) return undefined;
 
-    const dim = Number.parseInt(dimRaw, 10);
-    if (!Number.isFinite(dim) || dim <= 0) return undefined;
+    const dim = parsePositiveInt(dimRaw);
+    if (dim === undefined) return undefined;
 
-    const mode = env["EMBEDDING_MODE"] === "asymmetric" ? "asymmetric" : "symmetric";
+    // 省略（或留空）⇒ 文档化的默认 symmetric；**其余任何值都作废整条配置**。
+    // 旧写法 `=== "asymmetric" ? "asymmetric" : "symmetric"` 分不清「省略」与
+    // 「拼错」：`symetric` / `Asymmetric` / `"asymmetric "` 全都安静地变成
+    // symmetric，前缀永不施加、召回率降一档且无日志（spec §8.1 的原话是
+    // 「不会报错，它只会安静地把召回率拉低一档」）。
+    const modeRaw = env["EMBEDDING_MODE"];
+    let mode: "symmetric" | "asymmetric";
+    if (!modeRaw) {
+      mode = "symmetric";
+    } else if (modeRaw === "symmetric" || modeRaw === "asymmetric") {
+      mode = modeRaw;
+    } else {
+      return undefined;
+    }
+
+    // 显式要求了 MRL 降维却给一个解析不出的值时，旧实现把它**丢掉**：用户以为
+    // 在用 256 维，实际写进索引的是模型原生维度，且没有任何日志。要求了就是要求了。
     const dimensionsRaw = env["EMBEDDING_DIMENSIONS"];
-    const dimensions = dimensionsRaw ? Number.parseInt(dimensionsRaw, 10) : undefined;
+    let dimensions: number | undefined;
+    if (dimensionsRaw) {
+      dimensions = parsePositiveInt(dimensionsRaw);
+      if (dimensions === undefined) return undefined;
+    }
 
     return {
       baseUrl,
@@ -140,7 +178,7 @@ export const config = {
       model,
       dim,
       mode,
-      ...(dimensions !== undefined && Number.isFinite(dimensions) ? { dimensions } : {}),
+      ...(dimensions !== undefined ? { dimensions } : {}),
       // bge-*-zh 系与 E5 系需要前缀；bge-m3 不需要。留出配置口而非硬编码模型判断。
       ...(env["EMBEDDING_QUERY_PREFIX"] ? { queryPrefix: env["EMBEDDING_QUERY_PREFIX"] } : {}),
       ...(env["EMBEDDING_DOCUMENT_PREFIX"]

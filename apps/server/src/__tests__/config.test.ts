@@ -191,15 +191,21 @@ describe("embedding config", () => {
     restoreEmbedding(savedEmbedding);
   });
 
-  it("rejects a non-numeric EMBEDDING_DIM", async () => {
-    const savedEmbedding = saveAndClearEmbedding();
-    setCompleteEmbedding();
-    process.env["EMBEDDING_DIM"] = "not-a-number";
+  // `Number.parseInt` 对这四个无兜底变量之一太宽容：`1024abc` 会解析成 `1024`、
+  // `1e3` 会解析成 `1`。两者都被**接受**，于是 dim 静默地不是用户写的那个值 ——
+  // 与 `?? "deepseek-chat"` 同一类缺陷，只是藏在一个数字里。
+  it.each([["not-a-number"], ["1024abc"], ["1.5"], ["Infinity"], [" "]])(
+    "rejects a malformed EMBEDDING_DIM (%s) instead of parsing a prefix of it",
+    async (badDim) => {
+      const savedEmbedding = saveAndClearEmbedding();
+      setCompleteEmbedding();
+      process.env["EMBEDDING_DIM"] = badDim;
 
-    const { config } = await loadConfig();
-    expect(config.embedding).toBeUndefined();
-    restoreEmbedding(savedEmbedding);
-  });
+      const { config } = await loadConfig();
+      expect(config.embedding).toBeUndefined();
+      restoreEmbedding(savedEmbedding);
+    },
+  );
 
   it("rejects a non-positive EMBEDDING_DIM", async () => {
     const savedEmbedding = saveAndClearEmbedding();
@@ -208,6 +214,41 @@ describe("embedding config", () => {
 
     const { config } = await loadConfig();
     expect(config.embedding).toBeUndefined();
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("accepts a dim with surrounding whitespace", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    process.env["EMBEDDING_DIM"] = " 1024 ";
+
+    const { config } = await loadConfig();
+    expect(config.embedding?.dim).toBe(1024);
+    restoreEmbedding(savedEmbedding);
+  });
+
+  // 显式要求 MRL 降维却拿到 NaN 时，原实现把它**丢掉**了：用户以为在用 256 维，
+  // 实际写进索引的是模型原生维度，且没有任何日志。要求了就是要求了。
+  it.each([["abc"], ["0"], ["-256"], ["1.5"]])(
+    "rejects an invalid EMBEDDING_DIMENSIONS (%s) instead of silently dropping it",
+    async (badDimensions) => {
+      const savedEmbedding = saveAndClearEmbedding();
+      setCompleteEmbedding();
+      process.env["EMBEDDING_DIMENSIONS"] = badDimensions;
+
+      const { config } = await loadConfig();
+      expect(config.embedding).toBeUndefined();
+      restoreEmbedding(savedEmbedding);
+    },
+  );
+
+  it("carries a valid MRL dimensions value through", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    process.env["EMBEDDING_DIMENSIONS"] = "256";
+
+    const { config } = await loadConfig();
+    expect(config.embedding?.dimensions).toBe(256);
     restoreEmbedding(savedEmbedding);
   });
 
@@ -223,7 +264,7 @@ describe("embedding config", () => {
   });
 
   // 配置对象直接被喂给 `createOpenAICompatibleEmbeddingProvider`（index.ts），
-  // 而 `/api/memory/list` 的 `pendingCount` 拿 `buildFingerprint(model, dim, mode)`
+  // 而 `/api/memory/list` 的 `globalPendingCount` 拿 `buildFingerprint(model, dim, mode)`
   // 去问「这个模型还有多少条没算」。两边必须给出同一个指纹 —— 否则队列会永远
   // 显示非零（或永远显示零），而库里的向量其实是另一个向量空间的。
   it("produces the provider whose fingerprint the pending queue is keyed on", async () => {
@@ -238,10 +279,27 @@ describe("embedding config", () => {
     restoreEmbedding(savedEmbedding);
   });
 
-  it("falls back to symmetric — and only symmetric — for an unknown mode", async () => {
+  // `symmetric` 是**省略**时的默认值，不是「任何认不出的字符串」的归宿 ——
+  // 原来的三元表达式分不清这两者，于是 `symetric` / `Asymmetric` / `"asymmetric "`
+  // 都会被静默当成 symmetric：前缀永不施加，召回率安静地降一档且无日志
+  // （spec §8.1、§4.5–§4.9 同类缺陷）。认不出就整条配置作废，让它显式失败。
+  it.each([["sideways"], ["Asymmetric"], ["symetric"], ["asymmetric "], [" "]])(
+    "rejects an unrecognized EMBEDDING_MODE (%s) instead of defaulting it",
+    async (badMode) => {
+      const savedEmbedding = saveAndClearEmbedding();
+      setCompleteEmbedding();
+      process.env["EMBEDDING_MODE"] = badMode;
+
+      const { config } = await loadConfig();
+      expect(config.embedding).toBeUndefined();
+      restoreEmbedding(savedEmbedding);
+    },
+  );
+
+  it("treats an empty EMBEDDING_MODE as omitted — symmetric is the documented default", async () => {
     const savedEmbedding = saveAndClearEmbedding();
     setCompleteEmbedding();
-    process.env["EMBEDDING_MODE"] = "sideways";
+    process.env["EMBEDDING_MODE"] = "";
 
     const { config } = await loadConfig();
     expect(config.embedding?.mode).toBe("symmetric");
