@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Segmenter } from "@agenthub/memory";
 import { closeDatabase, setDbPath, isBm25Ready, getDatabase } from "@agenthub/memory";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
-import { initializeMemory } from "../services/memory-startup.js";
+import { checkEmbeddingHealth, initializeMemory } from "../services/memory-startup.js";
 import type { MemoryStartupLog } from "../services/memory-startup.js";
 
 let dbPath: string;
@@ -33,18 +33,22 @@ interface CapturedLog {
   log: MemoryStartupLog;
   info: string[];
   errors: Array<{ message: string; detail: unknown }>;
+  warns: string[];
 }
 
-/** 收集日志而不打印，用于断言「失败真的留下了 ERROR」。 */
+/** 收集日志而不打印，用于断言「失败真的留下了 WARN / ERROR」。 */
 function captureLog(): CapturedLog {
   const info: string[] = [];
   const errors: Array<{ message: string; detail: unknown }> = [];
+  const warns: string[] = [];
   return {
     info,
     errors,
+    warns,
     log: {
       info: (message) => info.push(message),
       error: (message, detail) => errors.push({ message, detail }),
+      warn: (message) => warns.push(message),
     },
   };
 }
@@ -119,6 +123,21 @@ describe("initializeMemory", () => {
     expect(detail).toBeInstanceOf(Error);
   });
 
+  it("cancels the reindex timeout so it cannot hold the event loop open", async () => {
+    await ensureSchema();
+    vi.useFakeTimers();
+    try {
+      const { log } = captureLog();
+      await initializeMemory(passthrough, log);
+
+      // 重建是同步的，竞速一定由它先落地。若 `finally` 里不清定时器，这里会剩下
+      // 一个 30 秒的挂起定时器 —— server 里无害，但测试只因 vitest 强制退出才没暴露。
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not fail the process — a broken rebuild still resolves", async () => {
     await ensureSchema();
     seedPendingRow("legacy-1");
@@ -128,5 +147,55 @@ describe("initializeMemory", () => {
 
     expect(info).toEqual([]);
     expect(isBm25Ready()).toBe(false);
+  });
+});
+
+describe("checkEmbeddingHealth", () => {
+  it("warns with the detail and the consequence when the endpoint is broken", async () => {
+    const { log, warns, info, errors } = captureLog();
+    const broken = {
+      healthCheck: async () => ({ ok: false, detail: "HTTP 404 from /embeddings — model not found" }),
+    };
+
+    await expect(checkEmbeddingHealth(broken, log)).resolves.toBe(false);
+
+    expect(info).toEqual([]);
+    expect(errors).toEqual([]);
+    expect(warns.length).toBe(1);
+    // 必须点到**具体原因**：只说「不健康」与不说没多大区别
+    expect(warns[0]).toContain("model not found");
+    // 后果必须写清：这条路下一律返回空榜单，检索退化成纯 BM25
+    expect(warns[0]).toContain("BM25");
+    expect(warns[0]).toContain("returns nothing");
+    // 并且不能让人以为进程起不来（spec §10.3：向量路不阻止启动）
+    expect(warns[0]).toContain("starts anyway");
+  });
+
+  it("is silent when the endpoint is healthy", async () => {
+    const { log, warns, info, errors } = captureLog();
+
+    await expect(
+      checkEmbeddingHealth({ healthCheck: async () => ({ ok: true }) }, log),
+    ).resolves.toBe(true);
+
+    expect(warns).toEqual([]);
+    expect(info).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  it("warns instead of silently skipping the check when healthCheck itself throws", async () => {
+    const { log, warns } = captureLog();
+    const explodingHealth = {
+      healthCheck: async () => {
+        throw new Error("socket hang up");
+      },
+    };
+
+    await expect(checkEmbeddingHealth(explodingHealth, log)).resolves.toBe(false);
+
+    // 抛错被当成「检查通过」= 又回到「什么都没验」，所以必须有 WARN
+    expect(warns.length).toBe(1);
+    expect(warns[0]).toContain("socket hang up");
+    expect(warns[0]).toContain("BM25");
   });
 });

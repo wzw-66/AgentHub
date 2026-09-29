@@ -1,10 +1,11 @@
 import type { Segmenter } from "@agenthub/memory";
 import { initSchema, reindexMemories, REINDEX_TIMEOUT_MS } from "@agenthub/memory";
 
-/** 启动期只用到这两级。注入进来，测试才能断言「失败真的留下了 ERROR 日志」。 */
+/** 启动期只用到这三级。注入进来，测试才能断言「失败真的留下了 WARN/ERROR 日志」。 */
 export interface MemoryStartupLog {
   info(message: string): void;
   error(message: string, detail: unknown): void;
+  warn(message: string): void;
 }
 
 /**
@@ -44,15 +45,69 @@ export async function initializeMemory(
 ): Promise<void> {
   initSchema();
 
+  let timeout: NodeJS.Timeout | undefined;
   try {
     const result = await Promise.race([
       Promise.resolve().then(() => reindexMemories(segmenter)),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("reindex timeout")), REINDEX_TIMEOUT_MS),
-      ),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("reindex timeout")), REINDEX_TIMEOUT_MS);
+      }),
     ]);
     log.info(`[memory] reindexed ${result.backfilled} memories; BM25 ready`);
   } catch (err) {
     log.error(BM25_DEGRADED_MESSAGE, err);
+  } finally {
+    // 竞速赢家（重建完成）先于 30 秒定时器落地时，定时器还在等 —— 不清掉会让事件
+    // 循环多活 30 秒。server 里无害，但测试只因 vitest 强制退出才没暴露，掩盖了它。
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+/**
+ * 向量路健康检查的降级文案。说的是**真实状态**：接线是通的（worker 在跑、会重试），
+ * 但此刻这条路上什么都回不来，所以每次检索都在无声地只用 BM25。
+ */
+const EMBEDDING_UNHEALTHY_CONSEQUENCE =
+  "the vector leg is wired but currently returns nothing — every search silently " +
+  "degrades to BM25 only. The server starts anyway (spec §10.3): the worker keeps " +
+  "retrying, so this heals by itself once the endpoint is fixed.";
+
+/**
+ * 启动期验证 embedding 端点是否**真的**可用，而不是只看四个变量是否都在。
+ *
+ * `EmbeddingProvider.healthCheck()` 早就实现了，却从没被调用过 —— 后果是一个拼错的
+ * `EMBEDDING_MODEL` 或一个没起来的端点，在启动日志里与健康状态**长得一模一样**：
+ * `[memory] embedding enabled: bge-m3 (1024d, symmetric)`。而那种状态的真实签名是
+ * `{"processed":0,"failed":2} pending: 2`（spec §12）—— 向量路永远回空榜单，
+ * 只有盯着 worker 的计数才看得出来。
+ *
+ * **刻意不阻止启动**（spec §10.3）：向量路是可选能力，端点暂时不可用不该让整个
+ * server（聊天、Agent 执行、全部 API）起不来。但「不阻止启动」不等于「静默降级」，
+ * 所以失败必须留下一条带 `detail` 的 WARN。
+ *
+ * @returns 健康则为 `true`；不健康或检查本身抛错则 `false`（调用方据此决定是否
+ *   打「enabled」那条 info —— 见 apps/server/src/index.ts）。
+ */
+export async function checkEmbeddingHealth(
+  provider: { healthCheck(): Promise<{ ok: boolean; detail?: string }> },
+  log: MemoryStartupLog = console,
+): Promise<boolean> {
+  try {
+    const { ok, detail } = await provider.healthCheck();
+    if (ok) return true;
+
+    log.warn(
+      `[memory] embedding health check FAILED${detail ? `: ${detail}` : ""} — ` +
+        EMBEDDING_UNHEALTHY_CONSEQUENCE,
+    );
+    return false;
+  } catch (err) {
+    // 实现上 healthCheck 内部已 catch 并返回 ok:false，不该抛。但一个逃逸的异常
+    // 若被当成「检查通过」就会退回「静默地什么都没验」——正是本函数要根除的形态。
+    log.warn(
+      `[memory] embedding health check threw: ${(err as Error).message} — ` +
+        EMBEDDING_UNHEALTHY_CONSEQUENCE,
+    );
+    return false;
   }
 }

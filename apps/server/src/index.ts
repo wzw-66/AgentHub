@@ -12,7 +12,7 @@ import {
   startEmbeddingWorker,
 } from "@agenthub/memory";
 import { ConnectionManager } from "./realtime/connection-manager";
-import { initializeMemory } from "./services/memory-startup";
+import { checkEmbeddingHealth, initializeMemory } from "./services/memory-startup";
 
 // Load .env from project root before main() reads config (config uses lazy getters)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,11 +68,17 @@ async function main() {
   // 刻意不给缺失的变量兜底值 —— 见 config/env.ts 的 embedding getter。
   let embeddingWorker: { stop(): void } | undefined;
   if (embeddingProvider && vectorIndex) {
+    // 先验活再宣告 enabled：四个变量都在，与端点和模型**真的能用**，是两回事。
+    // 不验的话一个拼错的 EMBEDDING_MODEL 会让启动日志与健康状态一模一样
+    // （见 checkEmbeddingHealth）。检查**不**阻止启动 —— worker 照常起、照常重试。
+    const healthy = await checkEmbeddingHealth(embeddingProvider, app.log);
     embeddingWorker = startEmbeddingWorker({ provider: embeddingProvider, index: vectorIndex });
-    app.log.info(
-      `[memory] embedding enabled: ${embeddingConfig!.model} ` +
-        `(${embeddingConfig!.dim}d, ${embeddingConfig!.mode})`,
-    );
+    if (healthy) {
+      app.log.info(
+        `[memory] embedding enabled: ${embeddingConfig!.model} ` +
+          `(${embeddingConfig!.dim}d, ${embeddingConfig!.mode})`,
+      );
+    }
   } else {
     // 「缺失」与「非法」共用这条 warning（两者都让 config.embedding 为 undefined），
     // 所以措辞必须覆盖后者，否则一个拼错的 EMBEDDING_MODE 会得到一句
