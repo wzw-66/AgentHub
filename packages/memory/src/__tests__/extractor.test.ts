@@ -236,6 +236,8 @@ describe("extractMemories", () => {
   });
 
   it("handles LLM API failure gracefully (no throw)", async () => {
+    // 失败现在会打一条 console.error（见 callLLM）—— 这里只关心不抛错，把噪音压掉
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 429,
@@ -248,6 +250,33 @@ describe("extractMemories", () => {
       extractMemories(MOCK_PARAMS, LLM_CONFIG, db),
     ).resolves.toBeUndefined();
 
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("logs the HTTP status when the LLM call fails, instead of silently extracting zero", async () => {
+    // 「LLM 挂了」与「这一轮确实没什么可记的」都产出 0 条记忆，没有日志就分不出来 ——
+    // 而前者正是需要运维介入的那种失败。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    await expect(extractMemories(MOCK_PARAMS, LLM_CONFIG, db)).resolves.toBeUndefined();
+
+    expect(errorSpy.mock.calls.some(([m]) => String(m).includes("503"))).toBe(true);
+
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("logs when the LLM call throws (connection refused) and still does not throw", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+
+    await expect(extractMemories(MOCK_PARAMS, LLM_CONFIG, db)).resolves.toBeUndefined();
+
+    expect(errorSpy.mock.calls.some(([m]) => String(m).includes("ECONNREFUSED"))).toBe(true);
+
+    errorSpy.mockRestore();
     vi.unstubAllGlobals();
   });
 

@@ -109,9 +109,28 @@ export function createBlobVectorIndex(customDb?: Database): VectorIndex {
 
       const scored: Array<{ memoryId: string; score: number }> = [];
 
+      // 维度不符只警告**一次**（每次检索一条，不是每行一条）：换 dim 后库里可能
+      // 有上万行不匹配，逐行打日志会把日志淹掉。
+      let warnedDimMismatch = false;
+
       for (const row of rows) {
-        // 维度不符的行直接跳过 —— 拿截断或补零的结果参与排序会得到垃圾分数
-        if (row.dim !== query.length) continue;
+        // 维度不符的行直接跳过 —— 拿截断或补零的结果参与排序会得到垃圾分数。
+        //
+        // 但**不能静默跳过**：换了 `EMBEDDING_DIM` 而 worker 还没重嵌时，整个向量路
+        // 会回 `[]`，调用方看到的与「没有相关记忆」完全一样（spec §12 的可观测性
+        // 要求）。这条 warning 是那两种情况唯一的区别。
+        if (row.dim !== query.length) {
+          if (!warnedDimMismatch) {
+            warnedDimMismatch = true;
+            console.warn(
+              `[memory] vector index: stored vectors have dim=${row.dim} but the query is ` +
+                `dim=${query.length} — the embedding dim changed without re-embedding, so the ` +
+                "vector leg contributes nothing to this search. The worker re-embeds " +
+                "(and this warning stops) once it runs with the new dim.",
+            );
+          }
+          continue;
+        }
         if (row.vec.byteLength !== row.dim * 4) continue;
 
         const stored = toFloat32View(row.vec, row.dim);

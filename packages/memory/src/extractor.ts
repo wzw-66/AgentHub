@@ -87,6 +87,12 @@ async function callLLM(
     });
 
     if (!response.ok) {
+      // 返回语义不变（仍是 ""），但失败必须**可见**：一次 LLM 故障会静默地
+      // 抽出 0 条记忆，与「这一轮确实没什么可记的」在日志里长得一模一样。
+      console.error(
+        `[memory] extraction LLM call failed: HTTP ${response.status} from ${endpoint} — ` +
+          "no memories were extracted for this turn",
+      );
       return "";
     }
 
@@ -94,7 +100,12 @@ async function callLLM(
       choices?: Array<{ message?: { content?: string } }>;
     };
     return data?.choices?.[0]?.message?.content ?? "";
-  } catch {
+  } catch (err) {
+    // 同上：不改变返回值，只让失败留痕。重试/降级策略归调用方（spec §4.9）。
+    console.error(
+      `[memory] extraction LLM call threw: ${(err as Error).message} — ` +
+        "no memories were extracted for this turn",
+    );
     return "";
   }
 }

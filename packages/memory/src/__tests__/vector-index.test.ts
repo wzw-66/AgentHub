@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Database as DatabaseType } from "better-sqlite3";
 import { createTestDb, destroyTestDb } from "./setup.js";
 import { createMemory } from "../repository.js";
@@ -168,8 +168,11 @@ describe("BlobVectorIndex", () => {
   });
 
   it("handles a query vector of a different length than stored vectors without returning garbage", () => {
-    const mem = seedMemory("m1", "u1", "c1");
-    index.upsert(mem.id, normalize(new Float32Array([1, 0, 0])), "fp", "m");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const m1 = seedMemory("m1", "u1", "c1");
+    const m2 = seedMemory("m2", "u1", "c1");
+    index.upsert(m1.id, normalize(new Float32Array([1, 0, 0])), "fp", "m");
+    index.upsert(m2.id, normalize(new Float32Array([0, 1, 0])), "fp", "m");
 
     const hits = index.search(new Float32Array([1, 0]), 5, {
       userId: "u1",
@@ -177,6 +180,16 @@ describe("BlobVectorIndex", () => {
     });
     // 维度不匹配的行必须被跳过，而不是拿截断/补零的结果参与排序
     expect(hits).toEqual([]);
+
+    // 但跳过**不能是静默的**：换 dim 后整个向量路会回 `[]`，与「没有相关记忆」
+    // 在调用方看完全一样。日志必须同时给出「存的维度」与「查询的维度」。
+    const warnings = warn.mock.calls.map(([m]) => String(m));
+    // 每次检索只警告一次，不是每行一次（换 dim 后库里可能有上万行不匹配）
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toContain("dim=3");
+    expect(warnings[0]).toContain("dim=2");
+
+    warn.mockRestore();
   });
 
   it("scores by dot product, which equals cosine only because vectors are normalized", () => {
