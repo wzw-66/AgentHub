@@ -162,17 +162,29 @@ const PENDING_EMBEDDINGS_FROM = `
  * 用 `fingerprint` 而不是 `model` 做判据是必需的：Qwen3-Embedding 用同一个
  * 模型名服务多个输出维度，只比 `model` 会让不同维度的向量混进同一个索引而不
  * 触发重算（spec §8.1）。
+ *
+ * `limit` **在 SQL 里生效**（spec §6.2 的 `LIMIT batchSize`）。必须如此：取回整条
+ * 积压再在 JS 里切片，意味着每轮都把全部待嵌入行的 `content` 物化进 JS 堆、还要
+ * 对全量结果排序，才做 O(batchSize) 的工作 —— 首次回填时整体退化成 O(N²)。
  */
 export function listPendingEmbeddings(
   customDb?: Database,
   fingerprint?: string,
+  limit?: number,
 ): Array<{ id: string; content: string }> {
   const db = customDb || getDatabase();
-  return db
-    .prepare(
-      `SELECT r.id, r.content ${PENDING_EMBEDDINGS_FROM} ORDER BY r.created_at ASC`,
-    )
-    .all(fingerprint ?? null) as Array<{ id: string; content: string }>;
+  const sql = `SELECT r.id, r.content ${PENDING_EMBEDDINGS_FROM} ORDER BY r.created_at ASC`;
+  const params: unknown[] = [fingerprint ?? null];
+
+  // 不给 limit 时不拼 LIMIT：调用方（回填 CLI、可观测性）可能确实要全量。
+  if (limit === undefined) {
+    return db.prepare(sql).all(...params) as Array<{ id: string; content: string }>;
+  }
+  params.push(limit);
+  return db.prepare(`${sql} LIMIT ?`).all(...params) as Array<{
+    id: string;
+    content: string;
+  }>;
 }
 
 /** 队列长度。与 `listPendingEmbeddings` 共用同一段 WHERE，两者不可能给出不同答案。 */
@@ -279,7 +291,8 @@ export function startEmbeddingWorker(opts: {
   }
 
   async function runOnce(): Promise<{ processed: number; failed: number }> {
-    const pending = listPendingEmbeddings(db, opts.provider.fingerprint).slice(0, batchSize);
+    // 批次边界走 SQL：整条积压不进 JS 堆（spec §6.2）。
+    const pending = listPendingEmbeddings(db, opts.provider.fingerprint, batchSize);
     if (pending.length === 0) return { processed: 0, failed: 0 };
 
     const vectors = await embedBatch(pending);

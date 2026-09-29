@@ -192,6 +192,63 @@ describe("pending embeddings queue", () => {
     expect(row!.id).toBe(mem.id);
     expect(row!.content).toBe("content m1");
   });
+
+  it("bounds the result set in SQL, not after materialising the backlog", () => {
+    for (let i = 0; i < 5; i++) seed(`m${i}`);
+
+    // 5 条待嵌入，只取 2 条：批次边界在 SQL 里，整条积压不进 JS 堆（spec §6.2）。
+    expect(listPendingEmbeddings(db, "fp-a", 2)).toHaveLength(2);
+    // 省略 limit 时仍是全量（回填 CLI / 可观测性用）
+    expect(listPendingEmbeddings(db, "fp-a")).toHaveLength(5);
+    // 计数不受 limit 影响 —— 计数就是计数
+    expect(pendingEmbeddingCount(db, "fp-a")).toBe(5);
+  });
+
+  it("sends the batch bound to SQLite instead of trimming the result in JS", () => {
+    for (let i = 0; i < 5; i++) seed(`m${i}`);
+
+    // 「返回 2 行」本身分不清「SQL LIMIT」和「取回 5 行再 slice」—— 后者才是要修掉的
+    // O(backlog) 行为（每轮把整条积压的 content 物化进 JS 堆）。所以要断言真正发给
+    // SQLite 的那条语句带 LIMIT：截获 prepare，仅此一次，finally 里恢复。
+    const realPrepare = db.prepare.bind(db) as (sql: string) => unknown;
+    const prepared: string[] = [];
+    const patched = db as unknown as { prepare: (sql: string) => unknown };
+    patched.prepare = (sql: string) => {
+      prepared.push(sql);
+      return realPrepare(sql);
+    };
+    try {
+      expect(listPendingEmbeddings(db, "fp-a", 2)).toHaveLength(2);
+    } finally {
+      patched.prepare = realPrepare;
+    }
+
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]).toMatch(/LIMIT \?/);
+  });
+
+  it("returns the oldest rows first", () => {
+    const first = seed("m1");
+    const second = seed("m2");
+    const third = seed("m3");
+
+    // 显式错开 created_at：连着三次写入很容易落在同一毫秒，而相等的排序键之间
+    // 的顺序是未定义的，测试不能依赖它。
+    const setCreatedAt = db.prepare("UPDATE memory_records SET created_at = ? WHERE id = ?");
+    setCreatedAt.run("2026-01-01T00:00:01.000Z", first.id);
+    setCreatedAt.run("2026-01-01T00:00:02.000Z", second.id);
+    setCreatedAt.run("2026-01-01T00:00:03.000Z", third.id);
+
+    expect(listPendingEmbeddings(db, "fp-a", 2).map((r) => r.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    expect(listPendingEmbeddings(db, "fp-a", 3).map((r) => r.id)).toEqual([
+      first.id,
+      second.id,
+      third.id,
+    ]);
+  });
 });
 
 describe("startEmbeddingWorker", () => {
