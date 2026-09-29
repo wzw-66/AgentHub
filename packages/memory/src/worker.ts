@@ -1,6 +1,8 @@
 import type { Database } from "./db.js";
 import { getDatabase } from "./db.js";
 import type { Segmenter } from "./segmenter.js";
+import type { EmbeddingProvider } from "./embedding.js";
+import type { VectorIndex } from "./vector-index.js";
 
 /**
  * 期望中「启动期最多为索引重建等多久」（spec §9.4）。
@@ -128,4 +130,214 @@ export function reindexMemories(
   bm25Ready = true;
 
   return { backfilled };
+}
+
+/** 一条待嵌入记忆：worker 需要的只有 id 与正文（`upsert` 前不需要读整行）。 */
+interface PendingEmbedding {
+  id: string;
+  content: string;
+}
+
+/**
+ * 队列的**唯一定义**：列表与计数共用同一段 SQL，两处判据不可能漂移。
+ *
+ * `fingerprint` 是**空安全**的：省略（绑定 NULL）时 `e.fingerprint != NULL`
+ * 求值为 NULL（即假），于是「没有向量行」成为唯一判据 —— 否则一个只想知道
+ * 「还有多少条没算过向量」的调用方会永远看到非零积压。
+ */
+const PENDING_EMBEDDINGS_FROM = `
+  FROM memory_records r
+  LEFT JOIN memory_embeddings e ON e.memory_id = r.id
+  WHERE e.memory_id IS NULL OR e.fingerprint != ?
+`;
+
+/**
+ * 待嵌入队列 —— **它就是一个 LEFT JOIN，没有状态列**（spec §6.2）。
+ *
+ * 「待嵌入」不是某个列上的状态，而是「没有一条指纹匹配的向量行」。这样做的
+ * 好处：没有状态机可以写错、天然自愈（worker 崩了重启即可，行没了就再入队）、
+ * 且 `fingerprint` 变更（换模型 / 换维度 / 换前缀模式）会**自动**让旧向量作废
+ * 重算 —— 队列的前进判据与失效判据是同一个值，不可能漂移。
+ *
+ * 用 `fingerprint` 而不是 `model` 做判据是必需的：Qwen3-Embedding 用同一个
+ * 模型名服务多个输出维度，只比 `model` 会让不同维度的向量混进同一个索引而不
+ * 触发重算（spec §8.1）。
+ */
+export function listPendingEmbeddings(
+  customDb?: Database,
+  fingerprint?: string,
+): Array<{ id: string; content: string }> {
+  const db = customDb || getDatabase();
+  return db
+    .prepare(
+      `SELECT r.id, r.content ${PENDING_EMBEDDINGS_FROM} ORDER BY r.created_at ASC`,
+    )
+    .all(fingerprint ?? null) as Array<{ id: string; content: string }>;
+}
+
+/** 队列长度。与 `listPendingEmbeddings` 共用同一段 WHERE，两者不可能给出不同答案。 */
+export function pendingEmbeddingCount(customDb?: Database, fingerprint?: string): number {
+  const db = customDb || getDatabase();
+  const row = db
+    .prepare(`SELECT COUNT(*) AS count ${PENDING_EMBEDDINGS_FROM}`)
+    .get(fingerprint ?? null) as { count: number };
+  return row.count;
+}
+
+/**
+ * 后台嵌入 worker：把待嵌入队列一批批喂给 `EmbeddingProvider`，写进 `VectorIndex`。
+ *
+ * 写入路径**不碰** embedding 服务（`createMemory` 恒不调用它），所以向量算不出来
+ * 只会让这条记忆暂时只出现在 BM25 榜单里，不会让记忆本身写不进去（spec §6.2）。
+ *
+ * `runOnce()` 导出给测试与一次性回填用；正常运行时它也由内部定时器驱动。
+ * **嵌入失败不会抛出**：计入 `failed`、下轮重试；只有数据库层面的意外错误才会
+ * 冒泡（定时器回调会接住并记日志，循环不会因此死掉）。
+ */
+export function startEmbeddingWorker(opts: {
+  provider: EmbeddingProvider;
+  index: VectorIndex;
+  /** 默认 32 */
+  batchSize?: number;
+  /** 默认 5000ms；传 0 表示只手动 runOnce()，不自动轮询 */
+  intervalMs?: number;
+  /** 注入点：不传则用模块级 SQLite 单例。测试传临时库。 */
+  db?: Database;
+}): {
+  stop(): void;
+  runOnce(): Promise<{ processed: number; failed: number }>;
+  pendingCount(): number;
+} {
+  const batchSize = opts.batchSize ?? 32;
+  const intervalMs = opts.intervalMs ?? 5000;
+  const db = opts.db;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let stopped = false;
+  /**
+   * 至多一轮在飞（spec §8.6 的 `maxConcurrentBatches` 默认 1）。
+   *
+   * 一轮 32 条在 CPU 上跑 Ollama 很容易超过 5 秒，而**在写库之前队列不会推进**，
+   * 于是「每 5 秒开一轮」会变成 N 个并发请求重复嵌入同一批行：积压一点没少，
+   * 本地推理进程先被打满。跳过与在飞轮重叠的 tick 即可。
+   */
+  let running = false;
+
+  /**
+   * 嵌入一批文本，返回与入参等长的数组；失败的位置是 `undefined`。
+   *
+   * ── 为什么要逐条回退 ────────────────────────────────────────────────────
+   * spec §13 要求「一条坏向量不写库、计入失败计数、不影响同批其他条」，但接口
+   * `embedDocuments(texts): Promise<Float32Array[]>` **没有逐条失败通道**：只要
+   * 有一条要炸，整个 promise 就 reject（spec §8.1 固定了签名，不能改）。所以
+   * 「不影响同批其他条」只能靠**行为**实现：整批 reject 时把这一批拆成单条重试，
+   * 健康条目照常落库，只有真正坏的那条计入失败。
+   *
+   * 触发场景是具体的：`bge-m3` + Ollama 对某些技术文档返回 NaN（issue #14657），
+   * 而技术文档正是本项目的文档类别，`assertFiniteVector` 会拒收这些向量。
+   *
+   * ── 成本上界 ────────────────────────────────────────────────────────────
+   * 最坏 1 次整批 + N 次单条 = N+1 次调用，即 2 倍工作量 —— 不会退化成「每条都
+   * 重取整批」的二次方。端点整体不可用时这 N 次单条调用是纯粹的浪费，但无法在
+   * 调用方区分「整批挂」与「单条毒」，且下一轮仍从整批开始重试。
+   */
+  async function embedBatch(
+    items: PendingEmbedding[],
+  ): Promise<Array<Float32Array | undefined>> {
+    try {
+      const vectors = await opts.provider.embedDocuments(items.map((item) => item.content));
+      if (vectors.length === items.length) return vectors;
+      // 接口承诺「一进一出」。少回/多回条时不能把 `undefined`（数组空洞）静默
+      // 混进写入路径 —— 走与整批 reject 相同的回退路径，让能救的条目被救回来。
+      console.error(
+        `[memory] embedding provider returned ${vectors.length} vectors for ` +
+          `${items.length} input(s); falling back to per-item embedding`,
+      );
+    } catch (err) {
+      console.error("[memory] embedding batch failed, falling back to per-item:", err);
+    }
+
+    const out: Array<Float32Array | undefined> = items.map(() => undefined);
+
+    // 单条时「整批调用」就是「逐条调用」，立刻原样重试没有意义（只是把一次失败
+    // 变成两次），下一轮定时器会重试。
+    if (items.length === 1) return out;
+
+    for (let i = 0; i < items.length; i++) {
+      try {
+        const [vec] = await opts.provider.embedDocuments([items[i]!.content]);
+        if (!vec) throw new Error("provider returned no vector for a single input");
+        out[i] = vec;
+      } catch (err) {
+        // 这条不写库、计入失败，同批其他条已经/仍将正常落库。
+        console.error(
+          `[memory] embedding failed for memory ${items[i]!.id}; it stays pending:`,
+          err,
+        );
+      }
+    }
+    return out;
+  }
+
+  async function runOnce(): Promise<{ processed: number; failed: number }> {
+    const pending = listPendingEmbeddings(db, opts.provider.fingerprint).slice(0, batchSize);
+    if (pending.length === 0) return { processed: 0, failed: 0 };
+
+    const vectors = await embedBatch(pending);
+
+    let processed = 0;
+    let failed = 0;
+    for (let i = 0; i < pending.length; i++) {
+      const vec = vectors[i];
+      if (!vec) {
+        failed++;
+        continue;
+      }
+      try {
+        opts.index.upsert(pending[i]!.id, vec, opts.provider.fingerprint, opts.provider.model);
+        processed++;
+      } catch (err) {
+        // 落库失败同样是「该条失败」—— 与坏向量同类，不该让同批其他条陪葬。
+        console.error(`[memory] failed to write the embedding for ${pending[i]!.id}:`, err);
+        failed++;
+      }
+    }
+    return { processed, failed };
+  }
+
+  if (intervalMs > 0) {
+    timer = setInterval(() => {
+      if (stopped || running) return;
+      running = true;
+      // 单轮失败不能让定时器死掉，也不能留下 unhandled rejection：
+      // 吞掉并记日志，下一轮自然重试（spec §6.2）。
+      void runOnce()
+        .catch((err) => {
+          console.error("[memory] embedding worker round failed, will retry next round:", err);
+        })
+        .finally(() => {
+          running = false;
+        });
+    }, intervalMs);
+    // 定时器不该阻止进程退出（否则测试与优雅关闭都会挂住）
+    timer.unref();
+  }
+
+  return {
+    /**
+     * 停掉轮询。**已在飞行中的那一轮会跑完** —— 它的写入是幂等的
+     * （`INSERT OR REPLACE`），且一条已算好的向量没有理由丢掉。
+     * `runOnce()` 仍可手动调用（回填 CLI 的用法）。
+     */
+    stop(): void {
+      stopped = true;
+      if (timer) clearInterval(timer);
+      timer = undefined;
+    },
+
+    runOnce,
+
+    pendingCount(): number {
+      return pendingEmbeddingCount(db, opts.provider.fingerprint);
+    },
+  };
 }

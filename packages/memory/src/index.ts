@@ -11,6 +11,11 @@ export type { Segmenter } from "./segmenter.js";
 export { buildFtsQuery } from "./fts-query.js";
 export { reindexMemories, isBm25Ready, REINDEX_TIMEOUT_MS } from "./worker.js";
 export {
+  startEmbeddingWorker,
+  listPendingEmbeddings,
+  pendingEmbeddingCount,
+} from "./worker.js";
+export {
   normalize,
   assertFiniteVector,
   buildFingerprint,
