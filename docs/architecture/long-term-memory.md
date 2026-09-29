@@ -317,16 +317,16 @@ patch 里缺席即「不改这一列」，`?? 1` 会把「LLM 没重申重要度
 
 function createMemory(
   input: CreateMemoryInput,          // conversationId 必填
-  db?: Database,
+  customDb?: Database,
   segmenter?: Segmenter,             // 注入点：仅测试用
 ): MemoryRecord;
 
-function getMemory(id: string, db?: Database): MemoryRecord | null;
+function getMemory(id: string, customDb?: Database): MemoryRecord | null;
 
 function updateMemory(
   id: string,
   patch: { type?: MemoryType; content?: string; tags?: string[]; importance?: number },
-  db?: Database,
+  customDb?: Database,
   segmenter?: Segmenter,
 ): MemoryRecord | null;              // null = id 不存在，不抛错
 
@@ -336,11 +336,11 @@ function listMemories(params: {
   type?: MemoryType;
   limit?: number;                    // 默认 50
   offset?: number;                   // 默认 0
-}, db?: Database): { data: MemoryRecord[]; total: number };
+}, customDb?: Database): { data: MemoryRecord[]; total: number };
 
-function deleteMemory(id: string, db?: Database): void;
+function deleteMemory(id: string, customDb?: Database): void;
 
-function getMemoriesByIds(ids: string[], db?: Database): MemoryRecord[];  // 保持传入顺序
+function getMemoriesByIds(ids: string[], customDb?: Database): MemoryRecord[];  // 保持传入顺序
 
 // === Search （异步 —— 内部需要一次 embedding API 调用）===
 
@@ -351,7 +351,7 @@ function searchMemories(options: {
   agentId?: string;                  // 仅供 Web UI 筛选
   limit?: number;                    // 默认 50
   offset?: number;                   // 默认 0
-}, db?: Database): Promise<MemoryRecord[]>;
+}, customDb?: Database): Promise<MemoryRecord[]>;
 
 function buildMemoryContext(params: {
   userId: string;
@@ -395,13 +395,13 @@ function startEmbeddingWorker(opts: {
   db?: Database;
 }): { stop(): void; runOnce(): Promise<{ processed: number; failed: number }>; pendingCount(): number };
 
-function reindexMemories(segmenter: Segmenter, db?: Database): { backfilled: number };
+function reindexMemories(segmenter: Segmenter, customDb?: Database): { backfilled: number };
 function isBm25Ready(): boolean;
-function pendingEmbeddingCount(db?: Database, fingerprint?: string): number;
+function pendingEmbeddingCount(customDb?: Database, fingerprint?: string): number;
 
 // === 迁移 ===
 
-function initSchema(db?: Database): void;   // = migrate()
+function initSchema(customDb?: Database): void;   // = migrate()
 function migrate(db: Database): { from: number; to: number };
 ```
 
@@ -522,6 +522,8 @@ function migrate(db: Database): { from: number; to: number };
 
 把下面的脚本存成 `/tmp/scope-check.mjs`，然后从 `apps/server` 目录执行 ——
 **必须在该目录执行**：工作区依赖（`@agenthub/memory`）只链接在 `apps/server/node_modules` 下。
+另外 `import "@agenthub/memory"` 解析到的是**构建产物 `dist/`**（已被 gitignore）：
+新克隆的仓库先跑一次 `pnpm --filter @agenthub/memory build`，否则会报 `ERR_MODULE_NOT_FOUND`。
 
 ```bash
 cd apps/server && node --input-type=module < /tmp/scope-check.mjs
@@ -529,10 +531,17 @@ cd apps/server && node --input-type=module < /tmp/scope-check.mjs
 
 ```javascript
 // /tmp/scope-check.mjs
+import { rmSync } from "node:fs";
 import {
   setDbPath, initSchema, configureSearch, createJiebaSegmenter,
   reindexMemories, createMemory, searchMemories,
 } from "@agenthub/memory";
+
+// 每次从空库开始：不清掉临时库的话，重跑会追加两条重复记忆，
+// 下面印出来的「期望输出」就对不上了（第一次跑是对的，第二次全错）。
+for (const suffix of ["", "-wal", "-shm"]) {
+  rmSync(`/tmp/mem-scope-check.db${suffix}`, { force: true });
+}
 
 setDbPath("/tmp/mem-scope-check.db");   // 临时库，不碰 .agenthub/memory.db
 initSchema();
@@ -633,11 +642,18 @@ cd apps/server && node --input-type=module < /tmp/legs-check.mjs
 
 ```javascript
 // /tmp/legs-check.mjs
+import { rmSync } from "node:fs";
 import {
   setDbPath, initSchema, configureSearch, createJiebaSegmenter, reindexMemories,
   createMemory, searchMemories, createOpenAICompatibleEmbeddingProvider,
   createMemoryVectorIndex, startEmbeddingWorker,
 } from "@agenthub/memory";
+
+// 每次从空库开始（理由同第 1 段）：不清库重跑会写进重复记忆，
+// 两条路都会多召回几条，输出不再可比。
+for (const suffix of ["", "-wal", "-shm"]) {
+  rmSync(`/tmp/mem-legs-check.db${suffix}`, { force: true });
+}
 
 setDbPath("/tmp/mem-legs-check.db");
 initSchema();
@@ -687,6 +703,23 @@ embed runOnce -> {"processed":2,"failed":0} pending: 0
 both legs  "E_CONN_RESET" -> ["错误码 E_CONN_RESET 表示连接被对端重置", ...]
 both legs  "容器编排文件放哪了" -> [... "沙箱镜像预热脚本在 docker-compose.yaml 里" ...]
 ```
+
+> **这组期望值的出处：本地桩（固定返回同一个 1024 维单位向量）跑出来的，
+> 不是 `bge-m3` 的真实输出。** 上面 `processed: 2 / failed: 0` 依赖「端点正常且不返回 NaN」，
+> 换成真实模型后 `failed` 很可能不是 0。实测对着 `ollama serve`（模型尚未 pull）跑同一脚本，
+> 得到的是 `embed runOnce -> {"processed":0,"failed":2} pending: 2` —— 这不是 bug，
+> 而是本节的降级路径在起作用（BM25 两行仍然照常命中）。
+>
+> **`failed` 非零时，用日志区分两种成因，别把「模型缺陷」读成「链路坏了」：**
+>
+> - `Embedding request failed: HTTP 404 … model "bge-m3" not found` → 端点/模型没就绪（先 `ollama pull bge-m3`）
+> - `Embedding contains a non-finite value at doc[…]` → 命中 `bge-m3` + Ollama 的已知 NaN 缺陷。
+>   上面两条 fixture 都是技术文档，正落在触发区间内（见 `embedding-setup.md` 的 NaN 一节）。
+>   这类记忆仍留在 BM25 榜单里，靠 `globalPendingCount` 是否回落来区分。
+>
+> 第三、四行的命中条数取决于真实相似度是否过得去 `minSimilarity = 0.35`
+> （桩把相似度全算成 1.0，所以桩下会多带出无关记忆）。断言写在
+> 「**同一查询从空变为非空**」这一层，不要断言具体条数。
 
 怎么读这个结果：
 
