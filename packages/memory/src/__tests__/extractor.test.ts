@@ -132,7 +132,7 @@ describe("extractMemories", () => {
     vi.unstubAllGlobals();
   });
 
-  it("handles update operation from LLM output", async () => {
+  it("handles update operation from LLM output as an in-place update", async () => {
     // First, create a memory to be updated
     const created = createMemory({
       userId: "user-extract",
@@ -164,25 +164,33 @@ describe("extractMemories", () => {
 
     await extractMemories(MOCK_PARAMS, LLM_CONFIG, db);
 
-    // Verify the old memory is gone
-    expect(getMemory(created.id, db)).toBeNull();
+    // id 与 created_at 必须保留 —— 这正是旧实现（delete + create）破坏的
+    const updated = getMemory(created.id, db);
+    expect(updated).not.toBeNull();
+    expect(updated!.id).toBe(created.id);
+    expect(updated!.createdAt).toBe(created.createdAt);
+    expect(updated!.content).toBe("Updated content with new preference");
+    expect(updated!.type).toBe("preference");
+    expect(updated!.importance).toBe(7);
+    // 排除作用域列被就地更新顺手覆盖 —— 丢了它这条记忆就再也召不回（spec §7.1）
+    expect(updated!.conversationId).toBe("conv-extract");
 
-    // Verify the new memory exists with updated content
-    const updatedResults = await searchMemories(
+    // 更新必须也能被**检索**到：`mem_fts_au` 触发器读的是 `new.content_seg`，
+    // 若 updateMemory 只写 content 而漏掉 content_seg，索引里留下的仍是旧词
+    // （"Old content to update"）—— 只查 getMemory 看不出这种陈旧。
+    //
+    // 查询词必须**只出现在新内容里**：`buildFtsQuery` 是 OR 语义，用
+    // "Updated content" 会被旧内容里的 "content" 命中而永远通过。
+    const found = await searchMemories(
       {
-        query: "Updated content",
+        query: "preference",
         userId: "user-extract",
         scope: { conversationId: "conv-extract" },
         agentId: "agent-extract",
       },
       db,
     );
-    expect(updatedResults.length).toBe(1);
-    expect(updatedResults[0]!.content).toBe("Updated content with new preference");
-    expect(updatedResults[0]!.type).toBe("preference");
-    expect(updatedResults[0]!.importance).toBe(7);
-    // update 分支是 delete+create，重建的那行也必须带上会话 id（spec §4.7）
-    expect(updatedResults[0]!.conversationId).toBe("conv-extract");
+    expect(found.map((m) => m.id)).toContain(created.id);
 
     vi.unstubAllGlobals();
   });

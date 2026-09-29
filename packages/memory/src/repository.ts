@@ -115,6 +115,79 @@ export function deleteMemory(id: string, customDb?: Database): void {
 }
 
 /**
+ * 真正的 UPDATE —— **保留 `id` 与 `created_at`**，仅刷新 `updated_at`。
+ *
+ * 修复 spec §4.4：旧实现把「更新」写成 `delete + create`，导致 id 变更
+ * （`sourceMessageId` 溯源链断裂）、`created_at` 重置（丢失记忆年龄）、
+ * 向量行成孤儿污染检索。
+ *
+ * 内容或 tags 变更时**删除向量行而非重算** —— 使 `updateMemory` 保持同步，
+ * 并复用待嵌入队列（`listPendingEmbeddings` 是 LEFT JOIN 指纹），由 worker
+ * 异步补齐（spec §9.5）。指纹是 `model:dim:mode`，它检测不到内容变化，
+ * 所以「失效」这件事只能由写入方显式做。
+ *
+ * 返回 `null` 表示 id 不存在 —— 与 `getMemory` 的约定一致，不抛错。
+ */
+export function updateMemory(
+  id: string,
+  patch: { type?: MemoryType; content?: string; tags?: string[]; importance?: number },
+  customDb?: Database,
+  segmenter?: Segmenter,
+): MemoryRecord | null {
+  const db = customDb || getDatabase();
+  const existing = getMemory(id, db);
+  if (!existing) return null;
+
+  const seg = resolveSegmenter(segmenter);
+  const now = new Date().toISOString();
+
+  // 只把 patch 里出现过的字段放进 SET —— 未出现的字段原样保留。
+  const sets: string[] = ["updated_at = ?"];
+  const values: unknown[] = [now];
+
+  if (patch.type !== undefined) {
+    sets.push("type = ?");
+    values.push(patch.type);
+  }
+
+  const contentChanged = patch.content !== undefined && patch.content !== existing.content;
+  if (patch.content !== undefined) {
+    sets.push("content = ?");
+    values.push(patch.content);
+    // content_seg 必须由写入侧计算，触发器调不到 JS 分词器（spec §6.1）。
+    // 只能用 patch 里的新值算：拿旧值重算会把索引改回陈旧内容。
+    sets.push("content_seg = ?");
+    values.push(seg.cut(patch.content).join(" "));
+  }
+
+  const tagsChanged =
+    patch.tags !== undefined && JSON.stringify(patch.tags) !== JSON.stringify(existing.tags);
+  if (patch.tags !== undefined) {
+    sets.push("tags = ?");
+    values.push(JSON.stringify(patch.tags));
+    sets.push("tags_seg = ?");
+    values.push(patch.tags.flatMap((t) => seg.cut(t)).join(" "));
+  }
+
+  if (patch.importance !== undefined) {
+    sets.push("importance = ?");
+    values.push(patch.importance);
+  }
+
+  const txn = db.transaction(() => {
+    db.prepare(`UPDATE memory_records SET ${sets.join(", ")} WHERE id = ?`).run(...values, id);
+    if (contentChanged || tagsChanged) {
+      // 删行即「重新入队」：worker 按「缺向量或有旧指纹」挑选待嵌入项。
+      // 不在这里重算 —— 那会把网络调用带进同步签名（spec §9.5）。
+      db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
+    }
+  });
+  txn();
+
+  return getMemory(id, db);
+}
+
+/**
  * 按 id 批量取回完整记录，**保持传入的顺序**。
  *
  * 融合层只产出 id 与分数，需要回查完整记录。SQL 的 `IN` 不保证顺序，

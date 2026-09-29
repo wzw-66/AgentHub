@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Database as DatabaseType } from "better-sqlite3";
 import { createTestDb, destroyTestDb } from "./setup.js";
-import { createMemory, getMemory, listMemories, deleteMemory } from "../repository.js";
+import { createMemory, getMemory, listMemories, deleteMemory, updateMemory } from "../repository.js";
+import { createBlobVectorIndex } from "../vector-index.js";
 import { FakeSegmenter } from "./fakes.js";
 
 // 词表刻意**不含**「代码风格」：FakeSegmenter 是最长匹配，词表里有整词就不会切开它，
@@ -244,5 +245,158 @@ describe("deleteMemory", () => {
 
   it("does not throw when deleting non-existent record", () => {
     expect(() => deleteMemory("non-existent", db)).not.toThrow();
+  });
+});
+
+describe("updateMemory", () => {
+  it("keeps the id and created_at, and refreshes updated_at", async () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "preference",
+      content: "用户偏好缩进",
+    }, db, seg);
+
+    await new Promise((r) => setTimeout(r, 5)); // 让 updated_at 有可观测的差异
+
+    const updated = updateMemory(created.id, { content: "用户偏好缩进改两格" }, db, seg);
+
+    expect(updated).not.toBeNull();
+    expect(updated!.id).toBe(created.id);
+    expect(updated!.createdAt).toBe(created.createdAt);
+    expect(updated!.content).toBe("用户偏好缩进改两格");
+    expect(updated!.updatedAt).not.toBe(created.updatedAt);
+  });
+
+  it("recomputes content_seg when content changes", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+
+    updateMemory(created.id, { content: "用户偏好" }, db, seg);
+
+    const raw = db.prepare("SELECT content_seg FROM memory_records WHERE id = ?")
+      .get(created.id) as { content_seg: string };
+    expect(raw.content_seg).toBe("用户 偏好");
+  });
+
+  it("recomputes tags_seg when tags change", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+      tags: ["代码风格"],
+    }, db, seg);
+
+    updateMemory(created.id, { tags: ["偏好"] }, db, seg);
+
+    const raw = db.prepare("SELECT tags_seg FROM memory_records WHERE id = ?")
+      .get(created.id) as { tags_seg: string };
+    expect(raw.tags_seg).toBe("偏好");
+  });
+
+  it("drops the vector row when content changes so the worker recomputes it", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+    const index = createBlobVectorIndex(db);
+    index.upsert(created.id, new Float32Array([1, 0, 0]), "fp", "m");
+    expect(index.size()).toBe(1);
+
+    updateMemory(created.id, { content: "完全不同的一段内容" }, db, seg);
+
+    expect(index.size()).toBe(0);
+  });
+
+  it("keeps the vector row when only importance changes", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+    const index = createBlobVectorIndex(db);
+    index.upsert(created.id, new Float32Array([1, 0, 0]), "fp", "m");
+
+    updateMemory(created.id, { importance: 9 }, db, seg);
+
+    expect(index.size()).toBe(1);
+  });
+
+  it("returns null for a non-existent id", () => {
+    expect(updateMemory("no-such-id", { content: "x" }, db, seg)).toBeNull();
+  });
+
+  it("leaves unspecified fields untouched", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "preference",
+      content: "用户偏好缩进",
+      tags: ["代码风格"],
+      importance: 4,
+    }, db, seg);
+
+    const updated = updateMemory(created.id, { importance: 7 }, db, seg);
+
+    expect(updated!.content).toBe("用户偏好缩进");
+    expect(updated!.tags).toEqual(["代码风格"]);
+    expect(updated!.type).toBe("preference");
+    expect(updated!.importance).toBe(7);
+  });
+
+  // 下面两条用**按 memory_id 计数**而不是 index.size()：后者是全表 COUNT(*)，
+  // 而同级更早的用例会留下自己的向量行 —— 用全表计数就等于断言一个与本人
+  // 无关的常量，既测不出东西，还会随用例顺序漂移。
+  const vectorRowCount = (memoryId: string): number =>
+    (db.prepare("SELECT COUNT(*) AS count FROM memory_embeddings WHERE memory_id = ?")
+      .get(memoryId) as { count: number }).count;
+
+  it("drops the vector row when tags change (tags_seg is indexed too)", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+      tags: ["代码风格"],
+    }, db, seg);
+    createBlobVectorIndex(db).upsert(created.id, new Float32Array([1, 0, 0]), "fp", "m");
+    expect(vectorRowCount(created.id)).toBe(1);
+
+    updateMemory(created.id, { tags: ["格式"] }, db, seg);
+
+    expect(vectorRowCount(created.id)).toBe(0);
+  });
+
+  it("keeps the vector row when the patch repeats the content it already had", () => {
+    const created = createMemory({
+      userId: "user-1",
+      conversationId: "conv-upd",
+      agentId: "agent-1",
+      type: "fact",
+      content: "用户偏好缩进",
+    }, db, seg);
+    createBlobVectorIndex(db).upsert(created.id, new Float32Array([1, 0, 0]), "fp", "m");
+
+    // 判据必须是「值变了」，不是「字段出现了」—— 否则一次无实质变化的
+    // 回写就会白扔掉一个仍然有效的向量，逼 worker 重算。
+    const updated = updateMemory(created.id, { content: "用户偏好缩进" }, db, seg);
+
+    expect(updated!.content).toBe("用户偏好缩进");
+    expect(vectorRowCount(created.id)).toBe(1);
   });
 });

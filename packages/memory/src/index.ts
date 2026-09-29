@@ -8,6 +8,7 @@ export {
   listMemories,
   deleteMemory,
   getMemoriesByIds,
+  updateMemory,
 } from "./repository.js";
 export { searchMemories, configureSearch, resetSearchDepsForTesting } from "./search.js";
 export { fuseRankedLists, RRF_K } from "./fusion.js";

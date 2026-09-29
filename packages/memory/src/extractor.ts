@@ -1,7 +1,7 @@
 import type { Database } from "./db.js";
 import { getDatabase } from "./db.js";
 import { searchMemories } from "./search.js";
-import { createMemory, deleteMemory } from "./repository.js";
+import { createMemory, deleteMemory, updateMemory } from "./repository.js";
 import type { ExtractedMemory } from "./types.js";
 
 // ─── Prompt template ─────────────────────────────────────────────────────────
@@ -211,28 +211,20 @@ export async function extractMemories(
         break;
 
       case "update":
+        // 就地更新，**不是** delete + create：id 与 created_at 必须保留，
+        // 否则 sourceMessageId 的溯源链断裂、记忆年龄归零（spec §9.5）。
+        // 内容/tags 变更时 updateMemory 会删掉向量行，由 worker 异步补算。
         if (op.id && op.type && op.content) {
-          const id = op.id;
-          const type = op.type;
-          const content = op.content;
-          const tags = op.tags;
-          const importance = op.importance ?? 1;
-          const txn = db.transaction(() => {
-            deleteMemory(id, db);
-            return createMemory(
-              {
-                userId: params.userId,
-                conversationId: params.conversationId,
-                agentId: params.agentId,
-                type,
-                content,
-                tags,
-                importance,
-              },
-              db,
-            );
-          });
-          txn();
+          updateMemory(
+            op.id,
+            {
+              type: op.type,
+              content: op.content,
+              ...(op.tags !== undefined ? { tags: op.tags } : {}),
+              importance: op.importance ?? 1,
+            },
+            db,
+          );
         }
         break;
 
