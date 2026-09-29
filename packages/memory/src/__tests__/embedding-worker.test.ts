@@ -343,6 +343,35 @@ describe("startEmbeddingWorker", () => {
     worker.stop();
   });
 
+  // `batchSize` 直接进 SQL 的 `LIMIT ?`（Task 17 fix），而 SQLite 把 `LIMIT -1`
+  // 定义为**无上界** —— 负数会静默退化成「取回整条积压」，正是那次修正要去掉的
+  // O(backlog) 行为。0 则是一条也不处理，同样不是调用方想要的「照常跑」。
+  // 两者都必须是显式失败：静默 clamp 成一个能跑但语义不同的值，是兜底的另一种写法。
+  it("rejects a non-positive batchSize instead of degrading to no bound", () => {
+    const provider = new FakeEmbeddingProvider({ dim: 4 });
+    const index = createBlobVectorIndex(db);
+
+    expect(() => startEmbeddingWorker({ provider, index, db, batchSize: -1 })).toThrow(
+      /batchSize/,
+    );
+    expect(() => startEmbeddingWorker({ provider, index, db, batchSize: 0 })).toThrow(
+      /batchSize/,
+    );
+  });
+
+  // 省略 batchSize 不是「0」也不是「不限」—— 默认值是 32，这一条钉死它。
+  it("still bounds an omitted batchSize at the default of 32", async () => {
+    for (let i = 0; i < 40; i++) seed(`m${i}`);
+    const provider = new FakeEmbeddingProvider({ dim: 4 });
+    const index = createBlobVectorIndex(db);
+
+    const worker = startEmbeddingWorker({ provider, index, db, intervalMs: 0 });
+    expect((await worker.runOnce()).processed).toBe(32);
+    expect(worker.pendingCount()).toBe(8);
+
+    worker.stop();
+  });
+
   it("does not advance the queue while the provider is down", async () => {
     seed("m1");
     const provider = new OutageProvider(4);

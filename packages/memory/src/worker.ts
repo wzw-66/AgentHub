@@ -209,7 +209,7 @@ export function pendingEmbeddingCount(customDb?: Database, fingerprint?: string)
 export function startEmbeddingWorker(opts: {
   provider: EmbeddingProvider;
   index: VectorIndex;
-  /** 默认 32 */
+  /** 默认 32。必须是正数 —— 非正数会抛错，见下方校验。 */
   batchSize?: number;
   /** 默认 5000ms；传 0 表示只手动 runOnce()，不自动轮询 */
   intervalMs?: number;
@@ -221,6 +221,22 @@ export function startEmbeddingWorker(opts: {
   pendingCount(): number;
 } {
   const batchSize = opts.batchSize ?? 32;
+
+  // `batchSize` 直接进 SQL 的 `LIMIT ?`，而 SQLite 把 `LIMIT -1` 定义为**无上界** ——
+  // 一个负值会静默退化成「取回整条积压、再排序」，正是「批次边界走 SQL」那次修正
+  // 要去掉的 O(backlog) 行为（旧 JS `.slice` 至少还是有界的）。0 则是一条也不处理。
+  // 两者都不是「照常跑」，必须显式失败：把非法值静默 clamp 成一个能跑但语义不同的
+  // 值，只是兜底的另一种写法（global-constraints：必填参数不给默认值）。
+  // 校验放在这里而不是 SQL 里 —— 这里是调用方给的值第一次到达 worker 的地方，
+  // 越早失败越靠近配置错误的源头。
+  if (batchSize <= 0) {
+    throw new Error(
+      `startEmbeddingWorker: batchSize must be a positive integer, got ${batchSize}. ` +
+        `A non-positive value is not "unbounded" — SQLite reads LIMIT -1 as no upper ` +
+        `bound, which would re-introduce O(backlog) materialisation.`,
+    );
+  }
+
   const intervalMs = opts.intervalMs ?? 5000;
   const db = opts.db;
   let timer: ReturnType<typeof setInterval> | undefined;
