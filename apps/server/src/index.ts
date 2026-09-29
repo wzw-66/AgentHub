@@ -3,7 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as appConfig, assertLlmConfig } from "./config/env";
 import { buildApp } from "./app";
-import { setDbPath, createJiebaSegmenter } from "@agenthub/memory";
+import {
+  setDbPath,
+  createJiebaSegmenter,
+  createOpenAICompatibleEmbeddingProvider,
+  createMemoryVectorIndex,
+  startEmbeddingWorker,
+} from "@agenthub/memory";
 import { ConnectionManager } from "./realtime/connection-manager";
 import { initializeMemory } from "./services/memory-startup";
 
@@ -33,12 +39,37 @@ async function main() {
   const cm = new ConnectionManager();
   const app = await buildApp(cm);
 
+  // ─── Embedding worker（可选能力）────────────────────────────────────────────
+  // 未配置时**不启动** worker，只打一条 warning 说清缺什么、后果是什么（spec §10.3）。
+  // 降级是显式、有日志、可预期的：`/api/memory/search` 照常可用，只是没有语义召回。
+  // 刻意不给缺失的变量兜底值 —— 见 config/env.ts 的 embedding getter。
+  let embeddingWorker: { stop(): void } | undefined;
+  const embeddingConfig = appConfig.embedding;
+  if (embeddingConfig) {
+    const provider = createOpenAICompatibleEmbeddingProvider(embeddingConfig);
+    embeddingWorker = startEmbeddingWorker({
+      provider,
+      index: createMemoryVectorIndex(),
+    });
+    app.log.info(
+      `[memory] embedding enabled: ${embeddingConfig.model} ` +
+        `(${embeddingConfig.dim}d, ${embeddingConfig.mode})`,
+    );
+  } else {
+    app.log.warn(
+      "[memory] EMBEDDING_BASE_URL / EMBEDDING_API_KEY / EMBEDDING_MODEL / EMBEDDING_DIM " +
+        "not all set — semantic recall is DISABLED, falling back to BM25 only.",
+    );
+  }
+
   // ─── Graceful shutdown ─────────────────────────────────────────────────────
 
   const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
   for (const signal of signals) {
     process.on(signal, async () => {
       app.log.info(`Received ${signal}, shutting down gracefully...`);
+      // 在飞的那一轮会跑完（写入幂等），只是不再开新轮 —— `stop()` 的语义如此。
+      embeddingWorker?.stop();
       await app.close();
       process.exit(0);
     });

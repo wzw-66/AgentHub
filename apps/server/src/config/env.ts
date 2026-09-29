@@ -95,4 +95,57 @@ export const config = {
       return `${base}/v1/chat/completions`;
     },
   },
+
+  /**
+   * Embedding 配置。**四个必填项缺任意一个就整体为 undefined** —— 不做部分兜底，
+   * 不给 model/dim 设默认值（spec §10.2）。理由见 §4.9：曾经的 `?? "deepseek-chat"`
+   * 让用户配置的模型从未生效且无人发现；给 embedding 兜底会让同一个剧本重演 ——
+   * 一个拼错的 `EMBEDDING_MODEL` 会静默换一个模型，把**另一个向量空间**写进索引。
+   *
+   * 未配置时向量路整体关闭，退化为纯 BM25 并打 warning（spec §10.3）：
+   * 降级是显式、有日志、可预期的，兜底是隐式、无日志、不可预期的。
+   *
+   * 刻意不用 `requireEnv`（那会抛错、让进程起不来）：向量路是**可选能力**，
+   * 缺失是合法状态而非错误。LLM 的必填项与它不同 —— 那是启动期硬依赖。
+   */
+  get embedding():
+    | {
+        baseUrl: string;
+        apiKey: string;
+        model: string;
+        dim: number;
+        mode: "symmetric" | "asymmetric";
+        dimensions?: number;
+        queryPrefix?: string;
+        documentPrefix?: string;
+      }
+    | undefined {
+    const baseUrl = env["EMBEDDING_BASE_URL"];
+    const apiKey = env["EMBEDDING_API_KEY"];
+    const model = env["EMBEDDING_MODEL"];
+    const dimRaw = env["EMBEDDING_DIM"];
+
+    if (!baseUrl || !apiKey || !model || !dimRaw) return undefined;
+
+    const dim = Number.parseInt(dimRaw, 10);
+    if (!Number.isFinite(dim) || dim <= 0) return undefined;
+
+    const mode = env["EMBEDDING_MODE"] === "asymmetric" ? "asymmetric" : "symmetric";
+    const dimensionsRaw = env["EMBEDDING_DIMENSIONS"];
+    const dimensions = dimensionsRaw ? Number.parseInt(dimensionsRaw, 10) : undefined;
+
+    return {
+      baseUrl,
+      apiKey,
+      model,
+      dim,
+      mode,
+      ...(dimensions !== undefined && Number.isFinite(dimensions) ? { dimensions } : {}),
+      // bge-*-zh 系与 E5 系需要前缀；bge-m3 不需要。留出配置口而非硬编码模型判断。
+      ...(env["EMBEDDING_QUERY_PREFIX"] ? { queryPrefix: env["EMBEDDING_QUERY_PREFIX"] } : {}),
+      ...(env["EMBEDDING_DOCUMENT_PREFIX"]
+        ? { documentPrefix: env["EMBEDDING_DOCUMENT_PREFIX"] }
+        : {}),
+    };
+  },
 };

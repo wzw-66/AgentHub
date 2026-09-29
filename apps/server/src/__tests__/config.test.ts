@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  buildFingerprint,
+  createOpenAICompatibleEmbeddingProvider,
+} from "@agenthub/memory";
 
 // BASE_URL / MODEL 是历史遗留的死键，这里一并隔离，避免用例之间互相污染。
 const ENV_KEYS = [
@@ -99,6 +103,149 @@ describe("apiKey stays optional so the degraded mode is reachable", () => {
 
     const { config } = await loadConfig();
     expect(config.llm.apiKey).toBeFalsy();
+  });
+});
+
+// ─── Embedding（spec §10.2）────────────────────────────────────────────────────
+
+const EMBEDDING_KEYS = [
+  "EMBEDDING_BASE_URL",
+  "EMBEDDING_API_KEY",
+  "EMBEDDING_MODEL",
+  "EMBEDDING_DIM",
+  "EMBEDDING_MODE",
+  "EMBEDDING_DIMENSIONS",
+] as const;
+
+function saveAndClearEmbedding(): Record<string, string | undefined> {
+  const savedEmbedding: Record<string, string | undefined> = {};
+  for (const key of EMBEDDING_KEYS) {
+    savedEmbedding[key] = process.env[key];
+    delete process.env[key];
+  }
+  return savedEmbedding;
+}
+
+function restoreEmbedding(savedEmbedding: Record<string, string | undefined>): void {
+  for (const key of EMBEDDING_KEYS) {
+    if (savedEmbedding[key] === undefined) delete process.env[key];
+    else process.env[key] = savedEmbedding[key];
+  }
+}
+
+/** 四个必填项各给一个合法值；调用方删掉其中一个来构造「不全」的场景。 */
+function setCompleteEmbedding(): void {
+  process.env["EMBEDDING_BASE_URL"] = "http://127.0.0.1:11434/v1";
+  process.env["EMBEDDING_API_KEY"] = "EMPTY";
+  process.env["EMBEDDING_MODEL"] = "bge-m3";
+  process.env["EMBEDDING_DIM"] = "1024";
+}
+
+describe("embedding config", () => {
+  it("is undefined when nothing is configured", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    const { config } = await loadConfig();
+    expect(config.embedding).toBeUndefined();
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("is undefined when only some required keys are set — no partial fallback", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    process.env["EMBEDDING_BASE_URL"] = "http://127.0.0.1:11434/v1";
+    process.env["EMBEDDING_MODEL"] = "bge-m3";
+    // 缺 API_KEY 与 DIM
+    const { config } = await loadConfig();
+    expect(config.embedding).toBeUndefined();
+    restoreEmbedding(savedEmbedding);
+  });
+
+  // 四个必填项**各自**缺失都必须独立关闭向量路 —— 一个「缺了两个」的用例
+  // 无法区分「四个都校验」与「只校验了其中两个」。
+  it.each([
+    ["EMBEDDING_BASE_URL"],
+    ["EMBEDDING_API_KEY"],
+    ["EMBEDDING_MODEL"],
+    ["EMBEDDING_DIM"],
+  ] as const)("is undefined when %s alone is missing", async (missingKey) => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    delete process.env[missingKey];
+
+    const { config } = await loadConfig();
+    expect(config.embedding).toBeUndefined();
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("parses a complete Ollama configuration", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+
+    const { config } = await loadConfig();
+    expect(config.embedding).toEqual({
+      baseUrl: "http://127.0.0.1:11434/v1",
+      apiKey: "EMPTY",
+      model: "bge-m3",
+      dim: 1024,
+      mode: "symmetric",
+    });
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("rejects a non-numeric EMBEDDING_DIM", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    process.env["EMBEDDING_DIM"] = "not-a-number";
+
+    const { config } = await loadConfig();
+    expect(config.embedding).toBeUndefined();
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("rejects a non-positive EMBEDDING_DIM", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    process.env["EMBEDDING_DIM"] = "0";
+
+    const { config } = await loadConfig();
+    expect(config.embedding).toBeUndefined();
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("accepts an explicit asymmetric mode", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    process.env["EMBEDDING_MODEL"] = "bge-large-zh-v1.5";
+    process.env["EMBEDDING_MODE"] = "asymmetric";
+
+    const { config } = await loadConfig();
+    expect(config.embedding?.mode).toBe("asymmetric");
+    restoreEmbedding(savedEmbedding);
+  });
+
+  // 配置对象直接被喂给 `createOpenAICompatibleEmbeddingProvider`（index.ts），
+  // 而 `/api/memory/list` 的 `pendingCount` 拿 `buildFingerprint(model, dim, mode)`
+  // 去问「这个模型还有多少条没算」。两边必须给出同一个指纹 —— 否则队列会永远
+  // 显示非零（或永远显示零），而库里的向量其实是另一个向量空间的。
+  it("produces the provider whose fingerprint the pending queue is keyed on", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+
+    const { config } = await loadConfig();
+    const provider = createOpenAICompatibleEmbeddingProvider(config.embedding!);
+
+    expect(provider.fingerprint).toBe(buildFingerprint("bge-m3", 1024, "symmetric"));
+    expect(provider.fingerprint).toBe("bge-m3:1024:symmetric");
+    restoreEmbedding(savedEmbedding);
+  });
+
+  it("falls back to symmetric — and only symmetric — for an unknown mode", async () => {
+    const savedEmbedding = saveAndClearEmbedding();
+    setCompleteEmbedding();
+    process.env["EMBEDDING_MODE"] = "sideways";
+
+    const { config } = await loadConfig();
+    expect(config.embedding?.mode).toBe("symmetric");
+    restoreEmbedding(savedEmbedding);
   });
 });
 
