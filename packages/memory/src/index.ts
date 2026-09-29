@@ -21,4 +21,6 @@ export type {
   EmbeddingFingerprint,
   OpenAICompatibleEmbeddingOptions,
 } from "./embedding.js";
+export { createBlobVectorIndex, createMemoryVectorIndex } from "./vector-index.js";
+export type { VectorIndex } from "./vector-index.js";
 export type { MemoryScope, EmbeddingMode } from "./types.js";
