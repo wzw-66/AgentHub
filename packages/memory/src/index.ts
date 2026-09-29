@@ -28,6 +28,7 @@ export {
   normalize,
   assertFiniteVector,
   buildFingerprint,
+  prefixDigest,
   createOpenAICompatibleEmbeddingProvider,
 } from "./embedding.js";
 export type {

@@ -7,9 +7,34 @@ import { buildMemoryContext } from "../context.js";
 import { extractMemories } from "../extractor.js";
 import { buildFtsQuery } from "../fts-query.js";
 import { createBlobVectorIndex, type VectorIndex } from "../vector-index.js";
+import { createOpenAICompatibleEmbeddingProvider } from "../embedding.js";
 import type { MemoryScope } from "../types.js";
-import { startEmbeddingWorker, setBm25ReadyForTesting, reindexMemories } from "../worker.js";
+import {
+  startEmbeddingWorker,
+  setBm25ReadyForTesting,
+  reindexMemories,
+  pendingEmbeddingCount,
+} from "../worker.js";
 import { FakeEmbeddingProvider, FakeSegmenter } from "./fakes.js";
+
+/**
+ * 假 embedding 端点：回 `dim` 维的全 1 向量（归一化后仍有限）。
+ *
+ * 驱动**真实** provider 而不触网 —— 指纹、前缀、超时这些行为只有真实实现才有，
+ * 假 provider 自己声明的指纹验不了「前缀确实进了判据」。
+ */
+function stubEmbeddingFetch(dim: number) {
+  return vi.fn(async (_url: string, init: { body: string }) => {
+    const { input } = JSON.parse(init.body) as { input: string[] };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: input.map((_, i) => ({ embedding: new Array<number>(dim).fill(1), index: i })),
+      }),
+    };
+  });
+}
 
 /**
  * 本文件是**唯一**的端到端用例：前面每个 task 都只验自己那一环，这里把
@@ -416,6 +441,52 @@ describe("end-to-end: spec §7.1 长会话的项目续接", () => {
 
     const row = db.prepare("SELECT fingerprint FROM memory_embeddings").get() as { fingerprint: string };
     expect(row.fingerprint).toBe(provider16.fingerprint);
+  });
+
+  it("re-enqueues every memory when the embedding prefix changes", async () => {
+    const index = createBlobVectorIndex(db);
+    // 真实 provider + 假端点：指纹由真实实现算出，验的是「前缀真的进了判据」，
+    // 而不是假 provider 自己声明的指纹。
+    const fetchImpl = stubEmbeddingFetch(8);
+    const base = {
+      baseUrl: "http://stub.invalid/v1",
+      apiKey: "EMPTY",
+      model: "bge-m3",
+      dim: 8,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    };
+    const plain = createOpenAICompatibleEmbeddingProvider(base);
+    const prefixed = createOpenAICompatibleEmbeddingProvider({
+      ...base,
+      mode: "asymmetric",
+      queryPrefix: "query: ",
+      documentPrefix: "passage: ",
+    });
+
+    createMemory({
+      userId: "u1", conversationId: "C1", agentId: "a1", type: "fact", content: "用户偏好缩进",
+    }, db, seg);
+
+    const first = startEmbeddingWorker({ provider: plain, index, intervalMs: 0, db });
+    expect((await first.runOnce()).processed).toBe(1);
+    first.stop();
+    expect(pendingEmbeddingCount(db, plain.fingerprint)).toBe(0);
+
+    // 同样的前缀再跑一轮：队列必须为空 —— 否则 worker 每 5 秒重算整库
+    const again = startEmbeddingWorker({ provider: plain, index, intervalMs: 0, db });
+    expect((await again.runOnce()).processed).toBe(0);
+    again.stop();
+
+    // 换前缀 → 指纹变 → 全部重新入队。旧实现（`model:dim:mode`）在这里会看到
+    // pending = 0，于是新旧前缀的向量永久混用而没有任何信号。
+    expect(pendingEmbeddingCount(db, prefixed.fingerprint)).toBe(1);
+    const second = startEmbeddingWorker({ provider: prefixed, index, intervalMs: 0, db });
+    expect((await second.runOnce()).processed).toBe(1);
+    second.stop();
+
+    const row = db.prepare("SELECT fingerprint FROM memory_embeddings").get() as { fingerprint: string };
+    expect(row.fingerprint).toBe(prefixed.fingerprint);
+    expect(prefixed.fingerprint).not.toBe(plain.fingerprint);
   });
 
   it("runs the full migration → reindex → search path on a legacy database", async () => {

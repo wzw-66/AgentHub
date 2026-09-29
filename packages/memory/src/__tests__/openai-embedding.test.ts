@@ -279,4 +279,59 @@ describe("createOpenAICompatibleEmbeddingProvider", () => {
     expect(makeProvider({ mode: "asymmetric" }).fingerprint).toBe("bge-m3:3:asymmetric");
     expect(makeProvider({ dim: 4 }).fingerprint).toBe("bge-m3:4:symmetric");
   });
+
+  it("folds the prefix content into the fingerprint", async () => {
+    // 旧指纹 `model:dim:mode` 分不清「前缀是什么」，于是改前缀既不报错也不重算，
+    // 新旧前缀的向量永久混用（spec §6.2 一直没兑现的那一半）。
+    expect(makeProvider().fingerprint).toBe("bge-m3:3:symmetric"); // 无前缀：逐字不变
+    expect(makeProvider({ queryPrefix: "Q: " }).fingerprint).not.toBe("bge-m3:3:symmetric");
+    expect(makeProvider({ queryPrefix: "Q: " }).fingerprint).not.toBe(
+      makeProvider({ queryPrefix: "Q2: " }).fingerprint,
+    );
+    // 文档侧前缀同样要进指纹：只覆盖查询侧会让「改文档前缀」继续静默失效
+    expect(makeProvider({ documentPrefix: "D: " }).fingerprint).not.toBe(
+      makeProvider().fingerprint,
+    );
+    // 两侧调换必须得到不同的指纹 —— 拼串而非分别哈希就会在这里漏掉
+    expect(makeProvider({ queryPrefix: "A: ", documentPrefix: "B: " }).fingerprint).not.toBe(
+      makeProvider({ queryPrefix: "B: ", documentPrefix: "A: " }).fingerprint,
+    );
+    // 用空格当分隔符时这一对会碰撞（两解都是 "query:  passage: "），
+    // 但它们施加在文本上的前缀并不相同、向量也不同 —— 指纹必须区分得开
+    expect(
+      makeProvider({ queryPrefix: "query: ", documentPrefix: "passage: " }).fingerprint,
+    ).not.toBe(
+      makeProvider({ queryPrefix: "query:", documentPrefix: " passage: " }).fingerprint,
+    );
+    // 空串前缀 == 未配置前缀（都是「不加前缀」，向量相同，指纹也必须相同）
+    expect(makeProvider({ queryPrefix: "", documentPrefix: "" }).fingerprint).toBe(
+      "bge-m3:3:symmetric",
+    );
+  });
+
+  it("aborts a request that accepts the connection but never responds", async () => {
+    // 模拟「接受连接后永不回应」的端点：真实 fetch 会尊重 init.signal，故这个假
+    // fetch 也必须尊重。忽略 signal 的假 fetch 不是这个故障的模型 —— 它只会让
+    // 本测试挂到 vitest 超时（证明的是测试写错了，不是被测行为）。
+    const fetchImpl = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<never>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), {
+            once: true,
+          });
+        }),
+    );
+    const provider = makeProvider({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      // 测试缝：把 5 秒压到 20ms，用例不必真的等超时（生产不该改这个选项）
+      requestTimeoutMs: 20,
+    });
+
+    await expect(provider.embedQuery("a")).rejects.toThrow(/timeout/i);
+
+    // 请求必须**带上**一个 abort signal —— 没有它，永不回应的端点会把读路径
+    // 挂到 undici 默认的 headersTimeout（约 5 分钟）
+    const [, init] = fetchImpl.mock.calls[0] as [string, { signal?: AbortSignal }];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
 });

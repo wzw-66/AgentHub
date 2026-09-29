@@ -3,6 +3,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 import { createTestDb, destroyTestDb } from "./setup.js";
 import { createMemory, setDefaultSegmenter } from "../repository.js";
 import { configureSearch, resetSearchDepsForTesting, searchMemories } from "../search.js";
+import { createOpenAICompatibleEmbeddingProvider } from "../embedding.js";
 import { createBlobVectorIndex } from "../vector-index.js";
 import { FakeEmbeddingProvider, FakeSegmenter } from "./fakes.js";
 import { setBm25ReadyForTesting } from "../worker.js";
@@ -282,6 +283,50 @@ describe("hybrid retrieval", () => {
     expect(results.map((r) => r.id)).toContain(mem.id);
     // 降级必须留痕：向量路挂了要以 ERROR 现身，而不是让 BM25 的结果看起来
     // 像是「全部的相关记忆」
+    expect(errorSpy.mock.calls.some(([message]) => String(message).includes("Vector leg"))).toBe(true);
+
+    configureSearch({ segmenter: seg, vectorIndex, embeddingProvider: provider, minSimilarity: 0 });
+    errorSpy.mockRestore();
+  });
+
+  it("degrades to BM25 when the embedding endpoint accepts but never responds", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // 端点接受连接后永不回应 —— 与「连接被拒」不同，它不会快速失败。没有超时的话
+    // 读路径会挂到 undici 默认的 headersTimeout（约 5 分钟），而消息早已落库并返回
+    // 201（执行是 fire-and-forget），可见症状就是「agent 对每条消息都静默不回复」。
+    //
+    // 假 fetch 必须尊重 init.signal（真实 fetch 如此），否则挂住的就不是被测代码。
+    const hangingFetch = (_url: string, init?: { signal?: AbortSignal }) =>
+      new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+      });
+    const hanging = createOpenAICompatibleEmbeddingProvider({
+      baseUrl: "http://127.0.0.1:11434/v1",
+      apiKey: "EMPTY",
+      model: "bge-m3",
+      dim: 8,
+      // 测试缝：真等 5 秒没有额外信息，只会让用例变慢（生产不该改这个选项）
+      requestTimeoutMs: 20,
+      fetchImpl: hangingFetch as unknown as typeof fetch,
+    });
+    configureSearch({ segmenter: seg, vectorIndex, embeddingProvider: hanging, minSimilarity: 0 });
+
+    const mem = createMemory({
+      userId: "user-hang",
+      conversationId: "conv-hang",
+      agentId: "agent-hang",
+      type: "fact",
+      content: "缩进 survives a hung embedding endpoint",
+    }, db, seg);
+
+    const results = await searchMemories(
+      { query: "缩进", userId: "user-hang", scope: { conversationId: "conv-hang" } },
+      db,
+    );
+
+    // 超时必须表现为一次普通的 leg 失败：空榜单走进数组，RRF 退化为纯 BM25 ——
+    // 而不是一个永不到来的 promise，也不是一个 unhandled rejection。
+    expect(results.map((r) => r.id)).toContain(mem.id);
     expect(errorSpy.mock.calls.some(([message]) => String(message).includes("Vector leg"))).toBe(true);
 
     configureSearch({ segmenter: seg, vectorIndex, embeddingProvider: provider, minSimilarity: 0 });

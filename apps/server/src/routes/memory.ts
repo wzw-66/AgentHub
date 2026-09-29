@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { MemoryType } from "@agenthub/shared";
 import {
   buildFingerprint,
+  prefixDigest,
   createMemory,
   getDatabase,
   getMemory,
@@ -136,10 +137,21 @@ async function handleList(
   // 向量路未配置时传 `undefined`：那时没有任何指纹算「匹配」，计数退化为
   // 「从未算过向量的记忆条数」。这不是 0 —— 造一个假的 0 正是本项目要根除的
   // 静默错误值。语义与 worker 的 `pendingCount()` 在未配置时一致。
+  //
+  // 指纹必须与 provider 完全一致，包括前缀分量：`prefixDigest` 是这两个构造点
+  // 唯一的共享口径，漏掉它会让「改了前缀」的库在这里看起来没有积压（队列判据
+  // 与失效判据漂移），而 worker 那边照常重算 —— 见 embedding.ts 的 prefixDigest。
   const embedding = appConfig.embedding;
   const globalPendingCount = pendingEmbeddingCount(
     db,
-    embedding ? buildFingerprint(embedding.model, embedding.dim, embedding.mode) : undefined,
+    embedding
+      ? buildFingerprint(
+          embedding.model,
+          embedding.dim,
+          embedding.mode,
+          prefixDigest(embedding.queryPrefix ?? "", embedding.documentPrefix ?? ""),
+        )
+      : undefined,
   );
 
   return reply

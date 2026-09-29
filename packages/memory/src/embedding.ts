@@ -1,7 +1,23 @@
 import type { EmbeddingMode } from "./types.js";
 
 /**
- * 向量空间的指纹。模型相同但维度或前缀模式不同 → 向量不可混用。
+ * 单次 embedding HTTP 请求的超时（毫秒）。
+ *
+ * **这不是可选的健壮性加固，而是读路径的正确性问题。** 检索在聊天关键路径上：
+ * `routes/messages.ts` 在 `harness.execute(...)` 之前 await `buildMemoryContext`，
+ * 而后者 await `embedQuery`。连接被**拒绝**（Ollama 没在跑）会快速失败并正确降级，
+ * 已有测试覆盖；但一个**接受连接后永不回应**的端点会让读路径一直挂着，直到
+ * undici 默认的 `headersTimeout`（约 5 分钟）。消息本身已落库、201 也照常返回
+ * （执行是 fire-and-forget），所以可见症状是「agent 对每条消息都静默地永不回复」。
+ *
+ * 5000ms 对本地 Ollama 绰绰有余（毫秒级），也远在 spec §6.4 的延迟预算之内；
+ * 超时后与其它 leg 失败同形：fetch reject → embed reject → `runVectorLeg` 捕获
+ * → 空榜单 → RRF 退化为纯 BM25。
+ */
+const EMBEDDING_REQUEST_TIMEOUT_MS = 5_000;
+
+/**
+ * 向量空间的指纹。模型相同但维度、模式或**前缀内容**不同 → 向量不可混用。
  *
  * 这是**唯一**的向量失效判据。不能用 `model` 代替：Qwen3-Embedding 用同一
  * 模型名服务多个输出维度，只比 model 会让不同维度的向量混进同一个索引
@@ -9,12 +25,67 @@ import type { EmbeddingMode } from "./types.js";
  */
 export type EmbeddingFingerprint = string;
 
+/**
+ * 前缀内容的短指纹：把 `queryPrefix` 与 `documentPrefix` 两段一起哈希。
+ * 两侧都为空（未配置前缀，即默认配置）时返回空串。
+ *
+ * **为什么前缀必须是指纹的一部分**：队列的判据是「没有一条指纹匹配的向量行」
+ * （见 worker.ts 的 `PENDING_EMBEDDINGS_FROM`），而旧指纹 `model:dim:mode` 里
+ * 不含前缀内容 —— `mode` 只区分 symmetric/asymmetric，区分不了**前缀是什么**。
+ * 于是改一个前缀既不报错、也不重算：老文档带着旧前缀的向量继续匹配，
+ * 新文档用新前缀，两套向量永久混在同一个索引里，召回率静默降一档 ——
+ * 正是 spec §8.1 说的「不会报错，它只会安静地把召回率拉低一档」，
+ * 也是 spec §6.2「维度或前缀模式变更同样自动作废」一直没兑现的那一半。
+ *
+ * 用 FNV-1a 32 位十六进制：稳定、短、零依赖。这里只需区分「前缀不同」，
+ * 不需要密码学强度（前缀是操作者的配置，不是攻击面）。
+ *
+ * 两段用 **NUL** 拼接，不用空格：`E5` 风格的两个真实配置
+ * `("query: ", "passage: ")` 与 `("query:", " passage: ")` 用空格拼接会得到
+ * 完全相同的串（`"query:  passage: "`），而它们**施加在文本上的前缀并不相同**,
+ * 向量也不同 —— 指纹一旦碰撞就等于回到「换了前缀不重算」的老毛病。shell 与
+ * dotenv 都不可能让变量值含 NUL，故 NUL 是这里安全的定界符。
+ */
+export function prefixDigest(queryPrefix: string, documentPrefix: string): string {
+  // 两侧都为空 ⇒ 空串，使默认配置的指纹与改造前**逐字相同**。
+  if (queryPrefix === "" && documentPrefix === "") return "";
+
+  let hash = 0x811c9dc5;
+  const combined = `${queryPrefix}\u0000${documentPrefix}`;
+  for (let i = 0; i < combined.length; i++) {
+    hash ^= combined.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * 构造指纹。
+ *
+ * 注意 `prefixDigest` 是第 4 个参数，**省略即「无前缀」**。调用方只要设了
+ * `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` 就必须传
+ * `prefixDigest(query, document)`，否则前缀变更又不会触发重算 —— 两个构造点
+ * 因此必须共用同一个 `prefixDigest`。
+ *
+ * **这是对 spec §8.1 的有意扩展，不是静默偏离。** §8.1 把签名写成
+ * `${model}:${dim}:${mode}`，但 §6.2 又要求「维度或前缀模式变更同样自动作废」——
+ * 后者靠前者无法兑现（`mode` 分不清前缀内容）。补上前缀分量恰恰是让 §6.2 成真的
+ * 那个改动，故签名扩展是 spec 授权的，而非绕过 spec。
+ *
+ * **向后不兼容（有意的）**：任何已存库的、不含前缀分量的旧指纹都不再匹配新值。
+ * 于是升级后会发生**一次全量重嵌** —— 这正是旧指纹没能触发的那次重嵌，
+ * 是正确结果，不是副作用。
+ */
 export function buildFingerprint(
   model: string,
   dim: number,
   mode: EmbeddingMode,
+  prefixDigestValue = "",
 ): EmbeddingFingerprint {
-  return `${model}:${dim}:${mode}`;
+  // 无前缀时保持 `model:dim:mode` 原样：默认配置的指纹语义不变。
+  return prefixDigestValue === ""
+    ? `${model}:${dim}:${mode}`
+    : `${model}:${dim}:${mode}:${prefixDigestValue}`;
 }
 
 /**
@@ -106,6 +177,13 @@ export interface OpenAICompatibleEmbeddingOptions {
   queryPrefix?: string;
   /** 非对称模型的文档侧前缀。 */
   documentPrefix?: string;
+  /**
+   * 单次请求的超时（毫秒）。默认 `EMBEDDING_REQUEST_TIMEOUT_MS`。
+   *
+   * 这是**测试缝**：生产不该改它（5 秒的选择理由见常量本身）。测试把它压到
+   * 毫秒级，才能在不真等 5 秒的前提下断言「挂住的端点会被超时切断并降级」。
+   */
+  requestTimeoutMs?: number;
   /** 注入点，仅测试用。 */
   fetchImpl?: typeof fetch;
 }
@@ -130,6 +208,7 @@ export function createOpenAICompatibleEmbeddingProvider(
   const mode: EmbeddingMode = options.mode ?? "symmetric";
   const doFetch = options.fetchImpl ?? fetch;
   const endpoint = `${options.baseUrl.replace(/\/+$/, "")}/embeddings`;
+  const requestTimeoutMs = options.requestTimeoutMs ?? EMBEDDING_REQUEST_TIMEOUT_MS;
 
   /** `label` 只用于非有限值报错里的定位（`doc[2]` / `query[0]`）。 */
   async function embed(texts: string[], label: "doc" | "query" | "health" = "doc"): Promise<Float32Array[]> {
@@ -143,6 +222,9 @@ export function createOpenAICompatibleEmbeddingProvider(
         Authorization: `Bearer ${options.apiKey}`,
       },
       body: JSON.stringify(body),
+      // 「接受连接后永不回应」的端点会把整条读路径挂住（见常量说明）。超时后
+      // fetch 以 TimeoutError 拒绝，与其它失败同形，由 runVectorLeg 捕获成空榜单。
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
 
     if (!response.ok) {
@@ -200,7 +282,12 @@ export function createOpenAICompatibleEmbeddingProvider(
     model: options.model,
     dim: options.dim,
     mode,
-    fingerprint: buildFingerprint(options.model, options.dim, mode),
+    fingerprint: buildFingerprint(
+      options.model,
+      options.dim,
+      mode,
+      prefixDigest(options.queryPrefix ?? "", options.documentPrefix ?? ""),
+    ),
 
     async embedDocuments(texts: string[]): Promise<Float32Array[]> {
       const prefix = options.documentPrefix ?? "";
