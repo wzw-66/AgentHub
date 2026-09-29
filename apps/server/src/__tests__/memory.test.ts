@@ -2,12 +2,61 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { createTestApp, createTestUser, getAuthHeader } from "./helpers";
 import type { FastifyInstance } from "fastify";
-import { createMemory, closeDatabase, setDbPath, getDatabase } from "@agenthub/memory";
+import {
+  createMemory,
+  createBlobVectorIndex,
+  closeDatabase,
+  setDbPath,
+  getDatabase,
+} from "@agenthub/memory";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 
 const TEST_DATABASE_URL = process.env["TEST_DATABASE_URL"] || "file:./test.db";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * 读 `/api/memory/list` 的 `pendingCount`。
+ *
+ * 刻意只读**路由响应**、不调 `pendingEmbeddingCount` 做对照 —— 拿被测实现去
+ * 校验被测实现，两处一起错的时候测试照样绿。
+ */
+async function listPendingCount(
+  app: FastifyInstance,
+  auth: { authorization: string },
+): Promise<number> {
+  const res = await app.inject({ method: "GET", url: "/api/memory/list", headers: auth });
+  expect(res.statusCode).toBe(200);
+  return (res.json() as { pendingCount: number }).pendingCount;
+}
+
+const EMBEDDING_KEYS = [
+  "EMBEDDING_BASE_URL",
+  "EMBEDDING_API_KEY",
+  "EMBEDDING_MODEL",
+  "EMBEDDING_DIM",
+  "EMBEDDING_MODE",
+  "EMBEDDING_DIMENSIONS",
+] as const;
+
+/** 进程环境是全局的：用例必须自己保证「未配置」这个前提，而不是假设 .env 干净。 */
+function saveAndClearEmbedding(): Record<string, string | undefined> {
+  const savedEmbedding: Record<string, string | undefined> = {};
+  for (const key of EMBEDDING_KEYS) {
+    savedEmbedding[key] = process.env[key];
+    delete process.env[key];
+  }
+  return savedEmbedding;
+}
+
+function restoreEmbedding(savedEmbedding: Record<string, string | undefined>): void {
+  for (const key of EMBEDDING_KEYS) {
+    if (savedEmbedding[key] === undefined) delete process.env[key];
+    else process.env[key] = savedEmbedding[key];
+  }
+}
 
 describe("Memory API", () => {
   let app: FastifyInstance;
@@ -95,6 +144,80 @@ describe("Memory API", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { total: number; orphanCount: number };
     expect(body.orphanCount).toBe(1);
+  });
+
+  it("reports how many memories still wait for an embedding", async () => {
+    const userId = (globalThis as { __memUserId?: string }).__memUserId!;
+    const db = getDatabase();
+    const savedEmbedding = saveAndClearEmbedding();
+    try {
+      const baseline = await listPendingCount(app, auth);
+
+      const memory = createMemory(
+        {
+          userId,
+          conversationId: "conv-pending",
+          agentId: "agent-ui",
+          type: "fact",
+          content: "Waiting for its vector",
+        },
+        db,
+      );
+
+      // 真值会随队列走 —— 硬编码的 0 在这一步就会露馅。
+      expect(await listPendingCount(app, auth)).toBe(baseline + 1);
+
+      // 有了一条向量行，队列就前进。**必须等于基线而不是基线+1减去别的数**：
+      // 计数按「没有匹配的向量行」判据，不按「有没有向量行」猜。
+      createBlobVectorIndex(db).upsert(
+        memory.id,
+        new Float32Array([1, 0, 0, 0]),
+        "any-fingerprint",
+        "any-model",
+      );
+      expect(await listPendingCount(app, auth)).toBe(baseline);
+    } finally {
+      restoreEmbedding(savedEmbedding);
+    }
+  });
+
+  it("counts pending against the configured model's fingerprint", async () => {
+    const userId = (globalThis as { __memUserId?: string }).__memUserId!;
+    const db = getDatabase();
+    const index = createBlobVectorIndex(db);
+    const savedEmbedding = saveAndClearEmbedding();
+    // 已配好的向量路：模型 bge-m3、1024 维、symmetric ⇒ 指纹 "bge-m3:1024:symmetric"
+    // （`buildFingerprint` 的格式；这里写死字面量而不是调它，否则路由用错公式也能通过）。
+    process.env["EMBEDDING_BASE_URL"] = "http://127.0.0.1:11434/v1";
+    process.env["EMBEDDING_API_KEY"] = "EMPTY";
+    process.env["EMBEDDING_MODEL"] = "bge-m3";
+    process.env["EMBEDDING_DIM"] = "1024";
+
+    try {
+      const memory = createMemory(
+        {
+          userId,
+          conversationId: "conv-fingerprint",
+          agentId: "agent-ui",
+          type: "fact",
+          content: "Embedded under one model, then another",
+        },
+        db,
+      );
+      const vec = new Float32Array([1, 0, 0, 0]);
+      const baseline = await listPendingCount(app, auth);
+
+      // 指纹匹配 → 队列前进
+      index.upsert(memory.id, vec, "bge-m3:1024:symmetric", "bge-m3");
+      expect(await listPendingCount(app, auth)).toBe(baseline - 1);
+
+      // 同一模型名、不同维度/模式是**另一个向量空间**：旧向量不算数，该条重新入队。
+      // 若路由只判「有没有向量行」，这一步会错误地保持 baseline - 1。
+      index.upsert(memory.id, vec, "bge-m3:1024:asymmetric", "bge-m3");
+      expect(await listPendingCount(app, auth)).toBe(baseline);
+    } finally {
+      restoreEmbedding(savedEmbedding);
+    }
   });
 
   it("rejects a create without a conversation id", async () => {

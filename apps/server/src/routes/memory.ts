@@ -1,14 +1,17 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { MemoryType } from "@agenthub/shared";
 import {
+  buildFingerprint,
   createMemory,
   getDatabase,
   getMemory,
   listMemories,
+  pendingEmbeddingCount,
   searchMemories,
   deleteMemory,
   initSchema,
 } from "@agenthub/memory";
+import { config as appConfig } from "../config/env.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -104,16 +107,34 @@ async function handleList(
     offset: parseIntParam(query.offset, 0),
   });
 
+  const db = getDatabase();
+
   // 无主记忆（conversation_id IS NULL）在任何会话作用域下都检索不到 —— 这是
   // 迁移已知的、被接受的损失（spec §9.6），但损失必须可见：部署方靠这个计数
   // 判断是否需要跑那次一次性回填。按请求者过滤，不是一个全局计数。
-  const orphanRow = getDatabase()
+  const orphanRow = db
     .prepare(
       "SELECT COUNT(*) AS count FROM memory_records WHERE user_id = ? AND conversation_id IS NULL",
     )
     .get(request.userId!) as { count: number };
 
-  return reply.status(200).send({ ...result, orphanCount: orphanRow.count });
+  // 待嵌入计数（spec §12）。**这是「这个模型的队列」，不是一个全局积压数** ——
+  // 判据是「没有一条指纹匹配的向量行」，所以它必须拿到当前配置的指纹，否则换了
+  // 模型以后旧向量会被当成已完成的工作，队列看起来是空的而索引里全是另一个向量
+  // 空间的数据。指纹走 `buildFingerprint`，与 provider 用的是同一个定义。
+  //
+  // 向量路未配置时传 `undefined`：那时没有任何指纹算「匹配」，计数退化为
+  // 「从未算过向量的记忆条数」。这不是 0 —— 造一个假的 0 正是本项目要根除的
+  // 静默错误值。语义与 worker 的 `pendingCount()` 在未配置时一致。
+  const embedding = appConfig.embedding;
+  const pendingCount = pendingEmbeddingCount(
+    db,
+    embedding ? buildFingerprint(embedding.model, embedding.dim, embedding.mode) : undefined,
+  );
+
+  return reply
+    .status(200)
+    .send({ ...result, orphanCount: orphanRow.count, pendingCount });
 }
 
 async function handleSearch(
