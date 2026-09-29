@@ -41,12 +41,3 @@ export type MemoryScope =
  * 这样换成非对称模型时调用方一行都不用改（spec §8.1）。
  */
 export type EmbeddingMode = "symmetric" | "asymmetric";
-
-export interface MemoryConfig {
-  dbPath?: string;
-  llm?: {
-    apiKey?: string;
-    endpoint?: string;
-    model?: string;
-  };
-}
