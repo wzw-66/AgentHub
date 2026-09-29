@@ -11,6 +11,7 @@ export {
   updateMemory,
 } from "./repository.js";
 export { searchMemories, configureSearch, resetSearchDepsForTesting } from "./search.js";
+export { buildMemoryContext } from "./context.js";
 export { fuseRankedLists, RRF_K } from "./fusion.js";
 export { extractMemories } from "./extractor.js";
 export { buildScopeClause } from "./scope.js";

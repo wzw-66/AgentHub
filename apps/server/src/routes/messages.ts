@@ -22,7 +22,7 @@ import { decomposeMessage } from "../orchestrator/intent-analyzer.js";
 import { TaskDispatcher } from "../orchestrator/dispatcher.js";
 import { ResultAggregator } from "../orchestrator/aggregator.js";
 import { createMessage, createArtifact } from "@agenthub/db";
-import { initSchema } from "@agenthub/memory";
+import { buildMemoryContext, initSchema } from "@agenthub/memory";
 import { triggerMemoryExtraction } from "../services/memory-trigger.js";
 import type { PushSSEFn } from "../orchestrator/types.js";
 
@@ -676,12 +676,23 @@ async function runAgentExecution(
         },
       ];
 
+      // ── Long-term memory injection ────────────────────────────────
+      // 这条路径此前从不注入记忆 —— 1:1 聊天里记忆只写不读（spec §4.2）。
+      // 与 orchestrator 共用同一个 helper，两条路径的格式与作用域不可能各自漂移。
+      const memoryContext = await buildMemoryContext({
+        userId: conv.ownerId,
+        conversationId,
+        query: content,
+      });
+
+      const systemPromptParts = [agent.systemPrompt, pinnedContext, memoryContext].filter(Boolean);
+
       const context = {
         conversationId,
         message: content,
         history: historyMessages,
         agents: [],
-        systemPrompt: [agent.systemPrompt, pinnedContext].filter(Boolean).join("\n\n") || undefined,
+        systemPrompt: systemPromptParts.join("\n\n") || undefined,
         tools: toolDefinitions,
       };
 

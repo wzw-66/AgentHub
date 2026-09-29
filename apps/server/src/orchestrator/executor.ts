@@ -2,7 +2,7 @@ import type { Agent, AgentContext, Chunk } from "@agenthub/shared";
 import { ChunkType } from "@agenthub/shared";
 import { createAdapter } from "@agenthub/agent-core";
 import { getConversation, listPinnedMessages } from "@agenthub/db";
-import { searchMemories } from "@agenthub/memory";
+import { buildMemoryContext } from "@agenthub/memory";
 import type { SubTask, SubTaskResult } from "./types.js";
 import { processChunk } from "./artifact-detector.js";
 import { resolve } from "node:path";
@@ -129,30 +129,18 @@ export class SubTaskExecutor {
     const systemParts: string[] = [];
     if (pinnedContext) systemParts.push(pinnedContext);
 
-    // Inject relevant memories only on the FIRST SubTask
+    // Inject relevant memories only on the FIRST SubTask to maximize prefix caching.
+    // 后续 SubTask 的 system prompt 完全固定 —— 首次未命中缓存，之后同一对话内全部命中。
+    //
+    // 拼接逻辑不在这里 —— 单 agent 路径与这里是**同一个** helper，两条链路的
+    // 作用域参数与渲染格式不可能各自漂移（spec §8.7）。
     if (!this._memoryInjected) {
-      try {
-        const memories = await searchMemories({
-          query: subtask.instruction,
-          // 租户边界与作用域都是必填：少了它们，检索要么编译不过，要么
-          // 在运行时把别人的记忆或别的会话的记忆拼进提示词（spec §1.1、§4.8）。
-          userId: subtask.userId,
-          scope: { conversationId: subtask.conversationId },
-          limit: 5,
-        });
-        if (memories.length > 0) {
-          systemParts.push(
-            memories
-              .map((m) => `[Memory - ${m.type}] ${m.content}`)
-              .join("\n\n"),
-          );
-        }
-      } catch (err) {
-        // Non-blocking — memories are a hint, not a requirement. 但**不能静默**：
-        // 一个裸 catch 会让作用域/租户传错这类 bug 退化成「没有相关记忆」，
-        // 与真正的「没有匹配」在日志里长得一模一样。
-        console.error("[orchestrator] memory retrieval failed; continuing without memories:", err);
-      }
+      const memoryContext = await buildMemoryContext({
+        userId: subtask.userId,
+        conversationId: subtask.conversationId,
+        query: subtask.instruction,
+      });
+      if (memoryContext) systemParts.push(memoryContext);
       this._memoryInjected = true;
     }
 
